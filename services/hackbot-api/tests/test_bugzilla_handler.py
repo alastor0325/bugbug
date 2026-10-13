@@ -6,7 +6,9 @@ error handling — without touching a network.
 """
 
 import base64
+import json
 
+import requests
 from app.action_handlers import ApplyContext, bugzilla_handler
 
 
@@ -49,6 +51,92 @@ async def test_update_bug_handler_failure(monkeypatch):
     )
     assert result.status == "failed"
     assert "boom" in result.error
+
+
+def _http_error(status_code, json_body=None):
+    """A `requests.HTTPError` as `raise_for_status` builds it, with a response."""
+    response = requests.Response()
+    response.status_code = status_code
+    response._content = b"" if json_body is None else json.dumps(json_body).encode()
+    response.url = "https://bugzilla.example/rest/bug/1"
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        return exc
+    raise AssertionError("expected an error status")
+
+
+async def test_update_bug_handler_reports_a_rejection_with_bugzillas_reason(
+    monkeypatch,
+):
+    # Bugzilla's 4xx envelope carries the reason (here: who may change a
+    # field); `raise_for_status` would reduce it to "400 Client Error".
+    error = _http_error(
+        400,
+        {
+            "error": True,
+            "code": 115,
+            "message": "You are not allowed to change the severity of this bug",
+        },
+    )
+
+    def _raise(*_args):
+        raise error
+
+    monkeypatch.setattr(bugzilla_handler, "_request", _raise)
+    result = await bugzilla_handler.UpdateBugHandler().apply(
+        {"bug_id": 1, "changes": {"severity": "S3"}}, _ctx()
+    )
+    assert result.status == "failed"
+    assert result.rejected is True
+    assert result.error == "You are not allowed to change the severity of this bug"
+
+
+async def test_update_bug_handler_rejection_without_a_json_body(monkeypatch):
+    error = _http_error(401)
+
+    def _raise(*_args):
+        raise error
+
+    monkeypatch.setattr(bugzilla_handler, "_request", _raise)
+    result = await bugzilla_handler.UpdateBugHandler().apply(
+        {"bug_id": 1, "changes": {}}, _ctx()
+    )
+    assert result.rejected is True
+    assert "401" in result.error
+
+
+async def test_update_bug_handler_server_error_and_timeout_are_not_rejections(
+    monkeypatch,
+):
+    # Either may have gone through on Bugzilla's side, so a caller must not
+    # treat them as "nothing was applied".
+    for error in (_http_error(502), requests.Timeout("read timed out")):
+
+        def _raise(*_args, error=error):
+            raise error
+
+        monkeypatch.setattr(bugzilla_handler, "_request", _raise)
+        result = await bugzilla_handler.UpdateBugHandler().apply(
+            {"bug_id": 1, "changes": {}}, _ctx()
+        )
+        assert result.status == "failed"
+        assert result.rejected is False
+
+
+async def test_add_comment_handler_reports_a_rejection(monkeypatch):
+    error = _http_error(400, {"error": True, "code": 100, "message": "no comment"})
+
+    def _raise(*_args):
+        raise error
+
+    monkeypatch.setattr(bugzilla_handler, "_request", _raise)
+    result = await bugzilla_handler.AddCommentHandler().apply(
+        {"bug_id": 1, "text": "hi"}, _ctx()
+    )
+    assert result.status == "failed"
+    assert result.rejected is True
+    assert result.error == "no comment"
 
 
 async def test_add_comment_handler_builds_comment_body(monkeypatch):

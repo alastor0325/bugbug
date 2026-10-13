@@ -11,6 +11,7 @@ from dataclasses import dataclass, field, replace
 from types import SimpleNamespace
 
 from app import actions_applier
+from app.action_handlers import ActionResult
 from app.actions_applier import (
     apply_all_pending,
     on_run_completed,
@@ -560,9 +561,9 @@ async def test_lone_same_type_actions_on_different_bugs_not_merged(monkeypatch):
 
 
 async def test_coalesced_group_failure_marks_all_then_retries(monkeypatch):
-    failing = _RecordingHandler(
-        SimpleNamespace(status="failed", result=None, error="boom")
-    )
+    # A plain failure (not a rejection, see the tests below): nothing is retried
+    # on the spot, both members just fail together.
+    failing = _RecordingHandler(ActionResult.failed("boom"))
     monkeypatch.setattr(actions_applier, "get_handler", lambda t: failing)
 
     update = _row(
@@ -602,6 +603,173 @@ async def test_coalesced_group_failure_marks_all_then_retries(monkeypatch):
     await actions_applier._apply_pending_rows(_FakeDB(), run, rows)
     assert len(ok.calls) == 1
     assert update.status == "applied" and comment.status == "applied"
+
+
+# --- a rejected coalesced PUT still posts its comment --------------------- #
+#
+# BMO refuses a severity change without a comment, so the two cannot be split
+# up front. When Bugzilla rejects the combined PUT (nothing of it landed), the
+# comment is posted alone and only the field changes are recorded as failed.
+
+
+def _severity_and_comment():
+    update = _row(
+        0,
+        "pending",
+        action_type="bugzilla.update_bug",
+        params={"bug_id": 5, "changes": {"severity": "S3"}},
+    )
+    comment = _row(
+        1,
+        "pending",
+        action_type="bugzilla.add_comment",
+        params={"bug_id": 5, "text": "triaged"},
+    )
+    return update, comment
+
+
+def _bugzilla_handlers(monkeypatch, update_outcome, comment_outcome):
+    update_handler = _RecordingHandler(update_outcome)
+    comment_handler = _RecordingHandler(comment_outcome)
+    handlers = {
+        "bugzilla.update_bug": update_handler,
+        "bugzilla.add_comment": comment_handler,
+    }
+    monkeypatch.setattr(actions_applier, "get_handler", handlers.__getitem__)
+    return update_handler, comment_handler
+
+
+async def test_rejected_coalesced_update_still_posts_the_comment(monkeypatch):
+    reason = "You are not allowed to change the severity of this bug"
+    update_handler, comment_handler = _bugzilla_handlers(
+        monkeypatch,
+        ActionResult.failed(reason, rejected=True),
+        ActionResult.ok({"bug_id": 5}),
+    )
+    update, comment = _severity_and_comment()
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(update, []), (comment, [])],
+    )
+
+    # One combined PUT, then the comment on its own with its own params.
+    assert update_handler.calls == [
+        {
+            "bug_id": 5,
+            "changes": {"severity": "S3"},
+            "comment": {"body": "triaged", "is_private": False, "is_markdown": True},
+        }
+    ]
+    assert comment_handler.calls == [{"bug_id": 5, "text": "triaged"}]
+
+    assert comment.status == "applied"
+    assert comment.result == {"bug_id": 5}
+    assert comment.error is None
+    assert comment.applied_at is not None
+
+    assert update.status == "failed"
+    assert update.applied_at is None
+    assert reason in update.error
+    assert "comment was posted on its own" in update.error
+
+
+async def test_rejected_coalesced_update_without_a_comment_stays_failed(monkeypatch):
+    update_handler, comment_handler = _bugzilla_handlers(
+        monkeypatch,
+        ActionResult.failed("nope", rejected=True),
+        ActionResult.ok({}),
+    )
+    first = _row(
+        0,
+        "pending",
+        action_type="bugzilla.update_bug",
+        params={"bug_id": 5, "changes": {"a": 1}},
+    )
+    second = _row(
+        1,
+        "pending",
+        action_type="bugzilla.update_bug",
+        params={"bug_id": 5, "changes": {"b": 2}},
+    )
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(first, []), (second, [])],
+    )
+
+    assert len(update_handler.calls) == 1
+    assert comment_handler.calls == []
+    assert first.status == "failed" and first.error == "nope"
+    assert second.status == "failed" and second.error == "nope"
+
+
+async def test_failed_but_not_rejected_update_does_not_repost_the_comment(
+    monkeypatch,
+):
+    # A timeout may have gone through on Bugzilla's side; posting the comment
+    # again would duplicate it, so the whole group just fails as before.
+    update_handler, comment_handler = _bugzilla_handlers(
+        monkeypatch,
+        ActionResult.failed("read timed out"),
+        ActionResult.ok({}),
+    )
+    update, comment = _severity_and_comment()
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(update, []), (comment, [])],
+    )
+
+    assert len(update_handler.calls) == 1
+    assert comment_handler.calls == []
+    assert update.status == "failed" and update.error == "read timed out"
+    assert comment.status == "failed" and comment.error == "read timed out"
+
+
+async def test_comment_fallback_that_also_fails_keeps_both_errors(monkeypatch):
+    update_handler, comment_handler = _bugzilla_handlers(
+        monkeypatch,
+        ActionResult.failed("field refused", rejected=True),
+        ActionResult.failed("comment refused", rejected=True),
+    )
+    update, comment = _severity_and_comment()
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(update, []), (comment, [])],
+    )
+
+    assert len(update_handler.calls) == 1
+    assert len(comment_handler.calls) == 1
+    assert update.status == "failed" and update.error == "field refused"
+    assert comment.status == "failed" and comment.error == "comment refused"
+
+
+async def test_comment_posted_alone_is_not_retried_with_the_field_change(
+    monkeypatch,
+):
+    # A later manual retry re-applies only the failed field change; the comment
+    # that already went in stays applied and is not posted a second time.
+    update_handler, comment_handler = _bugzilla_handlers(
+        monkeypatch,
+        ActionResult.failed("field refused", rejected=True),
+        ActionResult.ok({"bug_id": 5}),
+    )
+    update, comment = _severity_and_comment()
+    run = _FakeRun(status=RunStatus.succeeded.value)
+    rows = [(update, []), (comment, [])]
+
+    await actions_applier._apply_pending_rows(_FakeDB(), run, rows)
+    await actions_applier._apply_pending_rows(_FakeDB(), run, rows)
+
+    assert update_handler.calls[1] == {"bug_id": 5, "changes": {"severity": "S3"}}
+    assert len(comment_handler.calls) == 1
+    assert comment.status == "applied"
 
 
 async def test_backward_placeholder_resolves_in_coalesced_comment(monkeypatch):

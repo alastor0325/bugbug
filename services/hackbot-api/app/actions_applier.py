@@ -184,6 +184,50 @@ async def _dispatch(
         return ActionResult.failed(str(exc))
 
 
+async def _apply_coalesced(
+    run: Run, member_rows: list[RunAction], results_by_ref: dict[str, dict]
+) -> list[tuple[RunAction, ActionResult]]:
+    """Apply one coalesced group as a single bug PUT; return each row's outcome.
+
+    If Bugzilla rejects the combined update (say the API user may not change a
+    field) nothing of it landed, and the field changes cannot be split off: BMO
+    refuses a severity change without a comment. The comment can still go in on
+    its own, so it is re-posted alone and only the field changes are recorded
+    as failed, with Bugzilla's reason. A timeout or server error is not a
+    rejection: the PUT may have gone through, so the whole group is left failed
+    rather than risking a duplicate comment.
+    """
+    entries = [
+        (member.type, resolve_placeholders(member.params, results_by_ref))
+        for member in member_rows
+    ]
+    outcome = await _dispatch(run, "bugzilla.update_bug", merge_resolved(entries), [])
+    comments = [m for m in member_rows if m.type == "bugzilla.add_comment"]
+    if outcome.status == "applied" or not outcome.rejected or not comments:
+        return [(member, outcome) for member in member_rows]
+
+    comment = comments[0]
+    log.warning(
+        "Bugzilla rejected the combined update for run %s (%s); posting the "
+        "comment alone",
+        run.run_id,
+        outcome.error,
+    )
+    comment_outcome = await _dispatch(
+        run, comment.type, resolve_placeholders(comment.params, results_by_ref), []
+    )
+    changes_outcome = ActionResult.failed(
+        f"{outcome.error} (the comment was posted on its own)"
+        if comment_outcome.status == "applied"
+        else outcome.error or "rejected",
+        rejected=True,
+    )
+    return [
+        (member, comment_outcome if member is comment else changes_outcome)
+        for member in member_rows
+    ]
+
+
 async def _apply_pending_rows(
     db: AsyncSession, run: Run, rows: list[tuple[RunAction, list[dict]]]
 ) -> None:
@@ -192,7 +236,8 @@ async def _apply_pending_rows(
     Same-bug Bugzilla field changes are coalesced with the closest comment into
     a single `PUT /bug/{id}` so Bugzilla applies them as one transaction (one
     bugmail, one history entry); any other comments on that bug still apply
-    separately. See `plan_coalesced_groups`/`merge_resolved` in `app.action_handlers`.
+    separately. See `plan_coalesced_groups`/`merge_resolved` in `app.action_handlers`,
+    and `_apply_coalesced` for what happens when Bugzilla rejects the combined PUT.
 
     Cross-action `{{actions.<ref>.<field>}}` placeholders resolve against rows
     that are already `applied` (seeded from prior applies) plus ones applied
@@ -230,33 +275,29 @@ async def _apply_pending_rows(
 
         if anchor is not None:
             member_rows = [pending[i][0] for i in group_at[anchor]]
-            entries = [
-                (member.type, resolve_placeholders(member.params, results_by_ref))
-                for member in member_rows
-            ]
-            outcome = await _dispatch(
-                run, "bugzilla.update_bug", merge_resolved(entries), []
-            )
+            outcomes = await _apply_coalesced(run, member_rows, results_by_ref)
         else:
-            member_rows = [row]
             params = resolve_placeholders(row.params, results_by_ref)
-            outcome = await _dispatch(run, row.type, params, attachments)
+            outcomes = [(row, await _dispatch(run, row.type, params, attachments))]
 
         # Only stamp applied_at on a real success, so a failed row isn't
         # mistaken for one that was applied.
-        applied_at = datetime.now(timezone.utc) if outcome.status == "applied" else None
-        for member in member_rows:
+        now = datetime.now(timezone.utc)
+        for member, outcome in outcomes:
             member.status = outcome.status
             member.result = outcome.result
             member.error = outcome.error
-            if applied_at is not None:
-                member.applied_at = applied_at
+            if outcome.status == "applied":
+                member.applied_at = now
         await db.commit()
 
-        if outcome.status == "applied" and outcome.result is not None:
-            for member in member_rows:
-                if member.ref:
-                    results_by_ref[member.ref] = outcome.result
+        for member, outcome in outcomes:
+            if (
+                member.ref
+                and outcome.status == "applied"
+                and outcome.result is not None
+            ):
+                results_by_ref[member.ref] = outcome.result
 
 
 async def on_run_completed(db: AsyncSession, run: Run) -> None:

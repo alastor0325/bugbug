@@ -59,6 +59,31 @@ def _request(method: str, path: str, json_body: dict[str, Any]) -> dict[str, Any
     return response.json()
 
 
+def _rejection(exc: Exception) -> str | None:
+    """Bugzilla's reason for refusing a request, or None if it may have gone through.
+
+    Only a 4xx reply is a refusal: Bugzilla applies a PUT as one transaction, so
+    nothing of it landed. Its JSON error envelope carries the human-readable
+    ``message`` (e.g. which field the API user may not change), which
+    ``raise_for_status`` drops.
+    """
+    response = getattr(exc, "response", None)
+    if response is None or not 400 <= response.status_code < 500:
+        return None
+    try:
+        message = response.json().get("message")
+    except (ValueError, AttributeError):
+        message = None
+    return message or str(exc)
+
+
+def _failed(exc: Exception) -> ActionResult:
+    reason = _rejection(exc)
+    if reason is None:
+        return ActionResult.failed(str(exc))
+    return ActionResult.failed(reason, rejected=True)
+
+
 def _comment_body(params: dict[str, Any]) -> dict[str, Any]:
     """Build the ``comment`` object for a PUT /bug/{id}.
 
@@ -89,7 +114,7 @@ class UpdateBugHandler:
             _request("PUT", f"bug/{bug_id}", body)
         except Exception as exc:
             log.exception("Failed to update bug %s", bug_id)
-            return ActionResult.failed(str(exc))
+            return _failed(exc)
         return ActionResult.ok({"bug_id": bug_id, "url": _bug_url(bug_id)})
 
 
@@ -102,7 +127,7 @@ class AddCommentHandler:
             _request("PUT", f"bug/{bug_id}", body)
         except Exception as exc:
             log.exception("Failed to add comment to bug %s", bug_id)
-            return ActionResult.failed(str(exc))
+            return _failed(exc)
         return ActionResult.ok({"bug_id": bug_id, "url": _bug_url(bug_id)})
 
 

@@ -60,14 +60,18 @@ class ActionResult:
     status: str  # "applied" | "failed"
     result: dict[str, Any] | None = None
     error: str | None = None
+    # True when the remote refused the request outright, so none of it was
+    # applied and a different request can safely follow. False on a timeout or
+    # a server error, where the request may have gone through.
+    rejected: bool = False
 
     @classmethod
     def ok(cls, result: dict[str, Any] | None = None) -> ActionResult:
         return cls(status="applied", result=result)
 
     @classmethod
-    def failed(cls, error: str) -> ActionResult:
-        return cls(status="failed", error=error)
+    def failed(cls, error: str, *, rejected: bool = False) -> ActionResult:
+        return cls(status="failed", error=error, rejected=rejected)
 
 
 class ActionHandler(Protocol):
