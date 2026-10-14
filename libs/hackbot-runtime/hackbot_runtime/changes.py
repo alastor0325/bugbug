@@ -73,6 +73,11 @@ def base_commit(repo: Path) -> str:
     return _git(repo, "rev-parse", "HEAD").strip()
 
 
+def toplevel(repo: Path) -> Path:
+    """Return the top directory of the checkout that holds ``repo``."""
+    return Path(_git(repo, "rev-parse", "--show-toplevel").strip())
+
+
 # Where publish_changes() puts the run's patch; the same key downstream reads.
 PATCH_ARTIFACT = "changes/changes.patch"
 

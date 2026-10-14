@@ -15,6 +15,7 @@ from __future__ import annotations
 import datetime
 import logging
 import os
+import subprocess
 import tempfile
 import uuid
 from functools import cached_property
@@ -60,6 +61,48 @@ def _wip_commit_message(actions: list[dict]) -> str:
             if action["type"] == action_type and action["params"]["title"]:
                 return action["params"]["title"]
     return changes.WIP_MESSAGE
+
+
+def _check_ready_checkout(path: Path, ref: str | None) -> None:
+    """Raise if ``path`` is not the top of a git checkout; warn if HEAD is not ``ref``."""
+    try:
+        head = changes.base_commit(path)
+        top = changes.toplevel(path)
+    except (OSError, subprocess.CalledProcessError) as e:
+        raise RuntimeError(
+            f"SOURCE_REPO_READY is set but {path} is not a git checkout"
+        ) from e
+    if top.resolve() != path.resolve():
+        raise RuntimeError(
+            f"SOURCE_REPO_READY is set but {path} is not the top of a git checkout"
+            f" ({top} is)"
+        )
+    if ref is None:
+        return
+    try:
+        wanted = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(path),
+                "rev-parse",
+                "--verify",
+                "-q",
+                f"{ref}^{{commit}}",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except subprocess.CalledProcessError:
+        wanted = None
+    if wanted != head:
+        log.warning(
+            "SOURCE_REPO_READY checkout %s is at %s, not at the requested ref %r",
+            path,
+            head,
+            ref,
+        )
 
 
 class HackbotContext(BaseSettings):
@@ -150,7 +193,11 @@ class HackbotContext(BaseSettings):
 
         env_path = os.environ.get("SOURCE_REPO")
         path = Path(env_path) if env_path else self._config.source.checkout_path
-        ensure_source_repo(path, self._config.source.repo_url, resolved_ref, depth)
+        if os.environ.get("SOURCE_REPO_READY", "").lower() in ("1", "true", "yes"):
+            log.info("using source at %s as is (SOURCE_REPO_READY)", path)
+            _check_ready_checkout(path, resolved_ref)
+        else:
+            ensure_source_repo(path, self._config.source.repo_url, resolved_ref, depth)
         # Record where the agent starts editing, so publish_changes() can later
         # diff the final tree against it. Best-effort: a failure here must not
         # break the agent's access to source — it only disables change capture.

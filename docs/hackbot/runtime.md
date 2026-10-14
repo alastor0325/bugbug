@@ -40,6 +40,9 @@ the orchestrator); its capabilities come from `hackbot.toml`.
 `prepare_repo` resolves its ref from the argument, then `SOURCE_REF`, then
 `[source].ref`. Preparing twice at conflicting refs raises rather than silently editing
 the wrong tree — the checkout is a shared, single-use resource for the run.
+`SOURCE_REPO_READY=1` makes it use `SOURCE_REPO` as it is, with no clone, fetch or
+reset, for a local run against a developer's own checkout. It raises if the path is not a
+git checkout, and logs a warning if HEAD is not the resolved ref.
 
 The checkout is **shallow by default** (`depth=1`, or `2` when pinned to a ref so the
 commit's own diff is computable). An agent that needs real history passes `depth`

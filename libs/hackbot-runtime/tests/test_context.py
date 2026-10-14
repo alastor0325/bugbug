@@ -1,6 +1,8 @@
 """Tests for HackbotContext capabilities and results plumbing."""
 
 import json
+import logging
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -36,6 +38,116 @@ def test_firefox_disabled_raises(tmp_path):
         _ = hb.firefox
 
 
+def _git_repo(path: Path) -> Path:
+    def git(*args):
+        subprocess.run(["git", "-C", str(path), *args], check=True, capture_output=True)
+
+    path.mkdir()
+    git("init", "-q")
+    git(
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.com",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "one",
+    )
+    git("tag", "first")
+    git(
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.com",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "two",
+    )
+    return path
+
+
+def _ready(monkeypatch, path: Path, ref: str | None = None):
+    def fake_ensure(*args, **kwargs):
+        raise AssertionError("ensure_source_repo must not run on a ready checkout")
+
+    monkeypatch.setattr("hackbot_runtime.context.ensure_source_repo", fake_ensure)
+    monkeypatch.setenv("SOURCE_REPO", str(path))
+    monkeypatch.setenv("SOURCE_REPO_READY", "1")
+    if ref is None:
+        monkeypatch.delenv("SOURCE_REF", raising=False)
+    else:
+        monkeypatch.setenv("SOURCE_REF", ref)
+
+
+async def test_source_repo_ready_skips_the_clone_and_reset(tmp_path, monkeypatch):
+    repo = _git_repo(tmp_path / "worktree")
+    _ready(monkeypatch, repo)
+
+    hb = _hb(tmp_path, HackbotConfig(source=SourceConfig(repo_url="x")))
+    assert await hb.prepare_repo() == repo
+    assert hb.repo_path == repo
+
+
+async def test_source_repo_ready_refuses_a_path_that_is_not_a_checkout(
+    tmp_path, monkeypatch
+):
+    (tmp_path / "plain").mkdir()
+    _ready(monkeypatch, tmp_path / "plain")
+
+    hb = _hb(tmp_path, HackbotConfig(source=SourceConfig(repo_url="x")))
+    with pytest.raises(RuntimeError, match="not a git checkout"):
+        await hb.prepare_repo()
+
+
+async def test_source_repo_ready_refuses_a_subdirectory_of_a_checkout(
+    tmp_path, monkeypatch
+):
+    repo = _git_repo(tmp_path / "worktree")
+    (repo / "sub").mkdir()
+    _ready(monkeypatch, repo / "sub")
+
+    hb = _hb(tmp_path, HackbotConfig(source=SourceConfig(repo_url="x")))
+    with pytest.raises(RuntimeError, match="not the top of a git checkout"):
+        await hb.prepare_repo()
+
+
+async def test_source_repo_ready_accepts_a_link_to_a_checkout(tmp_path, monkeypatch):
+    repo = _git_repo(tmp_path / "worktree")
+    (tmp_path / "link").symlink_to(repo)
+    _ready(monkeypatch, tmp_path / "link")
+
+    hb = _hb(tmp_path, HackbotConfig(source=SourceConfig(repo_url="x")))
+    assert await hb.prepare_repo() == tmp_path / "link"
+
+
+async def test_source_repo_ready_warns_when_head_is_not_the_requested_ref(
+    tmp_path, monkeypatch, caplog
+):
+    repo = _git_repo(tmp_path / "worktree")
+    _ready(monkeypatch, repo, ref="first")
+
+    hb = _hb(tmp_path, HackbotConfig(source=SourceConfig(repo_url="x")))
+    with caplog.at_level(logging.WARNING, logger="hackbot_runtime.context"):
+        assert await hb.prepare_repo() == repo
+    assert "not at the requested ref 'first'" in caplog.text
+
+
+async def test_source_repo_ready_is_quiet_when_head_is_the_requested_ref(
+    tmp_path, monkeypatch, caplog
+):
+    repo = _git_repo(tmp_path / "worktree")
+    _ready(monkeypatch, repo, ref="HEAD")
+
+    hb = _hb(tmp_path, HackbotConfig(source=SourceConfig(repo_url="x")))
+    with caplog.at_level(logging.WARNING, logger="hackbot_runtime.context"):
+        await hb.prepare_repo()
+    assert "requested ref" not in caplog.text
+
+
 async def test_source_repo_prepares_and_honors_env_override(tmp_path, monkeypatch):
     calls = []
 
@@ -47,6 +159,7 @@ async def test_source_repo_prepares_and_honors_env_override(tmp_path, monkeypatc
     monkeypatch.setattr("hackbot_runtime.context.ensure_source_repo", fake_ensure)
     monkeypatch.setenv("SOURCE_REPO", str(tmp_path / "from-env"))
     monkeypatch.delenv("SOURCE_REF", raising=False)
+    monkeypatch.delenv("SOURCE_REPO_READY", raising=False)
 
     cfg = HackbotConfig(
         source=SourceConfig(
