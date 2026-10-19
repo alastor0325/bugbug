@@ -6,6 +6,8 @@ from hackbot_agents.review_load.config import AuthorSettings, ReportSettings
 from hackbot_agents.review_load.load import (
     build_report,
     classify_author,
+    direct_only,
+    in_scope,
     waiting_since,
 )
 from testdata import (
@@ -179,3 +181,60 @@ class TestBuildReport:
         assert report.overdue == []
         assert report.per_reviewer == []
         assert len(report.buckets) == 4
+
+
+class TestStale:
+    def test_stale_reviews_are_counted_apart(self):
+        report = _report(
+            [rev(1, created=ts(2026, 1, 5)), rev(2, created=ts(2026, 10, 1))],
+            kinds={CAROL: "staff"},
+        )
+        assert report.total == 1
+        assert [r.revision.id for r in report.reviews] == [2]
+        assert report.stale.total == 1
+        assert report.stale.by_author == {"staff": 1}
+        assert sum(b.total for b in report.buckets) == 1
+        assert [r.revision.id for r in report.overdue] == [2]
+
+    def test_stale_reviews_are_not_in_per_reviewer(self):
+        report = _report([rev(1, created=ts(2026, 1, 5))])
+        assert report.per_reviewer == []
+
+    def test_a_fresh_request_on_an_old_revision_is_not_stale(self):
+        report = _report(
+            [
+                rev(
+                    1,
+                    [add_reviewers(ts(2026, 10, 16), ALICE)],
+                    created=ts(2026, 1, 5),
+                    reviewers={GROUP: "added", ALICE: "added"},
+                )
+            ]
+        )
+        assert report.stale.total == 0
+        [review] = report.reviews
+        assert review.reviewers == ("alice",)
+        assert review.since == datetime(2026, 10, 16, tzinfo=UTC)
+
+
+class TestScope:
+    @pytest.mark.parametrize(
+        ("files", "expected"),
+        [
+            (["dom/media/A.cpp"], True),
+            (["dom/media"], True),
+            (["gfx/B.cpp", "dom/media/x/C.h"], True),
+            (["dom/mediasource/A.cpp"], False),
+            (["dom/media/webrtc/A.cpp"], False),
+            (["gfx/B.cpp"], False),
+            ([], False),
+        ],
+    )
+    def test_in_scope(self, files, expected):
+        assert in_scope(files, ["dom/media"], ["dom/media/webrtc"]) is expected
+
+    def test_direct_only(self):
+        assert direct_only(rev(1, reviewers={ALICE: "added"}), WATCHED, GROUP)
+        assert not direct_only(
+            rev(1, reviewers={GROUP: "added", ALICE: "added"}), WATCHED, GROUP
+        )

@@ -13,17 +13,19 @@ run.
 Each watched group has one file, `hackbot_agents/review_load/configs/<name>.toml`. A run
 names it with the `config` input. An unknown name stops the run with an error.
 
-| Key                            | Meaning                                                                |
-| ------------------------------ | ---------------------------------------------------------------------- |
-| `review_group`                 | The Phabricator project slug whose review requests count               |
-| `[members]`                    | Phabricator handle and display name. Direct requests to them count too |
-| `report.slack_channel`         | Where the message goes                                                 |
-| `report.age_buckets_work_days` | Bucket edges in work days. `[1, 3, 7]` gives <1, 1-3, 3-7 and 7+       |
-| `report.overdue_work_days`     | Older than this, a review is overdue and listed by name                |
-| `report.max_listed`            | The longest overdue list; the rest shows as "and N more"               |
-| `authors.staff_email_domains`  | A Bugzilla email in one of these domains marks Mozilla staff           |
-| `authors.staff_accounts`       | Phabricator handles to count as staff                                  |
-| `authors.external_accounts`    | Phabricator handles to count as external                               |
+| Key                            | Meaning                                                                                                                                   |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `review_group`                 | The Phabricator project slug whose review requests count                                                                                  |
+| `paths`, `excludes`            | A direct request to a member counts only for a patch that changes a file under `paths` and not under `excludes`. Empty `paths`: all count |
+| `[members]`                    | Phabricator handle and display name. Direct requests to them count too                                                                    |
+| `report.slack_channel`         | Where the message goes                                                                                                                    |
+| `report.age_buckets_work_days` | Bucket edges in work days. `[1, 3, 7]` gives <1, 1-3, 3-7 and 7+                                                                          |
+| `report.overdue_work_days`     | Older than this, a review is overdue and listed by name                                                                                   |
+| `report.stale_work_days`       | Older than this, a review is only counted on one "stale" line                                                                             |
+| `report.max_listed`            | The longest overdue list; the rest shows as "and N more"                                                                                  |
+| `authors.staff_email_domains`  | A Bugzilla email in one of these domains marks Mozilla staff                                                                              |
+| `authors.staff_accounts`       | Phabricator handles to count as staff                                                                                                     |
+| `authors.external_accounts`    | Phabricator handles to count as external                                                                                                  |
 
 Add a group: copy `configs/media-playback.toml`, change the keys, and run the tests.
 `test_every_shipped_config_loads` checks the new file.
@@ -48,6 +50,12 @@ Add a group: copy `configs/media-playback.toml`, change the keys, and run the te
 - "New" is the first bucket: waiting reviews requested less than one work day ago. On
   Monday that includes the weekend. A review that was requested and done on the same
   day is not counted.
+- A request to a member, not the group, counts only if the revision changes a file
+  under `paths` and not under `excludes` (`differential.getcommitpaths`). A patch that
+  only changes tests outside `paths` is not counted.
+- A reviewer that waits `stale_work_days` or more is left out of the buckets, the
+  per-reviewer list and the overdue list. A revision with only such reviewers is
+  counted on the "stale" line.
 - Totals count each revision once, by its longest wait. "Per reviewer" counts the
   revision once for each watched reviewer it waits on.
 - An author is staff or external from the Bugzilla login email
@@ -61,7 +69,8 @@ Add a group: copy `configs/media-playback.toml`, change the keys, and run the te
 holds no key.
 
 - `/phabricator/api`: the read-only Conduit proxy, with `project.search`,
-  `user.search`, `transaction.search` and `bugzilla.account.search` added for this
+  `user.search`, `transaction.search`, `bugzilla.account.search` and
+  `differential.getcommitpaths` added for this
   agent only.
 - `/bugzilla/emails?ids=...`: the login email of each Bugzilla user id, nothing else.
 

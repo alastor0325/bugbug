@@ -52,6 +52,7 @@ class Report:
     reviews: list[WaitingReview]
     buckets: list[Bucket]
     per_reviewer: list[ReviewerLoad]
+    stale: Bucket
 
     @property
     def total(self) -> int:
@@ -100,6 +101,24 @@ def pending_reviewers(revision: Revision, watched: dict[str, str]) -> list[str]:
     ]
 
 
+def direct_only(revision: Revision, watched: dict[str, str], group_phid: str) -> bool:
+    """True if ``revision`` waits on watched members but not on the group."""
+    pending = pending_reviewers(revision, watched)
+    return bool(pending) and group_phid not in pending
+
+
+def _under(path: str, directory: str) -> bool:
+    return path == directory or path.startswith(directory + "/")
+
+
+def in_scope(files: list[str], paths: list[str], excludes: list[str]) -> bool:
+    """True if one of ``files`` is under ``paths`` and not under ``excludes``."""
+    return any(
+        any(_under(f, p) for p in paths) and not any(_under(f, e) for e in excludes)
+        for f in files
+    )
+
+
 def build_report(
     revisions: list[Revision],
     *,
@@ -113,11 +132,21 @@ def build_report(
     reviews = []
     waiting: Counter[str] = Counter()
     overdue: Counter[str] = Counter()
+    stale: Counter[AuthorKind] = Counter()
     for revision in revisions:
         pending = pending_reviewers(revision, watched)
         if not pending:
             continue
-        since_by_phid = {phid: waiting_since(revision, phid) for phid in pending}
+        author = author_kinds.get(revision.author_phid, "unknown")
+        since_by_phid = {
+            phid: since
+            for phid in pending
+            if work_days_between(since := waiting_since(revision, phid), now)
+            < settings.stale_work_days
+        }
+        if not since_by_phid:
+            stale[author] += 1
+            continue
         for phid, since in since_by_phid.items():
             waiting[watched[phid]] += 1
             if work_days_between(since, now) >= settings.overdue_work_days:
@@ -126,10 +155,10 @@ def build_report(
         reviews.append(
             WaitingReview(
                 revision=revision,
-                reviewers=tuple(watched[p] for p in pending),
+                reviewers=tuple(watched[p] for p in since_by_phid),
                 since=since,
                 age=work_days_between(since, now),
-                author=author_kinds.get(revision.author_phid, "unknown"),
+                author=author,
             )
         )
     reviews.sort(key=lambda r: (r.since, r.revision.id))
@@ -143,4 +172,4 @@ def build_report(
         ReviewerLoad(label, n, overdue[label])
         for label, n in sorted(waiting.items(), key=lambda kv: (-kv[1], kv[0]))
     ]
-    return Report(now, settings, reviews, buckets, per_reviewer)
+    return Report(now, settings, reviews, buckets, per_reviewer, Bucket(dict(stale)))

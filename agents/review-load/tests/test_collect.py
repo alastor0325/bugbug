@@ -17,6 +17,7 @@ CONFIG = ReviewLoadConfig.model_validate(
         "members": {"alice": "Alice", "bob": "Bob", "gone": "Gone"},
         "report": {"slack_channel": "#x"},
         "authors": {"external_accounts": ["outsider"]},
+        "paths": ["dom/media"],
     }
 )
 
@@ -53,6 +54,7 @@ def _phab():
         revision(1, author=CAROL, reviewers={GROUP: "added"}),
         revision(2, author=OUTSIDER, reviewers={ALICE: "added"}),
         revision(3, author=CAROL, reviewers={ALICE: "accepted"}),
+        revision(4, author=CAROL, reviewers={BOB: "added"}),
     ]
     return FakePhabricator(
         {
@@ -76,6 +78,7 @@ def _phab():
                 page([add_reviewers(ts(2026, 10, 2), GROUP)]),
                 page([]),
             ],
+            "differential.getcommitpaths": [["dom/media/A.cpp"], ["gfx/B.cpp"]],
             "bugzilla.account.search": [
                 [{"phid": CAROL, "id": "11"}, {"phid": OUTSIDER, "id": "12"}]
             ],
@@ -103,8 +106,11 @@ async def test_collect_inputs():
         "statuses": ["needs-review"],
     }
     assert search["attachments"] == {"reviewers": True}
-    # D3 waits on nobody watched, so its history is never read.
+    # D3 waits on nobody watched, so its history is never read. D4 only waits on
+    # a member and changes no file under `paths`, so it is dropped too.
     assert [m for m, _ in phab.calls].count("transaction.search") == 2
+    paths_calls = [p for m, p in phab.calls if m == "differential.getcommitpaths"]
+    assert paths_calls == [{"revision_id": 2}, {"revision_id": 4}]
 
 
 async def test_an_author_without_a_bugzilla_account_is_unknown():

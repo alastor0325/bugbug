@@ -29,6 +29,7 @@ ALLOWED_METHODS = READ_ONLY_METHODS | {
     "user.search",
     "transaction.search",
     "bugzilla.account.search",
+    "differential.getcommitpaths",
 }
 MAX_IDS = 500
 

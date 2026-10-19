@@ -11,7 +11,13 @@ from phabricator_client import PhabricatorClient
 
 from .conduit import Revision, parse_revision, parse_transactions
 from .config import ReviewLoadConfig
-from .load import AuthorKind, classify_author, pending_reviewers
+from .load import (
+    AuthorKind,
+    classify_author,
+    direct_only,
+    in_scope,
+    pending_reviewers,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -105,14 +111,21 @@ async def collect_inputs(config: ReviewLoadConfig, collector: Collector) -> Inpu
     ]
     limit = asyncio.Semaphore(_CONCURRENCY)
 
-    async def with_transactions(rev: Revision) -> Revision:
+    async def in_scope_with_history(rev: Revision) -> Revision | None:
         async with limit:
+            if config.paths and direct_only(rev, watched, group):
+                files = await collector.phabricator.conduit_request(
+                    "differential.getcommitpaths", revision_id=rev.id
+                )
+                if not in_scope(files or [], config.paths, config.excludes):
+                    return None
             txns = await collector.phabricator.search_all(
                 "transaction.search", objectIdentifier=rev.phid
             )
         return dataclasses.replace(rev, transactions=tuple(parse_transactions(txns)))
 
-    revisions = list(await asyncio.gather(*map(with_transactions, candidates)))
+    fetched = await asyncio.gather(*map(in_scope_with_history, candidates))
+    revisions = [rev for rev in fetched if rev is not None]
 
     authors = sorted({r.author_phid for r in revisions})
     handles, emails = await asyncio.gather(

@@ -98,3 +98,19 @@ def test_text_fallback_summarises():
     assert build_text(report, GROUP_LABEL) == (
         f"Review load for {GROUP_LABEL}: 1 waiting, 0 new, 1 overdue"
     )
+
+
+def test_stale_line():
+    report = _report(
+        [revision(1, created=ts(2025, 1, 6)), revision(2, created=ts(2026, 10, 1))]
+    )
+    text = _all_text(build_blocks(report, GROUP_LABEL))
+    assert "*Stale (60+ work days, not counted above):* 1 (unknown 1)" in text
+    assert "D1|" not in text
+
+
+def test_only_stale_is_not_empty():
+    report = _report([revision(1, created=ts(2025, 1, 6))])
+    text = _all_text(build_blocks(report, GROUP_LABEL))
+    assert "No reviews are waiting" not in text
+    assert "*Stale" in text

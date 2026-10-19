@@ -34,6 +34,8 @@ def test_minimal_config_gets_the_defaults(tmp_path):
     assert config.report.overdue_work_days == 7
     assert config.report.max_listed == 10
     assert config.authors.staff_email_domains == ["@mozilla.com"]
+    assert config.report.stale_work_days == 60
+    assert config.paths == []
 
 
 def test_unknown_config_stops_the_run(tmp_path):
@@ -103,3 +105,28 @@ def test_media_playback_config():
     assert config.review_group == "media-playback-reviewers"
     assert config.report.slack_channel == "#media-playback"
     assert "alwu" in config.members
+
+
+def test_stale_must_be_past_the_last_bucket_and_overdue():
+    with pytest.raises(ValidationError):
+        _config(stale_work_days=7)
+    with pytest.raises(ValidationError):
+        _config(overdue_work_days=30, stale_work_days=20)
+    assert _config(stale_work_days=8).report.stale_work_days == 8
+
+
+def test_paths_are_normalised(tmp_path):
+    body = MINIMAL.replace(
+        "[members]",
+        'paths = ["/dom/media/"]\nexcludes = ["dom/media/webrtc/"]\n\n[members]',
+    )
+    config = load_config("p", _write(tmp_path, "p", body))
+    assert config.paths == ["dom/media"]
+    assert config.excludes == ["dom/media/webrtc"]
+
+
+def test_media_playback_scope():
+    config = load_config("media-playback")
+    assert config.paths == ["dom/media"]
+    assert "dom/media/webrtc" in config.excludes
+    assert config.report.stale_work_days == 60

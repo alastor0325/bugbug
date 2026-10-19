@@ -6,7 +6,14 @@ from pathlib import Path
 from typing import Annotated
 
 from hackbot_runtime import AgentError
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 CONFIGS_DIR = Path(__file__).parent / "configs"
 
@@ -23,6 +30,8 @@ class ReportSettings(_Strict):
     slack_channel: Annotated[str, Field(min_length=1)]
     age_buckets_work_days: list[PositiveInt] = [1, 3, 7]
     overdue_work_days: PositiveInt = 7
+    # Older than this, a review is only counted on the "stale" line.
+    stale_work_days: PositiveInt = 60
     max_listed: PositiveInt = 10
 
     @field_validator("age_buckets_work_days")
@@ -31,6 +40,13 @@ class ReportSettings(_Strict):
         if not edges or any(a >= b for a, b in zip(edges, edges[1:])):
             raise ValueError("must be a non-empty, strictly ascending list")
         return edges
+
+    @model_validator(mode="after")
+    def _stale_is_last(self) -> "ReportSettings":
+        floor = max(self.age_buckets_work_days[-1], self.overdue_work_days)
+        if self.stale_work_days <= floor:
+            raise ValueError(f"stale_work_days must be more than {floor}")
+        return self
 
 
 class AuthorSettings(_Strict):
@@ -53,8 +69,17 @@ class ReviewLoadConfig(_Strict):
     review_group: Annotated[str, Field(min_length=1)]
     # Phabricator handle -> display name.
     members: dict[str, str] = {}
+    # A request to a member, not the group, counts only if the revision changes a
+    # file under one of `paths` and not under one of `excludes`. Empty: all count.
+    paths: list[str] = []
+    excludes: list[str] = []
     report: ReportSettings
     authors: AuthorSettings = AuthorSettings()
+
+    @field_validator("paths", "excludes")
+    @classmethod
+    def _strip_slashes(cls, paths: list[str]) -> list[str]:
+        return [p.strip("/") for p in paths]
 
     @property
     def group_label(self) -> str:

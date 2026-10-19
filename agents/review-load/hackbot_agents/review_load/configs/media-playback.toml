@@ -1,6 +1,11 @@
 # The Phabricator project whose review requests we count.
 review_group = "media-playback-reviewers"
 
+# A direct request to a member counts only if the patch changes a file under
+# `paths` and not under `excludes`. Same scope as firefox-review-stats.
+paths = ["dom/media"]
+excludes = ["dom/media/webrtc", "dom/media/systemservices"]
+
 # The team roster: Phabricator handle and display name. Reviews requested directly
 # from these people count too. Keep it the same as the playback team's `members` in
 # firefox-review-stats (reviewstats/teams.py).
@@ -20,6 +25,8 @@ slack_channel = "#media-playback"
 age_buckets_work_days = [1, 3, 7]
 # Older than this, a review is overdue and listed by name.
 overdue_work_days = 7
+# Older than this, a review is only counted on one "stale" line.
+stale_work_days = 60
 max_listed = 10
 
 [authors]

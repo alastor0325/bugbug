@@ -101,15 +101,22 @@ def build_blocks(report: Report, group_label: str) -> list[dict]:
             },
         }
     ]
-    if not report.total:
-        blocks.append(_section(f"No reviews are waiting for {group_label}."))
-        return blocks
-    blocks.append(
-        _section(
-            f"*New in the last work day:* {report.new.total}{_split(report.new)}\n"
-            f"*Waiting:* {report.total}"
+    lines = []
+    if report.total:
+        lines.append(
+            f"*New in the last work day:* {report.new.total}{_split(report.new)}"
         )
+        lines.append(f"*Waiting:* {report.total}")
+    if report.stale.total:
+        lines.append(
+            f"*Stale ({report.settings.stale_work_days}+ work days, not counted above):* "
+            f"{report.stale.total}{_split(report.stale)}"
+        )
+    blocks.append(
+        _section("\n".join(lines) or f"No reviews are waiting for {group_label}.")
     )
+    if not report.total:
+        return blocks
     blocks.append(_section(_table(report)))
     blocks.append(_section(_per_reviewer(report)))
     if report.overdue:
@@ -118,7 +125,7 @@ def build_blocks(report: Report, group_label: str) -> list[dict]:
 
 
 def build_text(report: Report, group_label: str) -> str:
-    if not report.total:
+    if not report.total and not report.stale.total:
         return f"Review load for {group_label}: No reviews are waiting."
     return (
         f"Review load for {group_label}: {report.total} waiting, "
