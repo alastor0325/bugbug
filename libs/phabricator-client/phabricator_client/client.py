@@ -21,6 +21,7 @@ from phabricator_client.config import PhabricatorSettings
 from phabricator_client.models import PhabricatorDiff
 
 _FULL_COMMIT_LEN = 40
+_SEARCH_PAGE_LIMIT = 100
 
 
 class UnresolvedCommitError(Exception):
@@ -116,6 +117,24 @@ class PhabricatorClient:
                 f"Conduit error {data['error_code']}: {data.get('error_info')}"
             )
         return data["result"]
+
+    async def search_all(self, method: str, **payload: Any) -> list[dict]:
+        """Return the ``data`` of every page of a ``*.search`` method.
+
+        Follows Conduit's ``after`` cursor; the plain search helpers here read
+        only the first page.
+        """
+        data: list[dict] = []
+        after = None
+        while True:
+            cursor = {"after": after} if after else {}
+            result = await self.conduit_request(
+                method, **payload, limit=_SEARCH_PAGE_LIMIT, **cursor
+            )
+            data += result.get("data") or []
+            after = (result.get("cursor") or {}).get("after")
+            if not after:
+                return data
 
     async def search_transactions(
         self, object_identifier: str, constraints: dict | None = None

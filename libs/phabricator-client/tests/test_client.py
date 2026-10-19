@@ -511,3 +511,22 @@ def test_defaults_from_env_when_no_settings(monkeypatch):
 def test_conduit_uses_httpx():
     # Guard against a regression back to `requests`.
     assert client_module.httpx is httpx
+
+
+async def test_search_all_follows_the_cursor(monkeypatch):
+    pages = [
+        {"data": [{"id": 1}], "cursor": {"after": "c1"}},
+        {"data": [{"id": 2}], "cursor": {"after": None}},
+    ]
+    calls = []
+
+    async def fake_request(self, method, **payload):
+        calls.append((method, payload))
+        return pages.pop(0)
+
+    monkeypatch.setattr(PhabricatorClient, "conduit_request", fake_request)
+    result = await _client().search_all("user.search", constraints={"x": 1})
+
+    assert result == [{"id": 1}, {"id": 2}]
+    assert calls[0] == ("user.search", {"constraints": {"x": 1}, "limit": 100})
+    assert calls[1][1]["after"] == "c1"
