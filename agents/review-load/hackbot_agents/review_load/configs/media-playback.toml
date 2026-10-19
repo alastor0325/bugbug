@@ -1,0 +1,30 @@
+# The Phabricator project whose review requests we count.
+review_group = "media-playback-reviewers"
+
+# The team roster: Phabricator handle and display name. Reviews requested directly
+# from these people count too. Keep it the same as the playback team's `members` in
+# firefox-review-stats (reviewstats/teams.py).
+[members]
+alwu = "Alastor Wu"
+chunmin = "Chun-Min Chang"
+jolin = "John Lin"
+padenot = "Paul Adenot"
+azebrowski = "azebrowski"
+kinetik = "Matthew Gregan"
+karlt = "Karl Tomlinson"
+aosmond = "Andrew Osmond"
+
+[report]
+slack_channel = "#media-playback"
+# Age buckets in work days from the review request: <1, 1-3, 3-7 and 7+.
+age_buckets_work_days = [1, 3, 7]
+# Older than this, a review is overdue and listed by name.
+overdue_work_days = 7
+max_listed = 10
+
+[authors]
+# A patch author with a Bugzilla email in one of these domains is Mozilla staff.
+staff_email_domains = ["@mozilla.com"]
+# Phabricator handles that the domain check gets wrong.
+staff_accounts = []
+external_accounts = []

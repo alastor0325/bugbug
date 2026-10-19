@@ -1,0 +1,32 @@
+services:
+  review-load-broker:
+    build:
+      context: ../..
+      dockerfile: agents/review-load/Dockerfile
+      target: broker
+    environment:
+      BUGZILLA_API_URL: ${BUGZILLA_API_URL:-https://bugzilla.mozilla.org/rest}
+      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY:?error}
+      PHABRICATOR_URL: ${PHABRICATOR_URL:-https://phabricator.services.mozilla.com}
+      PHABRICATOR_API_KEY: ${PHABRICATOR_API_KEY:?error}
+    expose:
+      - "8765"
+
+  review-load-agent:
+    build:
+      context: ../..
+      dockerfile: agents/review-load/Dockerfile
+      target: agent
+    environment:
+      - RUN_ID
+      - CONFIG=${CONFIG:?error}
+      - DRY_RUN=${DRY_RUN:-true}
+      - BROKER_URL=http://review-load-broker:8765
+      # No uploader locally: summary.json and message.json are written under
+      # /artifacts/<run_id>, bind-mounted to the host's ~/hackbot/artifacts.
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - ${HOME}/hackbot/artifacts:/artifacts
+    depends_on:
+      review-load-broker:
+        condition: service_started

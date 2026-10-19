@@ -22,6 +22,7 @@ members = [
     "hackbot-agent-bug-fix",
     "hackbot-agent-build-repair",
     "hackbot-agent-frontend-triage",
+    "hackbot-agent-review-load",
     "hackbot-agent-test-plan-generator",
     "hackbot-agent-test-repair",
     "hackbot-agent-uplift-resolve",
@@ -2445,6 +2446,42 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "starlette", specifier = ">=0.36.0" },
     { name = "uvicorn", specifier = ">=0.27.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "hackbot-agent-review-load"
+version = "0.1.0"
+source = { editable = "agents/review-load" }
+dependencies = [
+    { name = "hackbot-runtime" },
+    { name = "httpx" },
+    { name = "phabricator-client" },
+    { name = "phabricator-proxy" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "starlette" },
+    { name = "uvicorn" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "hackbot-runtime", editable = "libs/hackbot-runtime" },
+    { name = "httpx", specifier = ">=0.26.0" },
+    { name = "phabricator-client", editable = "libs/phabricator-client" },
+    { name = "phabricator-proxy", editable = "libs/phabricator-proxy" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pydantic-settings", specifier = ">=2.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+    { name = "starlette" },
+    { name = "uvicorn" },
 ]
 provides-extras = ["dev"]
 
