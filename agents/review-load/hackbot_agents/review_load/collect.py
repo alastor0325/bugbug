@@ -26,7 +26,7 @@ EmailLookup = Callable[[list[int]], Awaitable[dict[int, str]]]
 # The waiting revisions, the watched reviewers (PHID -> label) and each author's kind.
 Inputs = tuple[list[Revision], dict[str, str], dict[str, AuthorKind]]
 
-_CONCURRENCY = 8
+_CONCURRENCY = 2
 
 
 def broker_email_lookup(
