@@ -13,7 +13,7 @@ duplicate of a meta bug also fails the run: the hooks know only the team's meta 
 the meta bugs among the duplicate candidates. A comment that names an unreadable or
 restricted bug fails the run too, since the comment cannot be dropped in part and must
 not point at that bug. So does a comment that spells the number of a restricted bug
-that a commit message names. A duplicate of a bug that is not RESOLVED FIXED waits for
+that a commit message names. A duplicate of a bug that was closed with no fix waits for
 a person (see `dupe_target_warning`).
 """
 
@@ -280,16 +280,20 @@ def restricted_warning(ids: list[int], found: Mapping[int, dict] | None) -> str 
 def dupe_target_warning(
     actions: list[dict], bug: int, found: Mapping[int, dict]
 ) -> str | None:
-    """Why a person must check the duplicate close: its target is not RESOLVED FIXED.
+    """Why a person must check the duplicate close: its target was closed with no fix.
 
-    A target closed with no fix, or still open, does not show that this bug is fixed.
-    ``found`` holds the `dupe_of` bug, since `screen_writes` raises otherwise.
+    Such a target, a duplicate chain too, does not show that this bug is fixed. An
+    open target is the normal case and needs no warning. ``found`` holds the `dupe_of`
+    bug, since `screen_writes` raises otherwise.
     """
     duplicate = dupe_of(actions, bug)
     if duplicate is None:
         return None
     target = found[duplicate]
-    if target.get("resolution") == "FIXED":
+    if (
+        target.get("status") not in CLOSED_STATUSES
+        or target.get("resolution") == "FIXED"
+    ):
         return None
     state = f"{target.get('status')} {target.get('resolution') or ''}".strip()
     return (

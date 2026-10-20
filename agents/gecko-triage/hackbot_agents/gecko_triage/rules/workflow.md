@@ -344,8 +344,9 @@ open in this run.
 For a duplicate, the verifier reads the status and the resolution of the target. When
 the target was closed with no fix, it applies the INVALID test to this bug. When the
 target names a bug that fixed the problem, it reads that change in the current code and
-refutes the close if a reported path is still open. A duplicate of a bug that is not
-RESOLVED FIXED always waits for a person.
+refutes the close if a reported path is still open. A duplicate of a bug that was
+closed with a resolution other than FIXED always waits for a person. A duplicate of an
+open bug does not.
 
 In every comment that relies on an earlier fix, name that bug in the first paragraph and
 add it to `see_also`.

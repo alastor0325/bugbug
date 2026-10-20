@@ -387,7 +387,7 @@ def _fake_fetch(monkeypatch, found):
     return calls
 
 
-def _dupe_target(dupe, resolution):
+def _dupe_target(dupe, resolution, status="RESOLVED"):
     from hackbot_agents.gecko_triage.config import TRIAGE_SCOPE
 
     scope = TRIAGE_SCOPE[0]
@@ -396,7 +396,7 @@ def _dupe_target(dupe, resolution):
         "groups": [],
         "product": scope.product,
         "component": scope.component,
-        "status": "RESOLVED",
+        "status": status,
         "resolution": resolution,
         "keywords": [],
         "summary": "s",
@@ -421,21 +421,30 @@ async def test_the_meta_write_on_a_closed_dupe_target_is_dropped(
 
 
 @pytest.mark.parametrize(
-    ("resolution", "warning"),
+    ("status", "resolution", "warning"),
     [
-        ("FIXED", None),
+        ("RESOLVED", "FIXED", None),
+        ("NEW", "", None),
         (
+            "RESOLVED",
             "INVALID",
             "the duplicate target bug 9000002 is RESOLVED INVALID, not FIXED; a person "
             "must check that the current tree fixes every path this bug reports",
         ),
     ],
 )
-async def test_a_duplicate_of_an_unfixed_target_waits_for_a_person(
-    fake_client, tmp_path, new_state, monkeypatch, verdict_stores, resolution, warning
+async def test_a_duplicate_of_a_target_closed_with_no_fix_waits_for_a_person(
+    fake_client,
+    tmp_path,
+    new_state,
+    monkeypatch,
+    verdict_stores,
+    status,
+    resolution,
+    warning,
 ):
     dupe = 9000002
-    _fake_fetch(monkeypatch, {dupe: _dupe_target(dupe, resolution)})
+    _fake_fetch(monkeypatch, {dupe: _dupe_target(dupe, resolution, status)})
     recorder = ActionsRecorder()
     fake_client.script = _duplicate_script(recorder, dupe, verdict_stores, meta=False)
     fake_client.result = _result(

@@ -427,17 +427,30 @@ def test_the_restricted_warning_lists_the_bugs_the_run_met():
         ("RESOLVED", "WONTFIX"),
         ("RESOLVED", "WORKSFORME"),
         ("RESOLVED", "INCOMPLETE"),
-        ("NEW", ""),
+        ("RESOLVED", "DUPLICATE"),
+        ("VERIFIED", "INVALID"),
+        ("CLOSED", "WONTFIX"),
     ],
 )
-def test_a_duplicate_of_an_unfixed_target_needs_a_person(status, resolution):
+def test_a_duplicate_of_a_target_closed_with_no_fix_needs_a_person(status, resolution):
     found = {DUPE: _target(status=status, resolution=resolution)}
     warning = dupe_target_warning(_actions(meta_on=None), BUG, found)
     assert f"bug {DUPE} is {status} {resolution}".strip() + ", not FIXED" in warning
 
 
-def test_a_duplicate_of_a_fixed_target_needs_no_person():
-    found = {DUPE: _target(status="RESOLVED", resolution="FIXED")}
+@pytest.mark.parametrize(
+    ("status", "resolution"),
+    [
+        ("RESOLVED", "FIXED"),
+        ("VERIFIED", "FIXED"),
+        ("NEW", ""),
+        ("ASSIGNED", ""),
+        ("UNCONFIRMED", ""),
+        ("REOPENED", ""),
+    ],
+)
+def test_a_duplicate_of_a_fixed_or_open_target_needs_no_person(status, resolution):
+    found = {DUPE: _target(status=status, resolution=resolution)}
     assert dupe_target_warning(_actions(meta_on=None), BUG, found) is None
 
 
