@@ -15,6 +15,13 @@ add = ["stalled", "regression"]
 # Non-empty on a bug QA filed or follows.
 qa_whiteboard = "cf_qa_whiteboard"
 
+[history]
+# Changes to these fields give the agent nothing new to read, so they do not take the
+# last word away from its comment: the CC list, votes, ranks, and the release status and
+# tracking flags (`cf_status_firefox150`, `cf_tracking_firefox_esr140` and others).
+no_effect = ["cc", "votes", "cf_rank", "cf_fx_points", "cf_fx_iteration"]
+no_effect_prefixes = ["cf_status_", "cf_tracking_"]
+
 [whiteboard]
 # Keeps the agent off one bug. Anyone can add it.
 skip = "[gecko-triage:skip]"

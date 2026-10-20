@@ -293,7 +293,8 @@ must be on `PATH` for profile and spec reading.
 
 The bot accounts are `hackbot@mozilla.tld` and the logins in `BOT_ALIASES`. The agent
 never sends a needinfo to a bot account. When the agent wrote the newest comment and
-nothing changed after it, the preflight skips the bug. A `hackbot@mozilla.tld` comment
+nothing that it reads changed after it, the preflight skips the bug. A CC change, for
+example, does not count. A `hackbot@mozilla.tld` comment
 counts as the agent's only with the `gecko-triage` tag, since other Hackbot agents post
 as that account too. An alias comment counts with or without the tag. `BOT_ALIASES`
 stays out of the repo, because the alias account is temporary.

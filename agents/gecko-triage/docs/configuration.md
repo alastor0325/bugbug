@@ -95,8 +95,8 @@ no list, so it adds no meta bug.
 The bot accounts are `hackbot@mozilla.tld`, which posts every comment, and the logins in
 the `BOT_ALIASES` env var. They decide two things:
 
-- the preflight skips a bug when the agent wrote the newest comment and nothing changed
-  after it;
+- the preflight skips a bug when the agent wrote the newest comment and nothing that the
+  agent reads changed after it (`docs/bugzilla.md`);
 - the agent never sends a needinfo to a bot account.
 
 Every Hackbot agent posts as `hackbot@mozilla.tld`. Hackbot tags each comment with the

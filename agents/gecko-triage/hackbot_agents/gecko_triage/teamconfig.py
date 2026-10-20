@@ -180,6 +180,17 @@ class Fields(_Strict):
     qa_whiteboard: StrictStr
 
 
+class History(_Strict):
+    # Fields whose changes give the agent nothing new to read.
+    no_effect: tuple[Text, ...]
+    no_effect_prefixes: tuple[Text, ...]
+
+    def affects_analysis(self, field: str) -> bool:
+        return field not in self.no_effect and not field.startswith(
+            self.no_effect_prefixes
+        )
+
+
 class Whiteboard(_Strict):
     # A human adds this tag to keep the agent off a bug.
     skip: StrictStr
@@ -206,6 +217,7 @@ class NoTeam(_Strict):
 class Terms(_Strict):
     keywords: Keywords
     fields: Fields
+    history: History
     whiteboard: Whiteboard
     no_team: NoTeam
     meta_summary: Annotated[

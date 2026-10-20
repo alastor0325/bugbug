@@ -12,7 +12,9 @@ item that does not say it is public is dropped too.
 
 A bug read returns only the fields in `ALLOWED_FIELDS`. The broker cannot filter
 nested comments, attachments or history, so it refuses those fields. It sets
-`description` from comment 0 only when that comment is public.
+`description` from comment 0 only when that comment is public. The history of a
+public bug comes from its own tool, as field names with no values, and with no
+changes to comments or attachments.
 
 A search refuses the terms that match private comments or attachments. One risk
 stays: `longdesc` searches comment text, and the duplicate hunter needs it. If
@@ -357,6 +359,47 @@ async def _get_bug_comments(ctx: BugzillaContext, bug_id: int) -> dict:
     return dict(result, count=len(comments), comments=comments)
 
 
+# A history change with one of these keys is about a comment or an attachment, which
+# may be private.
+PRIVATE_ITEM_KEYS = ("attachment_id", "comment_id")
+
+
+def changed_fields(history: list[dict]) -> list[dict]:
+    """Each history entry as its time, its author and the names of the fields it changed.
+
+    The values are dropped, and so are changes to comments and attachments.
+    """
+    entries = []
+    for e in history:
+        fields = [
+            c.get("field_name")
+            for c in e.get("changes") or ()
+            if not any(k in c for k in PRIVATE_ITEM_KEYS)
+        ]
+        if fields:
+            entries.append(
+                {"when": e.get("when"), "who": e.get("who"), "fields": fields}
+            )
+    return entries
+
+
+async def _get_bug_history(
+    ctx: BugzillaContext,
+    bug_id: Annotated[int, Field(description="Bug ID.")],
+    new_since: Annotated[
+        str | None,
+        Field(
+            description="Only changes at or after this time (`2026-10-13T18:01:21Z`)."
+        ),
+    ] = None,
+) -> dict:
+    await _require_public(ctx, bug_id)
+    params = {"new_since": new_since} if new_since else {}
+    result = bugzilla._request(ctx, f"bug/{bug_id}/history", params)
+    bugs = result.get("bugs") or [{}]
+    return {"bug_id": bug_id, "history": changed_fields(bugs[0].get("history") or [])}
+
+
 def point_to_fetch_attachment(note: str) -> str:
     """A `data_omitted` note with its download advice replaced."""
     cut = note.find("Use download_attachment")
@@ -409,6 +452,15 @@ TOOLS = [
         _get_bug_attachments,
         description=GET_BUG_ATTACHMENTS_DESCRIPTION,
         own_schema=True,
+    ),
+    ToolDefinition(
+        name="get_bug_history",
+        namespace="bugzilla",
+        description=(
+            "Who changed which fields of a public bug, and when. Gives the field names "
+            "only, and no changes to comments or attachments."
+        ),
+        handler=off_loop(_get_bug_history),
     ),
 ]
 

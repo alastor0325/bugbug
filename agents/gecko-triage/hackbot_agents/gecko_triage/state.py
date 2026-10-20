@@ -6,7 +6,7 @@ Who asked for what does not matter, because other people also ask for informatio
 
 The code answers three questions from the bug:
 
-| Is there anything to do?    | not when the agent wrote the newest comment and nothing changed after it, unless the bug became closable after it |
+| Is there anything to do?    | not when the agent wrote the newest comment and nothing that it reads changed after it, unless the bug became closable after it |
 | Who does the bug wait for?  | every open needinfo flag, whoever set it                                     |
 | May the bug close?          | INCOMPLETE when every open needinfo is on the reporter, who has been quiet for `STALE_NEEDINFO_DAYS` |
 
@@ -90,6 +90,9 @@ class TriageState:
     bot_aliases: frozenset[str] = BOT_ALIASES
     # The broker withheld the bug (`inaccessible`): `bug` holds only its id.
     restricted: bool = False
+    # The broker's history of changes after the agent's newest comment, when the bug
+    # changed after it: `when`, `who` and the changed `fields`. None when not read.
+    history: tuple[dict, ...] | None = None
 
     @property
     def whiteboard(self) -> str:
@@ -179,7 +182,7 @@ class TriageState:
 
     @property
     def bot_has_last_word(self) -> bool:
-        """Whether the agent wrote the newest comment and nothing changed after it.
+        """Whether the agent wrote the newest comment and nothing it reads changed after it.
 
         The agent's comment is one from `BOT_ACCOUNT` with the `AGENT_TAG` tag, since
         other Hackbot agents post as the same account. A `BOT_ALIASES` login counts by
@@ -187,18 +190,71 @@ class TriageState:
         update posts the comment and its field changes in one transaction, so a change
         at the comment's time is not after it. BMO counts `hackbot@mozilla.tld` as a
         person for `last_change_time_non_bot`, so any later change by a person moves
-        that time past the comment.
+        that time past the comment. Then the broker's history decides: a change to a
+        field that gives nothing new to read, such as CC, keeps the last word.
         """
-        comment = self.newest_comment
-        if comment is None or not self._from_the_agent(comment):
-            return False
-        posted = parse_time(comment.get("creation_time"))
-        changed = parse_time(self.bug.get("last_change_time_non_bot")) or parse_time(
-            self.bug.get("last_change_time")
-        )
+        posted = self._agent_comment_time
+        changed = self._change_time
         if posted is None or changed is None:
             return False
-        return changed <= posted
+        return changed <= posted or self._nothing_to_read_since(posted)
+
+    @cached_property
+    def _agent_comment_time(self) -> dt.datetime | None:
+        """When the agent wrote the newest comment, or None when it did not."""
+        comment = self.newest_comment
+        if comment is None or not self._from_the_agent(comment):
+            return None
+        return parse_time(comment.get("creation_time"))
+
+    @property
+    def changed_after_agent_comment(self) -> dt.datetime | None:
+        """The agent's newest comment time, when the bug changed after it."""
+        posted = self._agent_comment_time
+        changed = self._change_time
+        if posted is None or changed is None:
+            return None
+        return posted if changed > posted else None
+
+    @property
+    def _change_time(self) -> dt.datetime | None:
+        return parse_time(self.bug.get("last_change_time_non_bot")) or parse_time(
+            self.bug.get("last_change_time")
+        )
+
+    def _is_bot_login(self, who: object) -> bool:
+        """An alias of the bot, or a BMO automation account other than `BOT_ACCOUNT`."""
+        who = _lower(who)
+        return who in self.bot_aliases_lower or (
+            who.endswith(".tld") and who != _lower(BOT_ACCOUNT)
+        )
+
+    @cached_property
+    def bot_aliases_lower(self) -> frozenset[str]:
+        return frozenset(map(_lower, self.bot_aliases))
+
+    def _nothing_to_read_since(self, posted: dt.datetime) -> bool:
+        """Whether every change after `posted` gives the agent nothing new to read.
+
+        A change counts when a person who is not a bot made it to a field that
+        `TERMS.history` does not list, for example a comment-free status or keyword
+        change. False when the history was not read, so the agent runs.
+        """
+        if self.history is None:
+            return False
+        for entry in self.history:
+            when = parse_time(entry.get("when"))
+            if when is None:
+                return False
+            if when <= posted or self._is_bot_login(entry.get("who")):
+                continue
+            fields = entry.get("fields") or ()
+            if any(
+                not isinstance(f, str) or TERMS.history.affects_analysis(f)
+                for f in fields
+            ):
+                return False
+        return True
 
     @cached_property
     def incomplete_allowed(self) -> bool:
@@ -298,6 +354,14 @@ async def fetch_state(
             if not bugs:
                 return None
             comments_res = await _call(session, "get_bug_comments", {"bug_id": bug})
+            state = TriageState(
+                bug=bugs[0],
+                comments=comments_res.get("comments") or [],
+                now=now or _now(),
+            )
+            since = state.changed_after_agent_comment
+            if since is not None:
+                state.history = await _history(session, bug, since)
     except Exception as e:  # see docstring
         print(
             f"[gecko_triage] state lookup for bug {bug} failed "
@@ -305,8 +369,30 @@ async def fetch_state(
             file=sys.stderr,
         )
         return None
-    return TriageState(
-        bug=bugs[0],
-        comments=comments_res.get("comments") or [],
-        now=now or _now(),
-    )
+    return state
+
+
+async def _history(
+    session: ClientSession, bug: int, since: dt.datetime
+) -> tuple[dict, ...] | None:
+    """The bug's changes at or after `since`, or None when the broker fails.
+
+    A failure only means that the agent runs, so it does not fail the state lookup.
+    """
+    try:
+        res = await _call(
+            session,
+            "get_bug_history",
+            {"bug_id": bug, "new_since": since.strftime("%Y-%m-%dT%H:%M:%SZ")},
+        )
+    except Exception as e:
+        print(
+            f"[gecko_triage] history lookup for bug {bug} failed "
+            f"({type(e).__name__}: {e})",
+            file=sys.stderr,
+        )
+        return None
+    history = res.get("history")
+    if not isinstance(history, list):
+        return None
+    return tuple(e for e in history if isinstance(e, dict))

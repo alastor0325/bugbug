@@ -36,6 +36,7 @@ PEOPLE_DATA = {
 }
 
 TERMS_DATA = {
+    "history": {"no_effect": ["cc"], "no_effect_prefixes": ["cf_status_"]},
     "meta_summary": r"\[meta\]",
     "keywords": {"meta": "meta", "add": ["stalled", "regression"]},
     "fields": {"qa_whiteboard": "cf_qa_whiteboard"},
@@ -324,6 +325,9 @@ def test_a_terms_file_parses():
     assert terms.fields.qa_whiteboard == "cf_qa_whiteboard"
     assert terms.meta_summary.search("[META] AV1")
     assert terms.no_team.products == ("Core",)
+    assert not terms.history.affects_analysis("cc")
+    assert not terms.history.affects_analysis("cf_status_firefox150")
+    assert terms.history.affects_analysis("priority")
     assert terms.whiteboard.fix_tags == (
         "[gecko-triage:easy-fix]",
         "[gecko-triage:gfb-candidate]",

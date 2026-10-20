@@ -65,6 +65,7 @@ def test_the_broker_serves_only_the_filtered_read_tools():
         "get_bugs",
         "get_bug_comments",
         "get_bug_attachments",
+        "get_bug_history",
     }
 
 
@@ -156,8 +157,53 @@ async def test_get_bug_attachments_drops_private_attachments():
     assert res == {"bug_id": 1, "count": 1, "attachments": [ATTACHMENTS[0]]}
 
 
+async def test_get_bug_history_gives_field_names_only():
+    history = [
+        {
+            "when": "2026-10-13T09:30:00Z",
+            "who": "dev@example.com",
+            "changes": [
+                {"field_name": "cc", "added": "dev@example.com", "removed": ""},
+                {"field_name": "priority", "added": "P2", "removed": "P3"},
+            ],
+        },
+        {
+            "when": "2026-10-13T10:00:00Z",
+            "who": "dev@example.com",
+            "changes": [
+                {
+                    "field_name": "attachments.isobsolete",
+                    "attachment_id": 7,
+                    "added": "1",
+                },
+                {"field_name": "comment_tag", "comment_id": 8, "added": "spam"},
+            ],
+        },
+    ]
+    tools, ctx, client = _tools(
+        {
+            "bug": {"bugs": [dict(PUBLIC)]},
+            "bug/1/history": {"bugs": [{"id": 1, "history": history}]},
+        }
+    )
+    res = await tools["get_bug_history"](ctx, 1, new_since="2026-10-13T09:00:00Z")
+    assert res == {
+        "bug_id": 1,
+        "history": [
+            {
+                "when": "2026-10-13T09:30:00Z",
+                "who": "dev@example.com",
+                "fields": ["cc", "priority"],
+            }
+        ],
+    }
+    assert client.calls[1] == ("bug/1/history", {"new_since": "2026-10-13T09:00:00Z"})
+
+
 @pytest.mark.parametrize("bug", [RESTRICTED, UNKNOWN])
-@pytest.mark.parametrize("tool", ["get_bug_comments", "get_bug_attachments"])
+@pytest.mark.parametrize(
+    "tool", ["get_bug_comments", "get_bug_attachments", "get_bug_history"]
+)
 async def test_a_restricted_bug_gives_no_comments_or_attachments(tool, bug):
     tools, ctx, client = _tools({"bug": {"bugs": [dict(bug)]}})
     with pytest.raises(ToolError) as e:

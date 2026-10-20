@@ -5,6 +5,7 @@ import json
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
+import pytest
 from conftest import BOT_COMMENTED, LATER, NOW, load, quiet, with_needinfo
 from hackbot_agents.gecko_triage import state as state_module
 from hackbot_agents.gecko_triage.config import AGENT_TAG, BOT_ACCOUNT, PEOPLE
@@ -88,6 +89,99 @@ def test_a_change_after_the_bot_comment_takes_the_last_word_away(
     changed = quiet(bug_new, last_change_time_non_bot="2026-10-13T09:00:01Z")
     s = TriageState(bug=changed, comments=comments_returning[:3], now=NOW)
     assert not s.bot_has_last_word
+
+
+PERSON = "dev@example.com"
+AFTER = "2026-10-13T09:30:00Z"
+
+
+def _changed_state(bug_new, comments_returning, history):
+    bug = quiet(bug_new, last_change_time_non_bot=AFTER)
+    return TriageState(
+        bug=bug, comments=comments_returning[:3], now=NOW, history=history
+    )
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        ["cc"],
+        ["votes", "cf_rank"],
+        ["cf_status_firefox150"],
+        ["cf_tracking_firefox_esr140", "cc"],
+    ],
+)
+def test_a_change_with_nothing_to_read_keeps_the_last_word(
+    bug_new, comments_returning, fields
+):
+    history = ({"when": AFTER, "who": PERSON, "fields": fields},)
+    assert _changed_state(bug_new, comments_returning, history).bot_has_last_word
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [["priority"], ["status"], ["keywords"], ["whiteboard"], ["cc", "severity"], [5]],
+)
+def test_a_change_the_agent_reads_takes_the_last_word_away(
+    bug_new, comments_returning, fields
+):
+    history = ({"when": AFTER, "who": PERSON, "fields": fields},)
+    assert not _changed_state(bug_new, comments_returning, history).bot_has_last_word
+
+
+@pytest.mark.parametrize(
+    "who", ["pilot-bot@example.com", "release-mgmt-account-bot@mozilla.tld"]
+)
+def test_a_bot_change_keeps_the_last_word(bug_new, comments_returning, who):
+    history = ({"when": AFTER, "who": who, "fields": ["priority"]},)
+    s = _changed_state(bug_new, comments_returning, history)
+    s.bot_aliases = frozenset({"pilot-bot@example.com"})
+    assert s.bot_has_last_word
+
+
+def test_a_change_by_the_hackbot_account_takes_the_last_word_away(
+    bug_new, comments_returning
+):
+    # Other Hackbot agents post as the same account.
+    history = ({"when": AFTER, "who": BOT_ACCOUNT, "fields": ["priority"]},)
+    assert not _changed_state(bug_new, comments_returning, history).bot_has_last_word
+
+
+def test_a_change_at_the_comment_time_is_part_of_the_bot_update(
+    bug_new, comments_returning
+):
+    history = ({"when": BOT_COMMENTED, "who": PERSON, "fields": ["priority"]},)
+    assert _changed_state(bug_new, comments_returning, history).bot_has_last_word
+
+
+@pytest.mark.parametrize(
+    "history", [None, ({"when": None, "who": PERSON, "fields": ["cc"]},)]
+)
+def test_an_unread_history_takes_the_last_word_away(
+    bug_new, comments_returning, history
+):
+    assert not _changed_state(bug_new, comments_returning, history).bot_has_last_word
+
+
+def test_the_history_is_asked_for_only_after_a_change(bug_new, comments_returning):
+    assert (
+        TriageState(
+            bug=quiet(bug_new), comments=comments_returning[:3]
+        ).changed_after_agent_comment
+        is None
+    )
+    assert _changed_state(
+        bug_new, comments_returning, None
+    ).changed_after_agent_comment == dt.datetime(
+        2026, 10, 13, 9, tzinfo=dt.timezone.utc
+    )
+    answered = quiet(bug_new, last_change_time_non_bot="2026-10-14T10:00:00Z")
+    assert (
+        TriageState(
+            bug=answered, comments=comments_returning
+        ).changed_after_agent_comment
+        is None
+    )
 
 
 def test_a_person_comment_after_the_bot_takes_the_last_word_away(
@@ -363,6 +457,43 @@ async def test_fetch_state_reads_the_bug_and_its_comments(monkeypatch):
 
     assert state.bug == bug and state.comments == comments
     assert state.now == NOW
+
+
+async def test_fetch_state_reads_the_history_after_a_change(monkeypatch):
+    bug = quiet(load("bug_new.json")["bugs"][0], last_change_time_non_bot=AFTER)
+    comments = load("comments_returning.json")["bugs"]["9000001"]["comments"][:3]
+    history = [{"when": AFTER, "who": PERSON, "fields": ["cc"]}]
+    calls = _fake_broker(
+        monkeypatch,
+        {
+            "get_bugs": {"count": 1, "bugs": [bug], "inaccessible": []},
+            "get_bug_comments": {"bug_id": 9000001, "comments": comments},
+            "get_bug_history": {"bug_id": 9000001, "history": history},
+        },
+    )
+    state = await fetch_state({"url": "http://broker/mcp"}, 9000001, now=NOW)
+    assert dict(calls)["get_bug_history"] == {
+        "bug_id": 9000001,
+        "new_since": BOT_COMMENTED,
+    }
+    assert state.history == tuple(history)
+    assert state.bot_has_last_word
+
+
+async def test_a_history_failure_still_gives_the_state(monkeypatch):
+    bug = quiet(load("bug_new.json")["bugs"][0], last_change_time_non_bot=AFTER)
+    comments = load("comments_returning.json")["bugs"]["9000001"]["comments"][:3]
+    _fake_broker(
+        monkeypatch,
+        {
+            "get_bugs": {"count": 1, "bugs": [bug], "inaccessible": []},
+            "get_bug_comments": {"bug_id": 9000001, "comments": comments},
+            "get_bug_history": RuntimeError("broker down"),
+        },
+    )
+    state = await fetch_state({"url": "http://broker/mcp"}, 9000001, now=NOW)
+    assert state is not None and state.history is None
+    assert not state.bot_has_last_word
 
 
 async def test_fetch_state_marks_a_withheld_bug_as_restricted(monkeypatch):
