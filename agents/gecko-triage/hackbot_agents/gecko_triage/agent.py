@@ -819,8 +819,9 @@ with every comment, from comment 0 to the newest.
 - **DUPLICATE**: read the `dupe_of` bug. It must cover this bug's symptom and its
   cause: fixing it must fix this bug. It must not be a meta or tracking bug, and it
   must be in the same component area. Read the status and the resolution of the
-  `dupe_of` bug. If it was closed with no fix (INVALID, WONTFIX, WORKSFORME or
-  INCOMPLETE), apply the INVALID test above to this bug, against the current code. If
+  `dupe_of` bug. If it is a DUPLICATE, follow the chain to the last bug. If the last
+  bug was closed with no fix (INVALID, WONTFIX, WORKSFORME or INCOMPLETE), apply the
+  INVALID test above to this bug, against the current code. If
   the `dupe_of` bug or its comments name a bug that fixed the problem or added a check,
   read that change in the current code with the `searchfox` tools and the VCS tools.
   Make sure that it covers each path and each claim of this report. If a reported path

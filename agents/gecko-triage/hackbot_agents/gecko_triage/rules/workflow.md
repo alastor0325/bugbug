@@ -149,11 +149,13 @@ propose or name a bug that `get_bugs` lists as inaccessible. When the older bug 
 this bug's trigger and cause, propose the duplicate, and put the new details in the
 comment. Prefer NEW when you are unsure: a wrong duplicate sends a human to the wrong bug.
 
-**A target closed with no fix.** Read the status and the resolution of the older bug. A
-duplicate target that is closed with no fix (INVALID, WONTFIX, WORKSFORME or INCOMPLETE)
-makes this close an INVALID close. Before you record DUPLICATE, apply the INVALID test to
-this bug against the current tree. If a failure that the reported input or code path can
-reach is still there, the bug is not INVALID and it is not a duplicate: keep it open.
+**A target closed with no fix.** Read the status and the resolution of the older bug. If
+it is a DUPLICATE, follow the chain to the last bug. A target that is closed with no fix
+(INVALID, WONTFIX, WORKSFORME, INCOMPLETE, or a DUPLICATE of such a bug) means that this
+duplicate close has the same effect as an INVALID close. Before you record DUPLICATE,
+apply the INVALID test to this bug against the current tree. If a failure that the
+reported input or code path can reach is still there, the bug is not INVALID and it is not
+a duplicate: keep it open.
 
 **An earlier fix.** When the older bug or its comments say that another bug fixed the
 problem or added a check, read that change in the current tree and make sure that it

@@ -742,10 +742,13 @@ def test_a_restricted_regressor_waits_for_a_person():
 
 def test_a_duplicate_of_a_bug_closed_with_no_fix_gets_the_invalid_test():
     workflow = _flat("workflow.md")
+    assert "If it is a DUPLICATE, follow the chain to the last bug." in workflow
     assert (
-        "A duplicate target that is closed with no fix (INVALID, WONTFIX, WORKSFORME "
-        "or INCOMPLETE) makes this close an INVALID close." in workflow
+        "A target that is closed with no fix (INVALID, WONTFIX, WORKSFORME, INCOMPLETE, "
+        "or a DUPLICATE of such a bug) means that this duplicate close has the same "
+        "effect as an INVALID close." in workflow
     )
+    assert "makes this close an INVALID close" not in workflow
     assert (
         "Before you record DUPLICATE, apply the INVALID test to this bug against the "
         "current tree." in workflow
@@ -775,9 +778,10 @@ def test_a_comment_names_an_earlier_fix_in_its_first_paragraph():
 def test_the_close_verifier_checks_the_duplicate_target_resolution_and_fix():
     prompt = " ".join(make_close_verifier().prompt.split())
     assert "Read the status and the resolution of the `dupe_of` bug." in prompt
+    assert "If it is a DUPLICATE, follow the chain to the last bug." in prompt
     assert (
-        "If it was closed with no fix (INVALID, WONTFIX, WORKSFORME or INCOMPLETE), "
-        "apply the INVALID test above to this bug" in prompt
+        "If the last bug was closed with no fix (INVALID, WONTFIX, WORKSFORME or "
+        "INCOMPLETE), apply the INVALID test above to this bug" in prompt
     )
     assert (
         "If the `dupe_of` bug or its comments name a bug that fixed the problem or "
