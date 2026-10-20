@@ -13,8 +13,9 @@ item that does not say it is public is dropped too.
 A bug read returns only the fields in `ALLOWED_FIELDS`. The broker cannot filter
 nested comments, attachments or history, so it refuses those fields. It sets
 `description` from comment 0 only when that comment is public. The history of a
-public bug comes from its own tool, as field names with no values, and with no
-changes to comments or attachments.
+public bug comes from its own tool, as field names with no values. It keeps only the
+changes that a logged-out reader sees: no time tracking or group changes, no changes
+to private comments or attachments, and no relation that names only hidden bugs.
 
 A search refuses the terms that match private comments or attachments. One risk
 stays: `longdesc` searches comment text, and the duplicate hunter needs it. If
@@ -359,23 +360,72 @@ async def _get_bug_comments(ctx: BugzillaContext, bug_id: int) -> dict:
     return dict(result, count=len(comments), comments=comments)
 
 
-# A history change with one of these keys is about a comment or an attachment, which
-# may be private.
-PRIVATE_ITEM_KEYS = ("attachment_id", "comment_id")
+# History fields that BMO hides from a logged-out reader: time tracking always, and
+# group changes. A relation change shows only when it names a bug the reader can see.
+HIDDEN_HISTORY_FIELDS = frozenset(
+    {"estimated_time", "remaining_time", "work_time", "deadline", "groups", "bug_group"}
+)
+RELATION_FIELDS = frozenset(
+    {"depends_on", "blocks", "regressions", "regressed_by", "see_also"}
+)
+_BUG_ID = re.compile(r"\d+")
+_LOCAL_BUG_URL = re.compile(r"/show_bug\.cgi\?id=(\d+)")
 
 
-def changed_fields(history: list[dict]) -> list[dict]:
+def _related(change: dict) -> tuple[set[int], bool]:
+    """The bug ids that a relation change names, and whether it names another site."""
+    values = [v for v in (change.get("added"), change.get("removed")) if v]
+    if change.get("field_name") != "see_also":
+        return {int(i) for v in values for i in _BUG_ID.findall(str(v))}, False
+    ids, external = set(), False
+    for url in (u.strip() for v in values for u in str(v).split(",")):
+        m = _LOCAL_BUG_URL.search(url)
+        if m and "bugzilla.mozilla.org" in url:
+            ids.add(int(m.group(1)))
+        elif url:
+            external = True
+    return ids, external
+
+
+def related_bugs(history: list[dict]) -> set[int]:
+    """Every bug id that a relation change in ``history`` names."""
+    return {
+        i
+        for e in history
+        for c in e.get("changes") or ()
+        if c.get("field_name") in RELATION_FIELDS
+        for i in _related(c)[0]
+    }
+
+
+def changed_fields(
+    history: list[dict],
+    visible_bugs: set[int],
+    public_attachments: set[int],
+    public_comments: set[int],
+) -> list[dict]:
     """Each history entry as its time, its author and the names of the fields it changed.
 
-    The values are dropped, and so are changes to comments and attachments.
+    The values are dropped. A change shows only when a logged-out reader sees it: not a
+    hidden field, not about a private attachment or comment, and for a relation, about
+    at least one bug in ``visible_bugs`` or another site.
     """
     entries = []
     for e in history:
-        fields = [
-            c.get("field_name")
-            for c in e.get("changes") or ()
-            if not any(k in c for k in PRIVATE_ITEM_KEYS)
-        ]
+        fields = []
+        for c in e.get("changes") or ():
+            name = c.get("field_name")
+            if name in HIDDEN_HISTORY_FIELDS:
+                continue
+            if "attachment_id" in c and c["attachment_id"] not in public_attachments:
+                continue
+            if "comment_id" in c and c["comment_id"] not in public_comments:
+                continue
+            if name in RELATION_FIELDS:
+                ids, external = _related(c)
+                if not external and not ids & visible_bugs:
+                    continue
+            fields.append(name)
         if fields:
             entries.append(
                 {"when": e.get("when"), "who": e.get("who"), "fields": fields}
@@ -383,21 +433,47 @@ def changed_fields(history: list[dict]) -> list[dict]:
     return entries
 
 
+def _public_ids(ctx: BugzillaContext, path: str, items_of) -> set[int]:
+    result = bugzilla._request(ctx, path, {"include_fields": "id,is_private"})
+    return {i["id"] for i in public_items(items_of(result))}
+
+
 async def _get_bug_history(
     ctx: BugzillaContext,
     bug_id: Annotated[int, Field(description="Bug ID.")],
     new_since: Annotated[
         str | None,
-        Field(
-            description="Only changes at or after this time (`2026-10-13T18:01:21Z`)."
-        ),
+        Field(description="Only changes after this time (`2026-10-13T18:01:21Z`)."),
     ] = None,
 ) -> dict:
     await _require_public(ctx, bug_id)
     params = {"new_since": new_since} if new_since else {}
     result = bugzilla._request(ctx, f"bug/{bug_id}/history", params)
-    bugs = result.get("bugs") or [{}]
-    return {"bug_id": bug_id, "history": changed_fields(bugs[0].get("history") or [])}
+    history = (result.get("bugs") or [{}])[0].get("history") or []
+    changes = [c for e in history for c in e.get("changes") or ()]
+
+    related = related_bugs(history)
+    visible = set()
+    if related:
+        found = await bugzilla.get_bugs(ctx, sorted(related), f"id,{GROUPS}")
+        visible = {b["id"] for b in public_bugs(found["bugs"])}
+    attachments = comments = set()
+    if any("attachment_id" in c for c in changes):
+        attachments = _public_ids(
+            ctx,
+            f"bug/{bug_id}/attachment",
+            lambda r: (r.get("bugs") or {}).get(str(bug_id), []),
+        )
+    if any("comment_id" in c for c in changes):
+        comments = _public_ids(
+            ctx,
+            f"bug/{bug_id}/comment",
+            lambda r: (r.get("bugs") or {}).get(str(bug_id), {}).get("comments", []),
+        )
+    return {
+        "bug_id": bug_id,
+        "history": changed_fields(history, visible, attachments, comments),
+    }
 
 
 def point_to_fetch_attachment(note: str) -> str:
@@ -458,7 +534,7 @@ TOOLS = [
         namespace="bugzilla",
         description=(
             "Who changed which fields of a public bug, and when. Gives the field names "
-            "only, and no changes to comments or attachments."
+            "only, and only the changes that a logged-out reader sees."
         ),
         handler=off_loop(_get_bug_history),
     ),

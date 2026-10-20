@@ -18,8 +18,8 @@ It skips a bug, before any model turn, when any of these is true:
 - the bug has a security keyword (`sec-*`, `csectype-*` or `security*`);
 - the whiteboard contains `[gecko-triage:skip]`;
 - Mozilla staff who are not QA filed it and the severity is already set;
-- the agent wrote the newest comment, and nothing that the agent reads changed on the bug
-  after it. A change to a field in the `[history]` table of `shared/bugzilla.toml`
+- the agent wrote the newest comment, and nothing that changes the analysis happened on
+  the bug after it. A change to a field in the `[history]` table of `shared/bugzilla.toml`
   (CC, votes, ranks, release status and tracking flags) does not count, and nor does a
   change by a bot alias or a BMO automation account. The agent's comment comes from `hackbot@mozilla.tld` with the `gecko-triage` tag, or from
   a login in `BOT_ALIASES` with or without the tag. A comment by another Hackbot agent
@@ -53,7 +53,9 @@ filters every read, and it does not trust the key.
   public.
 - A search cannot use terms that match private comments or attachments.
 - It gives the history of a public bug as the names of the changed fields, with no
-  values, and with no changes to comments or attachments.
+  values. It keeps only what a logged-out reader sees: no time tracking or group changes,
+  no changes to private comments or attachments, and no relation (depends on, blocks,
+  regressions, see also) that names only bugs the reader cannot see.
 - It gives attachment metadata. The prompt tells the model to ask for metadata only. With
   `include_data`, the broker can also put small public text attachments in the reply.
 

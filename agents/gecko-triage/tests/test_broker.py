@@ -157,28 +157,16 @@ async def test_get_bug_attachments_drops_private_attachments():
     assert res == {"bug_id": 1, "count": 1, "attachments": [ATTACHMENTS[0]]}
 
 
+def _entry(*changes, when="2026-10-13T09:30:00Z"):
+    return {"when": when, "who": "dev@example.com", "changes": list(changes)}
+
+
 async def test_get_bug_history_gives_field_names_only():
     history = [
-        {
-            "when": "2026-10-13T09:30:00Z",
-            "who": "dev@example.com",
-            "changes": [
-                {"field_name": "cc", "added": "dev@example.com", "removed": ""},
-                {"field_name": "priority", "added": "P2", "removed": "P3"},
-            ],
-        },
-        {
-            "when": "2026-10-13T10:00:00Z",
-            "who": "dev@example.com",
-            "changes": [
-                {
-                    "field_name": "attachments.isobsolete",
-                    "attachment_id": 7,
-                    "added": "1",
-                },
-                {"field_name": "comment_tag", "comment_id": 8, "added": "spam"},
-            ],
-        },
+        _entry(
+            {"field_name": "cc", "added": "dev@example.com", "removed": ""},
+            {"field_name": "priority", "added": "P2", "removed": "P3"},
+        )
     ]
     tools, ctx, client = _tools(
         {
@@ -198,6 +186,82 @@ async def test_get_bug_history_gives_field_names_only():
         ],
     }
     assert client.calls[1] == ("bug/1/history", {"new_since": "2026-10-13T09:00:00Z"})
+    # No relation, attachment or comment change, so nothing else is read.
+    assert len(client.calls) == 2
+
+
+def test_hidden_history_fields_are_dropped():
+    history = [
+        _entry({"field_name": f, "added": "1", "removed": ""})
+        for f in ("estimated_time", "remaining_time", "work_time", "deadline", "groups")
+    ]
+    assert broker.changed_fields(history, set(), set(), set()) == []
+
+
+@pytest.mark.parametrize(
+    ("change", "kept"),
+    [
+        ({"field_name": "depends_on", "added": "2", "removed": ""}, False),
+        ({"field_name": "blocks", "added": "1, 2", "removed": ""}, True),
+        ({"field_name": "regressed_by", "added": "", "removed": "2"}, False),
+        ({"field_name": "regressions", "added": "1", "removed": ""}, True),
+        (
+            {
+                "field_name": "see_also",
+                "added": "https://bugzilla.mozilla.org/show_bug.cgi?id=2",
+                "removed": "",
+            },
+            False,
+        ),
+        (
+            {
+                "field_name": "see_also",
+                "added": "https://github.com/w3c/media-source/issues/1",
+                "removed": "",
+            },
+            True,
+        ),
+    ],
+)
+def test_a_relation_change_shows_only_with_a_visible_bug(change, kept):
+    # Bug 1 is visible and bug 2 is hidden.
+    entries = broker.changed_fields([_entry(change)], {1}, set(), set())
+    assert bool(entries) is kept
+
+
+def test_changes_to_private_attachments_and_comments_are_dropped():
+    history = [
+        _entry(
+            {"field_name": "attachments.isobsolete", "attachment_id": 20, "added": "1"},
+            {"field_name": "attachments.isobsolete", "attachment_id": 21, "added": "1"},
+            {"field_name": "comment_tag", "comment_id": 10, "added": "spam"},
+            {"field_name": "comment_tag", "comment_id": 11, "added": "spam"},
+        )
+    ]
+    entries = broker.changed_fields(history, set(), {20}, {10})
+    assert entries[0]["fields"] == ["attachments.isobsolete", "comment_tag"]
+
+
+async def test_get_bug_history_checks_which_items_and_bugs_are_public():
+    history = [
+        _entry(
+            {"field_name": "flagtypes.name", "attachment_id": 21, "added": "review?"},
+            {"field_name": "longdescs.isprivate", "comment_id": 10, "added": "0"},
+            {"field_name": "depends_on", "added": "2", "removed": ""},
+        )
+    ]
+    tools, ctx, client = _tools(
+        {
+            "bug": {"bugs": [dict(PUBLIC), dict(RESTRICTED)]},
+            "bug/1/history": {"bugs": [{"id": 1, "history": history}]},
+            "bug/1/attachment": {"bugs": {"1": ATTACHMENTS}},
+            "bug/1/comment": {"bugs": {"1": {"comments": COMMENTS}}},
+        }
+    )
+    res = await tools["get_bug_history"](ctx, 1)
+    # Attachment 21 is private and bug 2 is restricted; comment 10 is public.
+    assert res["history"][0]["fields"] == ["longdescs.isprivate"]
+    assert ("bug/1/attachment", {"include_fields": "id,is_private"}) in client.calls
 
 
 @pytest.mark.parametrize("bug", [RESTRICTED, UNKNOWN])

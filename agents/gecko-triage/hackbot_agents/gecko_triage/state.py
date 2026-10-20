@@ -6,7 +6,7 @@ Who asked for what does not matter, because other people also ask for informatio
 
 The code answers three questions from the bug:
 
-| Is there anything to do?    | not when the agent wrote the newest comment and nothing that it reads changed after it, unless the bug became closable after it |
+| Is there anything to do?    | not when the agent wrote the newest comment and nothing that changes the analysis happened after it, unless the bug became closable after it |
 | Who does the bug wait for?  | every open needinfo flag, whoever set it                                     |
 | May the bug close?          | INCOMPLETE when every open needinfo is on the reporter, who has been quiet for `STALE_NEEDINFO_DAYS` |
 
@@ -182,7 +182,7 @@ class TriageState:
 
     @property
     def bot_has_last_word(self) -> bool:
-        """Whether the agent wrote the newest comment and nothing it reads changed after it.
+        """Whether the agent wrote the newest comment and nothing changed the analysis after it.
 
         The agent's comment is one from `BOT_ACCOUNT` with the `AGENT_TAG` tag, since
         other Hackbot agents post as the same account. A `BOT_ALIASES` login counts by
@@ -375,7 +375,7 @@ async def fetch_state(
 async def _history(
     session: ClientSession, bug: int, since: dt.datetime
 ) -> tuple[dict, ...] | None:
-    """The bug's changes at or after `since`, or None when the broker fails.
+    """The bug's changes after `since`, or None when the broker fails.
 
     A failure only means that the agent runs, so it does not fail the state lookup.
     """

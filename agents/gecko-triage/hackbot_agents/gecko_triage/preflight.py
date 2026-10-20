@@ -124,7 +124,7 @@ def skip_reason(state: TriageState) -> str | None:
         return f"filed by a Mozilla employee who is not QA ({bug.get('creator')})"
     if state.bot_has_last_word and not state.closable_since_newest_comment:
         return (
-            "gecko-triage or a bot alias wrote the newest comment and nothing that it "
-            "reads changed after it"
+            "gecko-triage or a bot alias wrote the newest comment and nothing that "
+            "changes the analysis happened after it"
         )
     return None

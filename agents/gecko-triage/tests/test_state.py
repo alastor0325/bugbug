@@ -134,9 +134,32 @@ def test_a_change_the_agent_reads_takes_the_last_word_away(
 )
 def test_a_bot_change_keeps_the_last_word(bug_new, comments_returning, who):
     history = ({"when": AFTER, "who": who, "fields": ["priority"]},)
-    s = _changed_state(bug_new, comments_returning, history)
-    s.bot_aliases = frozenset({"pilot-bot@example.com"})
+    s = TriageState(
+        bug=quiet(bug_new, last_change_time_non_bot=AFTER),
+        comments=comments_returning[:3],
+        now=NOW,
+        history=history,
+        bot_aliases=frozenset({"pilot-bot@example.com"}),
+    )
     assert s.bot_has_last_word
+
+
+def test_a_later_change_that_counts_takes_the_last_word_away(
+    bug_new, comments_returning
+):
+    history = (
+        {"when": AFTER, "who": PERSON, "fields": ["cc"]},
+        {"when": "2026-10-13T09:40:00Z", "who": PERSON, "fields": ["priority"]},
+    )
+    assert not _changed_state(bug_new, comments_returning, history).bot_has_last_word
+
+
+def test_an_empty_history_after_a_hidden_change_keeps_the_last_word(
+    bug_new, comments_returning
+):
+    # The broker drops a change that a logged-out reader cannot see, such as a
+    # private comment, so the agent has nothing new to read.
+    assert _changed_state(bug_new, comments_returning, ()).bot_has_last_word
 
 
 def test_a_change_by_the_hackbot_account_takes_the_last_word_away(

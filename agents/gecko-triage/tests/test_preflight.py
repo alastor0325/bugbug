@@ -126,8 +126,8 @@ def test_reporter_audience(bug_new):
 
 
 SKIP_BOT_LAST = (
-    "gecko-triage or a bot alias wrote the newest comment and nothing that it reads "
-    "changed after it"
+    "gecko-triage or a bot alias wrote the newest comment and nothing that changes "
+    "the analysis happened after it"
 )
 
 
