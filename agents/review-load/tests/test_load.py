@@ -8,6 +8,7 @@ from hackbot_agents.review_load.load import (
     classify_author,
     direct_only,
     in_scope,
+    report_rows,
     waiting_since,
 )
 from testdata import (
@@ -238,3 +239,40 @@ class TestScope:
         assert not direct_only(
             rev(1, reviewers={GROUP: "added", ALICE: "added"}), WATCHED, GROUP
         )
+
+
+class TestRows:
+    def test_rows_cover_every_review_with_its_state(self):
+        report = _report(
+            [
+                rev(1, created=ts(2026, 10, 19, 6)),
+                rev(2, created=ts(2026, 10, 14)),
+                rev(3, created=ts(2026, 10, 1)),
+                rev(4, created=ts(2026, 1, 5)),
+            ],
+            kinds={CAROL: "staff"},
+        )
+        rows = {row["id"]: row for row in report_rows(report)}
+        assert {i: r["state"] for i, r in rows.items()} == {
+            1: "new",
+            2: "waiting",
+            3: "overdue",
+            4: "stale",
+        }
+        assert rows[3] == {
+            "id": 3,
+            "url": "https://phabricator.services.mozilla.com/D3",
+            "title": "Bug 1900000 - Change 3",
+            "bug_id": 1900000,
+            "author": "staff",
+            "reviewers": ["#example-reviewers"],
+            "waiting_since": "2026-10-01T00:00:00+00:00",
+            "age_work_days": 12.5,
+            "state": "overdue",
+        }
+
+    def test_stale_reviews_keep_their_details(self):
+        report = _report([rev(4, created=ts(2026, 1, 5))])
+        [stale] = report.stale_reviews
+        assert stale.revision.id == 4
+        assert stale.reviewers == ("#example-reviewers",)

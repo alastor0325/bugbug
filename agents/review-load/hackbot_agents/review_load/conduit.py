@@ -1,7 +1,21 @@
-"""Parse Conduit responses into the plain records the counting works on."""
+"""Parse Conduit responses into the plain records the counting works on, and link back to Phabricator."""
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+
+from phabricator_client import PhabricatorSettings
+
+# The agent's own client points at the broker; links go to Phabricator itself.
+PHABRICATOR_URL = PhabricatorSettings.model_fields["url"].default
+
+
+def revision_url(revision_id: int) -> str:
+    return f"{PHABRICATOR_URL}/D{revision_id}"
+
+
+def revisions_url(revision_ids: list[int]) -> str:
+    """One Phabricator search listing ``revision_ids``."""
+    return f"{PHABRICATOR_URL}/differential/?ids={','.join(map(str, revision_ids))}"
 
 
 @dataclass(frozen=True)

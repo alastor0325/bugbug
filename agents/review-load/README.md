@@ -61,6 +61,8 @@ Add a group: copy `configs/media-playback.toml`, change the keys, and run the te
 - An author is staff or external from the Bugzilla login email
   (`bugzilla.account.search`, then the Bugzilla user record). An author with no linked
   Bugzilla account is "unknown".
+- The overdue list and the stale line link to one Phabricator search
+  (`/differential/?ids=...`) with all of their revisions, to work through them.
 - On Saturday and Sunday the run ends with no message.
 
 ## Broker
@@ -100,7 +102,8 @@ A local run has no hackbot-api apply step, so it never posts to Slack.
      uv run --package hackbot-agent-review-load python -m hackbot_agents.review_load
    ```
 
-4. Read `message.json` and `summary.json` under `~/hackbot/artifacts/<run_id>/` (Docker)
+4. Read `message.json`, `reviews.json` (every waiting and stale review, with its age and
+   state) and `summary.json` under `~/hackbot/artifacts/<run_id>/` (Docker)
    or `artifacts/<run_id>/` (no Docker). To see the message as Slack shows it, paste
    `blocks` into the [Block Kit Builder](https://app.slack.com/block-kit-builder).
 

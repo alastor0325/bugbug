@@ -9,13 +9,14 @@ from hackbot_runtime.actions.slack import record_message
 
 from .collect import Inputs
 from .config import ReviewLoadConfig
-from .load import build_report
+from .load import build_report, report_rows
 from .message import build_blocks, build_text
 from .workdays import is_weekend
 
 logger = logging.getLogger(__name__)
 
 MESSAGE_ARTIFACT = "message.json"
+REVIEWS_ARTIFACT = "reviews.json"
 
 
 class ReviewLoadResult(HackbotAgentResult):
@@ -50,6 +51,7 @@ async def run_review_load(
         "blocks": build_blocks(report, config.group_label),
     }
     publish_json(MESSAGE_ARTIFACT, message)
+    publish_json(REVIEWS_ARTIFACT, {"reviews": report_rows(report)})
     logger.info("%s", message["text"])
 
     if dry_run:

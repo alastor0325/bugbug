@@ -6,7 +6,7 @@ from datetime import datetime
 from functools import cached_property
 from typing import Literal
 
-from .conduit import Revision
+from .conduit import Revision, revision_url
 from .config import AuthorSettings, ReportSettings
 from .workdays import bucket_index, work_days_between
 
@@ -52,7 +52,8 @@ class Report:
     reviews: list[WaitingReview]
     buckets: list[Bucket]
     per_reviewer: list[ReviewerLoad]
-    stale: Bucket
+    # Oldest first.
+    stale_reviews: list[WaitingReview]
 
     @property
     def total(self) -> int:
@@ -61,6 +62,10 @@ class Report:
     @property
     def new(self) -> Bucket:
         return self.buckets[0]
+
+    @cached_property
+    def stale(self) -> Bucket:
+        return Bucket(dict(Counter(r.author for r in self.stale_reviews)))
 
     @cached_property
     def overdue(self) -> list[WaitingReview]:
@@ -132,36 +137,30 @@ def build_report(
     reviews = []
     waiting: Counter[str] = Counter()
     overdue: Counter[str] = Counter()
-    stale: Counter[AuthorKind] = Counter()
+    stale_reviews = []
     for revision in revisions:
         pending = pending_reviewers(revision, watched)
         if not pending:
             continue
-        author = author_kinds.get(revision.author_phid, "unknown")
-        since_by_phid = {
-            phid: since
-            for phid in pending
-            if work_days_between(since := waiting_since(revision, phid), now)
-            < settings.stale_work_days
-        }
-        if not since_by_phid:
-            stale[author] += 1
-            continue
-        for phid, since in since_by_phid.items():
+        since_by_phid = {phid: waiting_since(revision, phid) for phid in pending}
+        age_by_phid = {p: work_days_between(t, now) for p, t in since_by_phid.items()}
+        fresh = [p for p in pending if age_by_phid[p] < settings.stale_work_days]
+        for phid in fresh:
             waiting[watched[phid]] += 1
-            if work_days_between(since, now) >= settings.overdue_work_days:
+            if age_by_phid[phid] >= settings.overdue_work_days:
                 overdue[watched[phid]] += 1
-        since = min(since_by_phid.values())
-        reviews.append(
+        oldest = max(fresh or pending, key=age_by_phid.get)
+        (reviews if fresh else stale_reviews).append(
             WaitingReview(
                 revision=revision,
-                reviewers=tuple(watched[p] for p in since_by_phid),
-                since=since,
-                age=work_days_between(since, now),
-                author=author,
+                reviewers=tuple(watched[p] for p in fresh or pending),
+                since=since_by_phid[oldest],
+                age=age_by_phid[oldest],
+                author=author_kinds.get(revision.author_phid, "unknown"),
             )
         )
     reviews.sort(key=lambda r: (r.since, r.revision.id))
+    stale_reviews.sort(key=lambda r: (r.since, r.revision.id))
 
     counts = [Counter() for _ in range(len(edges) + 1)]
     for review in reviews:
@@ -172,4 +171,32 @@ def build_report(
         ReviewerLoad(label, n, overdue[label])
         for label, n in sorted(waiting.items(), key=lambda kv: (-kv[1], kv[0]))
     ]
-    return Report(now, settings, reviews, buckets, per_reviewer, Bucket(dict(stale)))
+    return Report(now, settings, reviews, buckets, per_reviewer, stale_reviews)
+
+
+def report_rows(report: Report) -> list[dict]:
+    """Every waiting and stale review as plain data, for checking a run by hand."""
+    overdue = {id(r) for r in report.overdue}
+    edges = report.settings.age_buckets_work_days
+
+    def row(review: WaitingReview, state: str) -> dict:
+        return {
+            "id": review.revision.id,
+            "url": revision_url(review.revision.id),
+            "title": review.revision.title,
+            "bug_id": review.revision.bug_id,
+            "author": review.author,
+            "reviewers": list(review.reviewers),
+            "waiting_since": review.since.isoformat(),
+            "age_work_days": round(review.age, 1),
+            "state": state,
+        }
+
+    def state(review: WaitingReview) -> str:
+        if id(review) in overdue:
+            return "overdue"
+        return "new" if bucket_index(review.age, edges) == 0 else "waiting"
+
+    return [row(r, state(r)) for r in report.reviews] + [
+        row(r, "stale") for r in report.stale_reviews
+    ]

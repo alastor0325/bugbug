@@ -1,13 +1,15 @@
 import json
 from datetime import UTC, datetime
 
-from hackbot_agents.review_load.conduit import parse_revision
+from hackbot_agents.review_load.conduit import parse_revision, revisions_url
 from hackbot_agents.review_load.config import ReportSettings
 from hackbot_agents.review_load.load import build_report
 from hackbot_agents.review_load.message import (
+    MAX_LINK_IDS,
     bucket_labels,
     build_blocks,
     build_text,
+    list_link,
 )
 from testdata import ALICE, GROUP, OUTSIDER, revision, ts
 
@@ -109,8 +111,36 @@ def test_stale_line():
     assert "D1|" not in text
 
 
+def test_revisions_url():
+    assert revisions_url([7, 3]) == (
+        "https://phabricator.services.mozilla.com/differential/?ids=7,3"
+    )
+
+
 def test_only_stale_is_not_empty():
     report = _report([revision(1, created=ts(2025, 1, 6))])
     text = _all_text(build_blocks(report, GROUP_LABEL))
     assert "No reviews are waiting" not in text
     assert "*Stale" in text
+
+
+def test_list_link_caps_the_ids():
+    report = _report([revision(i, created=ts(2026, 9, 1)) for i in range(1, 103)])
+    link = list_link(report.overdue, "overdue")
+    assert f"Open the oldest {MAX_LINK_IDS} of 102 overdue" in link
+    assert ",100|" in link
+    assert ",101" not in link
+
+
+def test_overdue_and_stale_link_to_phabricator():
+    report = _report(
+        [
+            revision(1, created=ts(2025, 1, 6)),
+            revision(2, created=ts(2026, 9, 1)),
+            revision(3, created=ts(2026, 9, 2)),
+        ],
+        max_listed=1,
+    )
+    text = _all_text(build_blocks(report, GROUP_LABEL))
+    assert "differential/?ids=2,3|Open all 2 overdue in Phabricator>" in text
+    assert "differential/?ids=1|Open all 1 stale in Phabricator>" in text

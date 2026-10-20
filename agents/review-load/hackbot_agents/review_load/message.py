@@ -1,8 +1,7 @@
 """The Slack message: Block Kit blocks and a plain-text fallback. Pure."""
 
+from .conduit import revision_url, revisions_url
 from .load import AuthorKind, Bucket, Report, WaitingReview
-
-PHABRICATOR_URL = "https://phabricator.services.mozilla.com"
 
 AUTHOR_LABELS: dict[AuthorKind, str] = {
     "staff": "Mozilla",
@@ -10,6 +9,18 @@ AUTHOR_LABELS: dict[AuthorKind, str] = {
     "unknown": "unknown",
 }
 _MAX_TITLE = 80
+
+
+# Keeps a link section well under Slack's 3000-character limit.
+MAX_LINK_IDS = 100
+
+
+def list_link(reviews: list[WaitingReview], what: str) -> str:
+    """A link to one Phabricator search with the oldest ``MAX_LINK_IDS`` of ``reviews``."""
+    url = revisions_url([r.revision.id for r in reviews[:MAX_LINK_IDS]])
+    if len(reviews) > MAX_LINK_IDS:
+        return f"<{url}|Open the oldest {MAX_LINK_IDS} of {len(reviews)} {what} in Phabricator>"
+    return f"<{url}|Open all {len(reviews)} {what} in Phabricator>"
 
 
 def _escape(text: str) -> str:
@@ -68,7 +79,7 @@ def _overdue_line(review: WaitingReview) -> str:
         if len(rev.title) <= _MAX_TITLE
         else rev.title[: _MAX_TITLE - 3] + "..."
     )
-    link = f"<{PHABRICATOR_URL}/D{rev.id}|D{rev.id}>"
+    link = f"<{revision_url(rev.id)}|D{rev.id}>"
     return (
         f"{link} {int(review.age)} work days, {AUTHOR_LABELS[review.author]}, "
         f"{_escape(title)} ({', '.join(review.reviewers)})"
@@ -115,12 +126,15 @@ def build_blocks(report: Report, group_label: str) -> list[dict]:
     blocks.append(
         _section("\n".join(lines) or f"No reviews are waiting for {group_label}.")
     )
+    if report.stale.total:
+        blocks.append(_section(list_link(report.stale_reviews, "stale")))
     if not report.total:
         return blocks
     blocks.append(_section(_table(report)))
     blocks.append(_section(_per_reviewer(report)))
     if report.overdue:
         blocks.append(_section(_overdue(report)))
+        blocks.append(_section(list_link(report.overdue, "overdue")))
     return blocks
 
 

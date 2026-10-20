@@ -61,6 +61,7 @@ async def test_dry_run_records_nothing():
     result, actions, published = await _run(MONDAY, dry_run=True)
     assert actions == []
     assert "message.json" in published
+    assert [row["id"] for row in published["reviews.json"]["reviews"]] == [1]
     assert result.posted is False
 
 
