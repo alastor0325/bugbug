@@ -193,9 +193,41 @@ async def test_get_bug_history_gives_field_names_only():
 def test_hidden_history_fields_are_dropped():
     history = [
         _entry({"field_name": f, "added": "1", "removed": ""})
-        for f in ("estimated_time", "remaining_time", "work_time", "deadline", "groups")
+        for f in ("estimated_time", "remaining_time", "work_time", "deadline")
     ]
     assert broker.changed_fields(history, set(), set(), set()) == []
+
+
+def test_a_group_change_shows_as_bmo_shows_it():
+    history = [
+        _entry({"field_name": "groups", "added": "", "removed": "core-security"})
+    ]
+    assert broker.changed_fields(history, set(), set(), set())[0]["fields"] == [
+        "groups"
+    ]
+
+
+@pytest.mark.parametrize(("added", "kept"), [("1", False), ("0", True)])
+def test_a_made_private_change_is_hidden(added, kept):
+    # Comment 10 is public again, but BMO still hides the change that made it private.
+    change = {"field_name": "longdescs.isprivate", "comment_id": 10, "added": added}
+    entries = broker.changed_fields([_entry(change)], set(), set(), {10})
+    assert bool(entries) is kept
+
+
+async def test_the_visibility_lookup_goes_in_chunks(monkeypatch):
+    monkeypatch.setattr(broker, "LOOKUP_CHUNK", 2)
+    history = [_entry({"field_name": "blocks", "added": "1, 2, 3", "removed": ""})]
+    tools, ctx, client = _tools(
+        {
+            "bug": {"bugs": [dict(PUBLIC)]},
+            "bug/1/history": {"bugs": [{"id": 1, "history": history}]},
+        }
+    )
+    res = await tools["get_bug_history"](ctx, 1)
+    assert res["history"][0]["fields"] == ["blocks"]
+    lookups = [p["id"] for path, p in client.calls[2:] if path == "bug"]
+    assert lookups == ["1,2", "3"]
 
 
 @pytest.mark.parametrize(

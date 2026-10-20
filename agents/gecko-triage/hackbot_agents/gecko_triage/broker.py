@@ -14,8 +14,9 @@ A bug read returns only the fields in `ALLOWED_FIELDS`. The broker cannot filter
 nested comments, attachments or history, so it refuses those fields. It sets
 `description` from comment 0 only when that comment is public. The history of a
 public bug comes from its own tool, as field names with no values. It keeps only the
-changes that a logged-out reader sees: no time tracking or group changes, no changes
-to private comments or attachments, and no relation that names only hidden bugs.
+changes that a logged-out reader sees: no time tracking, no changes to private
+comments or attachments, no "made private" change, and no relation that names only
+hidden bugs.
 
 A search refuses the terms that match private comments or attachments. One risk
 stays: `longdesc` searches comment text, and the duplicate hunter needs it. If
@@ -360,11 +361,15 @@ async def _get_bug_comments(ctx: BugzillaContext, bug_id: int) -> dict:
     return dict(result, count=len(comments), comments=comments)
 
 
-# History fields that BMO hides from a logged-out reader: time tracking always, and
-# group changes. A relation change shows only when it names a bug the reader can see.
+# History fields that BMO hides from a logged-out reader. A relation change shows only
+# when it names a bug the reader can see, and a comment that was made private does not
+# show that change.
 HIDDEN_HISTORY_FIELDS = frozenset(
-    {"estimated_time", "remaining_time", "work_time", "deadline", "groups", "bug_group"}
+    {"estimated_time", "remaining_time", "work_time", "deadline"}
 )
+MADE_PRIVATE = "longdescs.isprivate"
+# Bug ids per visibility lookup, so that the request URL stays short.
+LOOKUP_CHUNK = 200
 RELATION_FIELDS = frozenset(
     {"depends_on", "blocks", "regressions", "regressed_by", "see_also"}
 )
@@ -417,6 +422,8 @@ def changed_fields(
             name = c.get("field_name")
             if name in HIDDEN_HISTORY_FIELDS:
                 continue
+            if name == MADE_PRIVATE and str(c.get("added") or "0") != "0":
+                continue
             if "attachment_id" in c and c["attachment_id"] not in public_attachments:
                 continue
             if "comment_id" in c and c["comment_id"] not in public_comments:
@@ -454,9 +461,12 @@ async def _get_bug_history(
 
     related = related_bugs(history)
     visible = set()
-    if related:
-        found = await bugzilla.get_bugs(ctx, sorted(related), f"id,{GROUPS}")
-        visible = {b["id"] for b in public_bugs(found["bugs"])}
+    ids = sorted(related)
+    for start in range(0, len(ids), LOOKUP_CHUNK):
+        found = await bugzilla.get_bugs(
+            ctx, ids[start : start + LOOKUP_CHUNK], f"id,{GROUPS}"
+        )
+        visible |= {b["id"] for b in public_bugs(found["bugs"])}
     attachments = comments = set()
     if any("attachment_id" in c for c in changes):
         attachments = _public_ids(
