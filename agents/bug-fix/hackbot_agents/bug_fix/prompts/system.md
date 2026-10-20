@@ -95,3 +95,5 @@ Do **not** record private comments, all developers on the bug need to see the co
 Source-repo edits (Write/Edit) are allowed so you can prepare and inspect a candidate patch.
 
 Test your changes by updating existing tests or writing a new test if needed. If an existing test already covers the issue, you can just run it to verify that it fails before the fix and passes after.
+
+Before you submit or update a patch, run `./mach format` and `./mach lint` on the files you changed, and fix what they report. Keep formatter changes to the lines your patch changes.

@@ -32,9 +32,11 @@ from .config import (
     PHABRICATOR_READ_TOOLS,
     SOURCE_WRITE_TOOLS,
 )
+from .teamconfig import RULES_FILE, load_team
 
 HERE = Path(__file__).resolve().parent
 PROMPTS = HERE / "prompts"
+RULES_DIR = HERE / "rules"
 # The SDK's 1 MB default is too small for large messages.
 MAX_BUFFER_SIZE = 10 * 1024 * 1024
 
@@ -53,6 +55,21 @@ def render_prompt(name: str, **fields: object) -> str:
     break out of its ``{comment}`` placeholder.
     """
     return (PROMPTS / name).read_text().format(**fields)
+
+
+def build_system_prompt(rules_dir: Path, team_dir: Path | None) -> str:
+    """The system prompt, with the team's section appended when a team is set."""
+    prompt = render_prompt("system.md", rules_dir=str(rules_dir.resolve()))
+    if team_dir is None:
+        return prompt
+    team = load_team(team_dir / "team.toml")
+    section = render_prompt(
+        "team.md",
+        label=team.label,
+        components="\n".join(f"- {c.key}" for c in team.components),
+        rules=(team_dir / "rules" / RULES_FILE).read_text().strip(),
+    )
+    return f"{prompt}\n\n{section}"
 
 
 def select_workflow(
@@ -149,7 +166,8 @@ async def run_bug_fix(
     comment: str | None = None,
     revision_id: int | None = None,
     bugzilla_needinfo_flag_id: int | None = None,
-    rules_dir: Path | None = None,
+    rules_dir: Path = RULES_DIR,
+    team_dir: Path | None = None,
     model: str | None = None,
     max_turns: int | None = None,
     effort: str | None = None,
@@ -162,9 +180,6 @@ async def run_bug_fix(
     Returns a :class:`BugFixResult` on success; raises :class:`AgentError` if the
     agent ends in an error.
     """
-    if rules_dir is None:
-        rules_dir = HERE / "rules"
-
     print(f"[bug_fix] triaging bug {bug}", file=sys.stderr)
 
     # Firefox build/eval MCP server (in-process; no tokens). The runtime
@@ -189,7 +204,7 @@ async def run_bug_fix(
     )
     enabled_action_tools = actions_to_tool_names(BUG_FIX_ACTIONS)
 
-    system_prompt = render_prompt("system.md", rules_dir=str(rules_dir.resolve()))
+    system_prompt = build_system_prompt(rules_dir, team_dir)
 
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
