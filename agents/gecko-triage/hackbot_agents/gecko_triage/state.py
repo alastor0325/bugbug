@@ -92,6 +92,11 @@ class TriageState:
     restricted: bool = False
 
     @property
+    def whiteboard(self) -> str:
+        value = self.bug.get("whiteboard")
+        return value if isinstance(value, str) else ""
+
+    @property
     def reporter(self) -> str:
         return _lower(self.bug.get("creator"))
 

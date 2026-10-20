@@ -39,7 +39,11 @@ TERMS_DATA = {
     "meta_summary": r"\[meta\]",
     "keywords": {"meta": "meta", "add": ["stalled", "regression"]},
     "fields": {"qa_whiteboard": "cf_qa_whiteboard"},
-    "whiteboard": {"skip": "[gecko-triage:skip]"},
+    "whiteboard": {
+        "skip": "[gecko-triage:skip]",
+        "easy_fix": "[gecko-triage:easy-fix]",
+        "gfb_candidate": "[gecko-triage:gfb-candidate]",
+    },
     "no_team": {"products": ["Core"]},
 }
 
@@ -320,6 +324,24 @@ def test_a_terms_file_parses():
     assert terms.fields.qa_whiteboard == "cf_qa_whiteboard"
     assert terms.meta_summary.search("[META] AV1")
     assert terms.no_team.products == ("Core",)
+    assert terms.whiteboard.fix_tags == (
+        "[gecko-triage:easy-fix]",
+        "[gecko-triage:gfb-candidate]",
+    )
+
+
+@pytest.mark.parametrize(
+    "whiteboard",
+    [
+        {"skip": "[s]", "easy_fix": "[e]"},
+        {"skip": "[s]", "easy_fix": "[e]", "gfb_candidate": " "},
+        {"skip": "[s]", "easy_fix": "[e]", "gfb_candidate": "[e]"},
+        {"skip": "[s]", "easy_fix": "[s]", "gfb_candidate": "[g]"},
+    ],
+)
+def test_the_fix_tags_fail_closed(whiteboard):
+    with pytest.raises(ValidationError):
+        Terms.model_validate({**TERMS_DATA, "whiteboard": whiteboard})
 
 
 @pytest.mark.parametrize("products", [[], [""], ["Core", 1]])

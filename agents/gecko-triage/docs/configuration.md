@@ -83,7 +83,8 @@ logins the markers miss). They decide who filed a bug, and so who the comment is
 `shared/bugzilla.toml`: `keywords.meta` marks a meta bug, `keywords.add` lists the
 keywords the agent may add (`stalled`, `regression`), `fields.qa_whiteboard` is the QA
 whiteboard field, `meta_summary` is the summary pattern of a meta bug, and `whiteboard`
-holds the agent's skip tag, `[gecko-triage:skip]`.
+holds the agent's skip tag, `[gecko-triage:skip]`, and the fix tags it may add to an
+analyzed bug, `easy_fix` and `gfb_candidate`.
 
 The team's `meta-bugs.md` table is also the list of meta bugs the agent may add to
 `blocks`. Every table row must carry a bug id, or the run stops. A run with no team has

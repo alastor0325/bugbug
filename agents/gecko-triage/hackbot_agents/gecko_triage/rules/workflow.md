@@ -291,6 +291,42 @@ need nothing, ask for nothing.
 If the investigation reveals missing information, fall back to "Needs info" and still set
 severity and priority when the rules give them.
 
+### Fix tags
+
+On an analyzed bug, mark a fix that looks small, so that people can find it. Add the tag
+to the whiteboard in `bugzilla_update_bug`, with the other field changes. Add a tag only
+when the decision is `analyzed`. The comment does not need to say it. The tag is enough.
+
+Add `[gecko-triage:easy-fix]` when the fix is small for an experienced Firefox developer.
+All of these conditions must be true:
+
+- You found the cause in one function or one file. A suspected cause is not sufficient.
+- You can give a concrete fix direction.
+- A test can show the fix: a crashtest, a gtest, a mochitest, a WPT or a unit test.
+- The fix needs no design decision, no product decision and no spec decision.
+- The bug is not security sensitive. It has no security keyword. It has no sandbox or
+  IPC trust question. Its regressor is not restricted. It does not read like a security
+  report.
+- The fix stays in the code of one team.
+- The bug has no patch. Look for a Phabricator revision link and for an attachment that
+  is marked as a patch.
+
+Add `[gecko-triage:gfb-candidate]` also when a new contributor can do the fix with
+little Gecko knowledge. The easy-fix conditions must be true, and all of these too:
+
+- The change is local and simple.
+- Your comment tells where to change the code and what to change.
+- The build and the test need no special hardware and no setup for one operating system.
+- The fix needs no DRM key system.
+- The fix needs no change in upstream code first, for example vendored third-party code.
+
+A bug with `[gecko-triage:gfb-candidate]` also gets `[gecko-triage:easy-fix]`. The
+candidate tag is only a suggestion. Never add the `good-first-bug` keyword and never set
+a mentor. A person does that.
+
+Keep the tags strict. Few bugs meet the conditions. When the evidence is weak, do not add
+a tag. Never remove or change the whiteboard text that is already there.
+
 ### Fixability
 
 | Outcome                              | Meaning                                                                            | Next                                                        |

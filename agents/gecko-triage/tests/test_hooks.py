@@ -21,6 +21,7 @@ from hackbot_agents.gecko_triage.config import (
     MOZREGRESSION_PLACEHOLDER,
     TEAM,
     TEAM_META_BUGS,
+    TERMS,
     TRIAGE_PRIORITIES,
 )
 from hackbot_agents.gecko_triage.hooks import FEEDBACK_FOOTER, install_hooks
@@ -714,7 +715,7 @@ def test_every_other_field_is_refused_by_name(new_state):
     _comment(rec)
     for changes in (
         {"assigned_to": "dev@example.org"},
-        {"whiteboard": "[x]"},
+        {"cf_qa_whiteboard": "[x]"},
         {"severity": "S3", "cc": {"add": ["x@example.com"]}},
     ):
         with pytest.raises(ToolError) as e:
@@ -1925,4 +1926,90 @@ def test_without_a_refute_a_closing_comment_is_recorded():
     _comment(
         rec, _text("This works as the spec says, so we close this bug as INVALID.")
     )
+    assert len(rec.actions) == 1
+
+
+# --- whiteboard fix tags ---------------------------------------------------- #
+
+EASY = TERMS.whiteboard.easy_fix
+GFB = TERMS.whiteboard.gfb_candidate
+
+
+def _whiteboard_state(bug_new, comments_new, whiteboard):
+    return TriageState(
+        bug=dict(bug_new, whiteboard=whiteboard), comments=comments_new, now=NOW
+    )
+
+
+def _tagged(state, tags):
+    rec = _recorder(state)
+    _comment(rec)
+    _update(rec, {"severity": "S3", "whiteboard": {"add": tags}})
+    return rec.actions[-1]["params"]["changes"]["whiteboard"]
+
+
+@pytest.mark.parametrize(
+    ("current", "tags", "expected"),
+    [
+        ("", [EASY], EASY),
+        (None, [EASY, GFB], f"{EASY} {GFB}"),
+        ("", [GFB, EASY], f"{EASY} {GFB}"),
+        ("[av1] [fuzzblocker]", [EASY], f"[av1] [fuzzblocker] {EASY}"),
+        ("[av1] ", [EASY, GFB], f"[av1] {EASY} {GFB}"),
+        (f"[av1] {EASY}", [GFB], f"[av1] {EASY} {GFB}"),
+    ],
+    ids=["easy", "both", "both in any order", "keeps text", "keeps space", "gfb"],
+)
+def test_the_fix_tags_are_appended_to_the_whiteboard(
+    bug_new, comments_new, current, tags, expected
+):
+    state = _whiteboard_state(bug_new, comments_new, current)
+    assert _tagged(state, tags) == expected
+
+
+@pytest.mark.parametrize(
+    ("current", "whiteboard", "reason"),
+    [
+        ("[av1]", "", "may only be added to"),
+        ("[av1]", f"[av1] {EASY}", "may only be added to"),
+        ("[av1]", EASY, "may only be added to"),
+        ("[av1]", {"add": []}, "non-empty list"),
+        ("[av1]", {"remove": ["[av1]"]}, "may only be added to"),
+        ("[av1]", {"add": [EASY], "remove": ["[av1]"]}, "may only be added to"),
+        ("[av1]", {"add": ["[av1-new]"]}, "may only add"),
+        ("[av1]", {"add": [TERMS.whiteboard.skip]}, "may only add"),
+        ("[av1]", {"add": ["[gecko-triage:EASY-FIX] "]}, "may only add"),
+        ("[av1]", {"add": [GFB]}, "needs"),
+        ("[av1]", {"add": [EASY, EASY]}, "once"),
+        (f"[av1]{EASY}", {"add": [EASY]}, "already has"),
+        ("[Gecko-Triage:Easy-Fix]", {"add": [EASY]}, "already has"),
+        (f"{EASY} {GFB}", {"add": [GFB]}, "already has"),
+    ],
+)
+def test_every_other_whiteboard_change_is_refused(
+    bug_new, comments_new, current, whiteboard, reason
+):
+    rec = _recorder(_whiteboard_state(bug_new, comments_new, current))
+    _comment(rec)
+    with pytest.raises(ToolError, match=reason):
+        _update(rec, {"severity": "S3", "whiteboard": whiteboard})
+    assert len(rec.actions) == 1
+    _update(rec, {"severity": "S3"})
+    assert rec.actions[-1]["params"]["changes"] == {"severity": "S3"}
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"status": "RESOLVED", "resolution": "INVALID"},
+        {"component": "Audio/Video: cubeb"},
+        {"product": "Toolkit", "component": "General"},
+    ],
+    ids=["close", "move", "move to another product"],
+)
+def test_a_fix_tag_on_a_close_or_a_move_is_refused(new_state, changes):
+    rec = _recorder(new_state, close_verdicts=_verdicts(("INVALID", None)))
+    _comment(rec)
+    with pytest.raises(ToolError, match="not analyzed"):
+        _update(rec, {**changes, "whiteboard": {"add": [EASY]}})
     assert len(rec.actions) == 1

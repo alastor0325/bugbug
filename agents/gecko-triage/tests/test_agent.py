@@ -5,6 +5,7 @@ import contextlib
 import pytest
 from agent_tools.registry import ToolError
 from claude_agent_sdk import ResultMessage, SystemMessage
+from conftest import NOW
 from hackbot_agents.gecko_triage import agent, attachments, closing, dupes
 from hackbot_agents.gecko_triage.__main__ import AgentInputs
 from hackbot_agents.gecko_triage.authors import CommitFacts
@@ -1123,3 +1124,84 @@ async def test_a_failed_read_keeps_the_regressor_and_holds_the_run(
     }
     assert result.auto_apply is False
     assert "bug 9000003" in result.restricted_warning
+
+
+# --- whiteboard fix tags ---------------------------------------------------- #
+
+
+def _fix_tag_script(recorder, tags):
+    changes = {"severity": "S3", "whiteboard": {"add": tags}}
+    return _comment_and_update(recorder, "Short note.", changes)
+
+
+async def test_an_analyzed_run_keeps_its_fix_tags_and_reports_them(
+    fake_client, tmp_path, bug_new, comments_new
+):
+    tags = [agent.TERMS.whiteboard.easy_fix, agent.TERMS.whiteboard.gfb_candidate]
+    state = agent.TriageState(
+        bug=dict(bug_new, whiteboard="[av1]"), comments=comments_new, now=NOW
+    )
+    recorder = ActionsRecorder()
+    fake_client.script = _fix_tag_script(recorder, tags)
+    result = await _run(tmp_path, state, recorder)
+    changes = recorder.actions[-1]["params"]["changes"]
+    assert changes["whiteboard"] == f"[av1] {tags[0]} {tags[1]}"
+    assert result.fix_tags == tags
+    assert result.auto_apply is True
+
+
+async def test_a_run_with_no_fix_tag_reports_none(fake_client, tmp_path, new_state):
+    result = await _run(tmp_path, new_state)
+    assert result.fix_tags == []
+
+
+@pytest.mark.parametrize("decision", ["needs_info", "stalled", "watching"])
+async def test_a_fix_tag_on_a_run_that_is_not_analyzed_is_dropped(
+    fake_client, tmp_path, new_state, decision
+):
+    recorder = ActionsRecorder()
+    fake_client.script = _fix_tag_script(recorder, [agent.TERMS.whiteboard.easy_fix])
+    fake_client.result = _result(
+        f'```json\n{{"decision": "{decision}", "issue_type": "drm"}}\n```'
+    )
+    result = await _run(tmp_path, new_state, recorder)
+    assert recorder.actions[-1]["params"]["changes"] == {"severity": "S3"}
+    assert result.fix_tags == []
+    assert result.auto_apply is True
+    assert "whiteboard change" in result.result and decision in result.result
+
+
+def test_fix_tag_drops_only_drop_on_a_run_that_is_not_analyzed():
+    actions = [
+        {
+            "action_id": "a1",
+            "type": "bugzilla.update_bug",
+            "params": {"bug_id": BUG, "changes": {"whiteboard": "[x]"}},
+        }
+    ]
+    assert agent.fix_tag_drops(agent.Plan(decision="analyzed"), actions, BUG) == []
+    (drop,) = agent.fix_tag_drops(agent.Plan(decision="needs_info"), actions, BUG)
+    assert (drop.action_id, drop.field) == ("a1", "whiteboard")
+    assert agent.fix_tag_drops(agent.Plan(decision="needs_info"), [], BUG) == []
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (None, []),
+        ("[gecko-triage:easy-fix]", ["[gecko-triage:easy-fix]"]),
+        (
+            ["[gecko-triage:gfb-candidate]", "[gecko-triage:easy-fix]", "[x]"],
+            ["[gecko-triage:easy-fix]", "[gecko-triage:gfb-candidate]"],
+        ),
+        (
+            ["[gecko-triage:easy-fix]", "[gecko-triage:easy-fix]"],
+            ["[gecko-triage:easy-fix]"],
+        ),
+        (42, []),
+    ],
+)
+def test_the_fix_tags_finding_keeps_only_known_tags(value, expected):
+    base = {"bug_id": BUG, "num_turns": 1, "total_cost_usd": 0.0}
+    assert agent.GeckoTriageResult(**base, fix_tags=value).fix_tags == expected
+    assert agent.GeckoTriageResult(**base).fix_tags == []

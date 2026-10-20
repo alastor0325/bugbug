@@ -183,6 +183,19 @@ class Fields(_Strict):
 class Whiteboard(_Strict):
     # A human adds this tag to keep the agent off a bug.
     skip: StrictStr
+    # The tags the agent may add to an analyzed bug. `gfb_candidate` needs `easy_fix`.
+    easy_fix: Text
+    gfb_candidate: Text
+
+    @model_validator(mode="after")
+    def _distinct_tags(self) -> Whiteboard:
+        if len({self.skip, self.easy_fix, self.gfb_candidate}) != 3:
+            raise ValueError("the whiteboard tags must differ")
+        return self
+
+    @property
+    def fix_tags(self) -> tuple[str, str]:
+        return (self.easy_fix, self.gfb_candidate)
 
 
 class NoTeam(_Strict):

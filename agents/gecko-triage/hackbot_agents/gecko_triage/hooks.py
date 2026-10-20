@@ -28,6 +28,10 @@ What they enforce:
 - `keywords` only adds one of the keywords `shared/bugzilla.toml` allows;
 - `regressed_by` only adds another bug's id;
 - `see_also` only adds the id of another bug that its see_also does not name yet;
+- `whiteboard` only adds the fix tags of `shared/bugzilla.toml` that the bug lacks, the
+  good-first-bug candidate tag only with the easy-fix tag, never on a close or a move.
+  The hook records the bug's whiteboard with the tags at its end, since Bugzilla
+  replaces the whole text. The post-run check drops it on a run that is not `analyzed`;
 - a move names a target component other than the current one, and a move to another
   product carries the version and milestone that exist in every product;
 - one field-change call on the triaged bug per run, since the apply step merges calls
@@ -739,6 +743,40 @@ def _check_see_also(value: object, state: TriageState, bug_id: int) -> None:
             raise ToolError(f"the bug already has bug {item} in see_also")
 
 
+def with_fix_tags(current: str, tags: list[str]) -> str:
+    """``current`` with ``tags`` at its end; the text already there stays as it is."""
+    added = " ".join(tags)
+    if not current.strip():
+        return added
+    return current + added if current[-1].isspace() else f"{current} {added}"
+
+
+def _check_whiteboard(changes: dict, state: TriageState) -> None:
+    """Turn ``{"add": [<fix tag>]}`` into the bug's full new whiteboard text."""
+    fix_tags = TERMS.whiteboard.fix_tags
+    easy_fix, gfb = fix_tags
+    if (RESOLUTION_FIELDS | MOVE_FIELDS) & set(changes):
+        raise ToolError(
+            "a fix tag goes only on an analyzed bug; a close or a move is not analyzed"
+        )
+    current = state.whiteboard
+    present = current.casefold()
+    tags = _additions("whiteboard", changes["whiteboard"])
+    for tag in tags:
+        if tag not in fix_tags:
+            raise ToolError(
+                f"whiteboard may only add {easy_fix} or {gfb}, not {tag!r}; never "
+                "remove or edit the text already there"
+            )
+        if tag.casefold() in present:
+            raise ToolError(f"the bug's whiteboard already has {tag}")
+    if len(set(tags)) != len(tags):
+        raise ToolError("add each tag once")
+    if gfb in tags and easy_fix not in tags and easy_fix.casefold() not in present:
+        raise ToolError(f"{gfb} needs {easy_fix}; add both")
+    changes["whiteboard"] = with_fix_tags(current, [t for t in fix_tags if t in tags])
+
+
 def _same_name(a: object, b: object) -> bool:
     return (
         isinstance(a, str)
@@ -928,6 +966,8 @@ def update_bug_hook(
             _check_regressed_by(changes["regressed_by"], state, bug_id)
         if "see_also" in changes:
             _check_see_also(changes["see_also"], state, bug_id)
+        if "whiteboard" in changes:
+            _check_whiteboard(changes, state)
         for flag in changes.get("flags", ()):
             flag["new"] = True
 

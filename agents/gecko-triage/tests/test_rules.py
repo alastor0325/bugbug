@@ -20,6 +20,7 @@ from hackbot_agents.gecko_triage.config import (
     TEAM,
     TEAM_RULES_DIR,
     TEAMS_DIR,
+    TERMS,
     TRIAGE_SCOPE,
 )
 from hackbot_agents.gecko_triage.teamconfig import load_team, team_dir
@@ -812,3 +813,41 @@ def test_the_needinfo_rules_agree_on_a_developer_found_in_the_history():
     assert (
         "A hand-off note that says who drives the bug now is not a request" in comment
     )
+
+
+def test_the_rules_say_when_to_add_each_fix_tag(new_state):
+    easy, gfb = TERMS.whiteboard.easy_fix, TERMS.whiteboard.gfb_candidate
+    workflow = _flat("workflow.md")
+    analyzed = workflow[
+        workflow.index("## Analyzed") : workflow.index("## Close or move")
+    ]
+    assert "### Fix tags" in analyzed
+    for text in (
+        f"Add `{easy}` when the fix is small for an experienced Firefox developer.",
+        "You found the cause in one function or one file. A suspected cause is not",
+        "A test can show the fix: a crashtest, a gtest, a mochitest, a WPT or a unit",
+        "The fix needs no design decision, no product decision and no spec decision.",
+        "It has no security keyword. It has no sandbox or IPC trust question.",
+        "Its regressor is not restricted.",
+        "The fix stays in the code of one team.",
+        "Look for a Phabricator revision link and for an attachment that is marked as",
+        f"Add `{gfb}` also when a new contributor can do the fix",
+        "Your comment tells where to change the code and what to change.",
+        "no special hardware and no setup for one operating system.",
+        "The fix needs no DRM key system.",
+        "no change in upstream code first, for example vendored third-party code.",
+        f"A bug with `{gfb}` also gets `{easy}`.",
+        "Never add the `good-first-bug` keyword and never set a mentor.",
+        "The comment does not need to say it. The tag is enough.",
+        "Add a tag only when the decision is `analyzed`.",
+        "When the evidence is weak, do not add a tag.",
+    ):
+        assert text in analyzed, text
+    prompt = " ".join(load_system_prompt(new_state, ()).split())
+    assert f'`whiteboard`: `{{"add": ["{easy}"]}}`, optionally with `"{gfb}"`' in prompt
+    assert "Anything else (assignee, another whiteboard change, CC" in prompt
+    docs = " ".join((AGENT_ROOT / "docs" / "bugzilla.md").read_text().split())
+    assert f"| whiteboard | Adds `{easy}` to an analyzed bug" in docs
+    assert "The assignee, the whiteboard, CC" not in docs
+    readme = " ".join((AGENT_ROOT / "README.md").read_text().split())
+    assert "`fix_tags` lists the whiteboard tags the run added" in readme

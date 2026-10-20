@@ -113,8 +113,7 @@ def skip_reason(state: TriageState) -> str | None:
         return "restricted bug (non-empty groups)"
     if is_security(bug):
         return "security bug"
-    whiteboard = bug.get("whiteboard")
-    if isinstance(whiteboard, str) and TERMS.whiteboard.skip in whiteboard:
+    if TERMS.whiteboard.skip in state.whiteboard:
         return f"whiteboard carries {TERMS.whiteboard.skip}"
     # Staff file their own bugs, but an untriaged one still needs severity and
     # priority, so only a bug that already has a severity is left to them.

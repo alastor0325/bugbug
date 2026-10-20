@@ -4,8 +4,8 @@ Triages one Gecko bug per run and keeps no memory of its own. A team, such as me
 its own rules. With no team, the run uses the shared rules for the bug's component. It inventories what the report contains. It reads the diagnostics reporters attach:
 Firefox Profiler captures, logs, crash reports and specs. It records one comment plus
 the field changes it is allowed. These are severity and priority when they are unset,
-needinfo flags, a meta bug in `blocks`, keywords, `regressed_by`, `see_also`, a component
-move and a resolution. On a duplicate, it also adds the team meta bug to the `dupe_of` bug. A bug
+needinfo flags, a meta bug in `blocks`, keywords, `regressed_by`, `see_also`, fix tags in
+the whiteboard, a component move and a resolution. On a duplicate, it also adds the team meta bug to the `dupe_of` bug. A bug
 runs again when someone changes it. Each run reads the whole bug, with all comments, and
 decides from it the status, what is missing and the next step. Who asked for what does
 not matter.
@@ -305,7 +305,7 @@ stays out of the repo, because the alias account is temporary.
 preflight), `asked`, `unread`, `severity`, `priority`, `needinfo`, `meta_bug`,
 `duplicate_of`, `issue_type`, `issue_type_note`, `issue_type_warning`,
 `close_verification`, `close_warning`, `needinfo_warning`, `restricted_warning`,
-`auto_apply` and `agent_version`. `actions` carries the recorded comment and field
+`fix_tags`, `auto_apply` and `agent_version`. `actions` carries the recorded comment and field
 changes. After the session, the run reads the `dupe_of` bug, the `regressed_by` and
 `see_also` bugs, the bugs the comment names and the commit message bugs through the
 broker. The run drops a change on any other bug. It also drops
@@ -328,6 +328,15 @@ few words with `other` only, cut to 60 characters, and is null otherwise. It is 
 so it never fails a run. A missing or unknown value, `other` with no note, a note with an
 email address, or any value on a run with no list sets both to null, and
 `issue_type_warning` says why. It is null when the value stands.
+
+`fix_tags` lists the whiteboard tags the run added, `[gecko-triage:easy-fix]` and
+`[gecko-triage:gfb-candidate]`, so a dashboard can list the bugs whose fix looks small.
+It is empty when the run added none. The agent sends `{"add": [<tag>]}`, and the hook
+records the bug's whole whiteboard with the tags at its end, since Bugzilla replaces the
+whole text. The hook refuses any other whiteboard change. The decision comes only in the
+final message, so the post-run check drops the whiteboard change of a run that is not
+`analyzed`. Then `result` names the drop. The drop alone does not hold the run for a
+person, since the rest of the run passed its checks.
 
 `close_verification` is `refuted` when `close_verifier` refuted a close in the run, and
 `confirmed` when its confirm covers the close the run recorded, the same resolution and

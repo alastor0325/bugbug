@@ -8,8 +8,8 @@ through the Bugzilla broker, reads attached diagnostics (Firefox Profiler captur
 `profiler-cli`, logs, crash reports, and archives, memory reports and videos through
 `attachments.fetch_attachment`), and records a comment plus the field
 changes the rules allow: severity and priority when unset, needinfo flags, a meta bug in
-`blocks`, keywords, `regressed_by`, `see_also`, a component move and a resolution. On a duplicate it
-also adds the team meta bug to the `dupe_of` bug. The triage knowledge is in `rules/`
+`blocks`, keywords, `regressed_by`, `see_also`, fix tags in the whiteboard, a component
+move and a resolution. On a duplicate it also adds the team meta bug to the `dupe_of` bug. The triage knowledge is in `rules/`
 and `teams/<team>/rules/`. A run with no team uses `rules/` alone, in the bug's own
 component, and never vouches for unattended apply.
 
@@ -74,6 +74,7 @@ from .preflight import reporter_audience
 from .state import TriageState
 from .targets import (
     Dropped,
+    _updates,
     bugs_to_read,
     drop_writes,
     dupe_target_warning,
@@ -171,6 +172,12 @@ def _as_close_verification(value: object) -> str | None:
     return text.lower() if text and text.lower() in CLOSE_VERIFICATIONS else None
 
 
+def _as_fix_tags(value: object) -> list[str]:
+    """The known fix tags in ``value``, each once, easy-fix first."""
+    items = _as_list(value) or []
+    return [t for t in TERMS.whiteboard.fix_tags if t in items]
+
+
 def _as_level(value: object, prefix: str) -> str | None:
     if not isinstance(value, str):
         return None
@@ -232,6 +239,10 @@ class GeckoTriageResult(Plan, HackbotAgentResult):
     needinfo_warning: str | None = None
     # The restricted or unreadable bugs the run met, for a person to check, or None.
     restricted_warning: str | None = None
+    # The fix tags this run added to the whiteboard, for a dashboard of small fixes.
+    fix_tags: Annotated[list[str], BeforeValidator(_as_fix_tags)] = Field(
+        default_factory=list
+    )
     # The code that made this run: see `version.py`.
     agent_version: str = Field(default_factory=current_agent_version)
     result: str | None = None
@@ -357,6 +368,44 @@ def analyzed_refusal(
         f"the decision is analyzed but the run asked for {', '.join(asked)}; "
         "a run that asks for data is needs_info"
     )
+
+
+def _whiteboard(actions: list[dict], bug: int) -> tuple[str, str] | None:
+    """``(action_id, new whiteboard)`` of the recorded whiteboard change on ``bug``.
+
+    The hook allows one field-change call on the triaged bug, so there is one at most.
+    """
+    for action_id, bug_id, changes in _updates(actions):
+        if bug_id == bug and isinstance(changes.get("whiteboard"), str):
+            return action_id, changes["whiteboard"]
+    return None
+
+
+def fix_tag_drops(plan: Plan, actions: list[dict], bug: int) -> list[Dropped]:
+    """The whiteboard change to drop: a fix tag goes only on an `analyzed` run.
+
+    The hook cannot see the decision, which comes in the final message.
+    """
+    change = _whiteboard(actions, bug)
+    if plan.decision == "analyzed" or change is None:
+        return []
+    reason = (
+        f"the whiteboard change on bug {bug}, since a fix tag goes only on an "
+        f"analyzed bug and the decision is {plan.decision}"
+    )
+    return [Dropped(change[0], reason, "whiteboard")]
+
+
+def added_fix_tags(actions: list[dict], bug: int, state: TriageState) -> list[str]:
+    """The fix tags the recorded whiteboard change adds to the bug."""
+    change = _whiteboard(actions, bug)
+    if change is None:
+        return []
+    return [
+        t
+        for t in TERMS.whiteboard.fix_tags
+        if t in change[1] and t not in state.whiteboard
+    ]
 
 
 def issue_type_refusal(plan: Plan) -> str | None:
@@ -516,6 +565,8 @@ def load_system_prompt(
         state=state.describe(),
         audience=reporter_audience(state.bug),
         keywords=render_keywords(),
+        easy_fix_tag=TERMS.whiteboard.easy_fix,
+        gfb_tag=TERMS.whiteboard.gfb_candidate,
         needinfo_experts=render_needinfo_experts(),
         issue_types=render_issue_types(),
         duplicate_candidates=dupes.render_candidates(duplicate_candidates or []),
@@ -1209,10 +1260,11 @@ async def run_gecko_triage(
         commit_bugs=commits.bugs,
     )
     dropped = screen_writes(recorded, bug, found)
+    tag_drops = fix_tag_drops(plan, recorded, bug)
     asked_authors = author_needinfos(recorded, state, commits.authors)
     needinfo_warning = AUTHOR_NEEDINFO_WARNING if asked_authors else None
     hidden_warning = restricted_warning(to_read, found)
-    drop_writes(actions_recorder, dropped)
+    drop_writes(actions_recorder, dropped + tag_drops)
     actions = actions_recorder.actions
     close_verification = close_verdicts.outcome(closing.recorded_close(actions))
     close_warning = close_mismatch(
@@ -1221,7 +1273,7 @@ async def run_gecko_triage(
 
     return GeckoTriageResult(
         bug_id=bug,
-        result=with_dropped(result_msg.result, dropped),
+        result=with_dropped(result_msg.result, dropped + tag_drops),
         num_turns=result_msg.num_turns,
         total_cost_usd=result_msg.total_cost_usd,
         auto_apply=not dropped
@@ -1233,5 +1285,6 @@ async def run_gecko_triage(
         close_warning=close_warning,
         needinfo_warning=needinfo_warning,
         restricted_warning=hidden_warning,
+        fix_tags=added_fix_tags(actions, bug, state),
         **plan.model_dump(),
     )

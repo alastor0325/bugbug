@@ -155,6 +155,7 @@ ALLOWED_UPDATE_FIELDS = (
         "keywords",
         "regressed_by",
         "see_also",
+        "whiteboard",
     }
 )
 # Bugzilla refuses a move to another product unless the version and milestone exist

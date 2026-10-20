@@ -108,10 +108,11 @@ The `actions` tools record intent; nothing reaches Bugzilla during the run. Reco
    - `keywords`: `{{"add": ["<keyword>"]}}`, only one of the keywords above, and not one the bug already has.
    - `regressed_by`: `{{"add": [<bug id>]}}`, only when the regressor is known, never a guess.
    - `see_also`: `{{"add": [<bug id>]}}`, only a related bug that is not a duplicate, as `workflow.md` says. Give the bug id, not a URL, and not a bug the bug's `see_also` already names.
+   - `whiteboard`: `{{"add": ["{easy_fix_tag}"]}}`, optionally with `"{gfb_tag}"` too, only on an `analyzed` bug that meets "Fix tags" in `workflow.md`. Give only the tags; the recorder keeps the whiteboard text already there and adds them at its end. The candidate tag needs the easy-fix tag, and no tag the whiteboard already has.
    - `product` and `component`: the **target** component for a wrong-component bug, never the current one.
    - `status: "RESOLVED"` with `resolution` one of {resolutions}; `DUPLICATE` needs `dupe_of: <bug id>`, and `INCOMPLETE` only when the state above says closing is permitted. Never WORKSFORME. The recorder refuses a close until `close_verifier` confirms that resolution, and every close after it refutes one.
 
-   Anything else (assignee, the whiteboard, CC, another status) is refused. Suggest it in the comment for a person to apply.
+   Anything else (assignee, another whiteboard change, CC, another status) is refused. Suggest it in the comment for a person to apply.
 
 3. {duplicate_meta}
 

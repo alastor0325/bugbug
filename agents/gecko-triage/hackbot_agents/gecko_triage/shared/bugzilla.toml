@@ -18,6 +18,11 @@ qa_whiteboard = "cf_qa_whiteboard"
 [whiteboard]
 # Keeps the agent off one bug. Anyone can add it.
 skip = "[gecko-triage:skip]"
+# The agent adds these to an analyzed bug whose fix looks small, so people can find it
+# (`rules/workflow.md`, "Fix tags"). `gfb_candidate` only suggests a good first bug: a
+# person adds the `good-first-bug` keyword and the mentor. It comes with `easy_fix`.
+easy_fix = "[gecko-triage:easy-fix]"
+gfb_candidate = "[gecko-triage:gfb-candidate]"
 
 [no_team]
 # The products a run with no team may triage. Most of their code is in the
