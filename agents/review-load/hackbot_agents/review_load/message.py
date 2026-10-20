@@ -2,6 +2,7 @@
 
 from .conduit import revision_url, revisions_url
 from .load import AuthorKind, Bucket, Report, WaitingReview
+from .workdays import bucket_index
 
 AUTHOR_LABELS: dict[AuthorKind, str] = {
     "staff": "Mozilla",
@@ -11,16 +12,33 @@ AUTHOR_LABELS: dict[AuthorKind, str] = {
 _MAX_TITLE = 80
 
 
-# Keeps a link section well under Slack's 3000-character limit.
-MAX_LINK_IDS = 100
+# Keeps the line of list links well under Slack's 3000-character section limit.
+MAX_LINK_IDS = 60
 
 
-def list_link(reviews: list[WaitingReview], what: str) -> str:
+def list_link(reviews: list[WaitingReview], label: str) -> str:
     """A link to one Phabricator search with the oldest ``MAX_LINK_IDS`` of ``reviews``."""
     url = revisions_url([r.revision.id for r in reviews[:MAX_LINK_IDS]])
-    if len(reviews) > MAX_LINK_IDS:
-        return f"<{url}|Open the oldest {MAX_LINK_IDS} of {len(reviews)} {what} in Phabricator>"
-    return f"<{url}|Open all {len(reviews)} {what} in Phabricator>"
+    count = len(reviews)
+    if count > MAX_LINK_IDS:
+        return f"<{url}|{label} (oldest {MAX_LINK_IDS} of {count})>"
+    return f"<{url}|{label} ({count})>"
+
+
+def _lists(report: Report) -> str:
+    edges = report.settings.age_buckets_work_days
+    overdue_days = report.settings.overdue_work_days
+    lists = [
+        ("new", [r for r in report.reviews if bucket_index(r.age, edges) == 0]),
+        (
+            f"{edges[0]}-{overdue_days} days",
+            [r for r in report.reviews if edges[0] <= r.age < overdue_days],
+        ),
+        ("overdue", report.overdue),
+        ("stale", report.stale_reviews),
+    ]
+    links = [list_link(reviews, label) for label, reviews in lists if reviews]
+    return "*Open in Phabricator:* " + " | ".join(links)
 
 
 def _escape(text: str) -> str:
@@ -126,15 +144,15 @@ def build_blocks(report: Report, group_label: str) -> list[dict]:
     blocks.append(
         _section("\n".join(lines) or f"No reviews are waiting for {group_label}.")
     )
-    if report.stale.total:
-        blocks.append(_section(list_link(report.stale_reviews, "stale")))
     if not report.total:
+        if report.stale.total:
+            blocks.append(_section(_lists(report)))
         return blocks
     blocks.append(_section(_table(report)))
+    blocks.append(_section(_lists(report)))
     blocks.append(_section(_per_reviewer(report)))
     if report.overdue:
         blocks.append(_section(_overdue(report)))
-        blocks.append(_section(list_link(report.overdue, "overdue")))
     return blocks
 
 

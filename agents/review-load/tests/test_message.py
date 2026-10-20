@@ -125,11 +125,67 @@ def test_only_stale_is_not_empty():
 
 
 def test_list_link_caps_the_ids():
-    report = _report([revision(i, created=ts(2026, 9, 1)) for i in range(1, 103)])
+    report = _report(
+        [revision(i, created=ts(2026, 9, 1)) for i in range(1, MAX_LINK_IDS + 3)]
+    )
     link = list_link(report.overdue, "overdue")
-    assert f"Open the oldest {MAX_LINK_IDS} of 102 overdue" in link
-    assert ",100|" in link
-    assert ",101" not in link
+    assert f"overdue (oldest {MAX_LINK_IDS} of {MAX_LINK_IDS + 2})" in link
+    assert f",{MAX_LINK_IDS}|" in link
+    assert f",{MAX_LINK_IDS + 1}" not in link
+
+
+def test_one_line_of_lists():
+    report = _report(
+        [
+            revision(1, created=ts(2025, 1, 6)),
+            revision(2, created=ts(2026, 9, 1)),
+            revision(3, created=ts(2026, 9, 2)),
+            revision(4, created=ts(2026, 10, 14)),
+            revision(5, created=ts(2026, 10, 19, 6)),
+        ],
+        max_listed=1,
+    )
+    [line] = [
+        b["text"]["text"]
+        for b in build_blocks(report, GROUP_LABEL)
+        if b["text"]["text"].startswith("*Open in Phabricator:*")
+    ]
+    url = "https://phabricator.services.mozilla.com/differential/?ids="
+    assert line == (
+        f"*Open in Phabricator:* <{url}5|new (1)> | <{url}4|1-7 days (1)> | "
+        f"<{url}2,3|overdue (2)> | <{url}1|stale (1)>"
+    )
+
+
+def test_empty_lists_are_left_out():
+    report = _report([revision(1, created=ts(2025, 1, 6))])
+    text = _all_text(build_blocks(report, GROUP_LABEL))
+    assert "|stale (1)>" in text
+    assert "new (" not in text
+    assert "overdue (" not in text
+
+
+def test_revisions_url():
+    assert revisions_url([7, 3]) == (
+        "https://phabricator.services.mozilla.com/differential/?ids=7,3"
+    )
+
+
+def test_only_stale_is_not_empty():
+    report = _report([revision(1, created=ts(2025, 1, 6))])
+    text = _all_text(build_blocks(report, GROUP_LABEL))
+    assert "No reviews are waiting" not in text
+    assert "*Stale" in text
+
+
+def test_list_link_caps_the_ids():
+    report = _report(
+        [revision(i, created=ts(2026, 9, 1)) for i in range(1, MAX_LINK_IDS + 3)]
+    )
+    link = list_link(report.overdue, "overdue")
+    assert f"overdue (oldest {MAX_LINK_IDS} of {MAX_LINK_IDS + 2})" in link
+    assert f",{MAX_LINK_IDS}|" in link
+    assert f",{MAX_LINK_IDS + 1}" not in link
 
 
 def test_overdue_and_stale_link_to_phabricator():
