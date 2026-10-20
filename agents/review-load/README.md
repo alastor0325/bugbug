@@ -13,19 +13,18 @@ run.
 Each watched group has one file, `hackbot_agents/review_load/configs/<name>.toml`. A run
 names it with the `config` input. An unknown name stops the run with an error.
 
-| Key                            | Meaning                                                                                                                                   |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `review_group`                 | The Phabricator project slug whose review requests count                                                                                  |
-| `paths`, `excludes`            | A direct request to a member counts only for a patch that changes a file under `paths` and not under `excludes`. Empty `paths`: all count |
-| `[members]`                    | Phabricator handle and display name. Direct requests to them count too                                                                    |
-| `report.slack_channel`         | Where the message goes                                                                                                                    |
-| `report.age_buckets_work_days` | Bucket edges in work days. `[1, 3, 7]` gives <1, 1-3, 3-7 and 7+                                                                          |
-| `report.overdue_work_days`     | Older than this, a review is overdue and listed by name                                                                                   |
-| `report.stale_work_days`       | Older than this, a review is only counted on one "stale" line                                                                             |
-| `report.max_listed`            | The longest overdue list; the rest shows as "and N more"                                                                                  |
-| `authors.staff_email_domains`  | A Bugzilla email in one of these domains marks Mozilla staff                                                                              |
-| `authors.staff_accounts`       | Phabricator handles to count as staff                                                                                                     |
-| `authors.external_accounts`    | Phabricator handles to count as external                                                                                                  |
+| Key                           | Meaning                                                                                                                                   |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `review_group`                | The Phabricator project slug whose review requests count                                                                                  |
+| `paths`, `excludes`           | A direct request to a member counts only for a patch that changes a file under `paths` and not under `excludes`. Empty `paths`: all count |
+| `[members]`                   | Phabricator handle and display name. Direct requests to them count too                                                                    |
+| `report.slack_channel`        | Where the message goes                                                                                                                    |
+| `report.new_work_days`        | Below this, a review is "new today"                                                                                                       |
+| `report.overdue_work_days`    | From this, a review is overdue                                                                                                            |
+| `report.stale_work_days`      | From this, a review is only counted as stale                                                                                              |
+| `authors.staff_email_domains` | A Bugzilla email in one of these domains marks Mozilla staff                                                                              |
+| `authors.staff_accounts`      | Phabricator handles to count as staff                                                                                                     |
+| `authors.external_accounts`   | Phabricator handles to count as external                                                                                                  |
 
 Add a group: copy `configs/media-playback.toml`, change the keys, and run the tests.
 `test_every_shipped_config_loads` checks the new file.
@@ -47,23 +46,30 @@ Add a group: copy `configs/media-playback.toml`, change the keys, and run the te
   when the revision last went back to review (`request-review`, `reopen`, `reclaim` or
   a new diff).
 - Ages are in work days in UTC. Saturday and Sunday do not count; holidays do.
-- "New" is the first bucket: waiting reviews requested less than one work day ago. On
-  Monday that includes the weekend. A review that was requested and done on the same
+- "New today" is a review requested less than `new_work_days` ago. On Monday that
+  includes the weekend. A review that was requested and done on the same
   day is not counted.
 - A request to a member, not the group, counts only if the revision changes a file
   under `paths` and not under `excludes` (`differential.getcommitpaths`). A patch that
   only changes tests outside `paths` is not counted.
-- A reviewer that waits `stale_work_days` or more is left out of the buckets, the
-  per-reviewer list and the overdue list. A revision with only such reviewers is
-  counted on the "stale" line.
+- A reviewer that waits `stale_work_days` or more is left out of the waiting count and
+  the per-reviewer list. A revision with only such reviewers is counted as stale.
 - Totals count each revision once, by its longest wait. "Per reviewer" counts the
   revision once for each watched reviewer it waits on.
 - An author is staff or external from the Bugzilla login email
   (`bugzilla.account.search`, then the Bugzilla user record). An author with no linked
   Bugzilla account is "unknown".
-- The overdue list and the stale line link to one Phabricator search
-  (`/differential/?ids=...`) with all of their revisions, to work through them.
-- On Saturday and Sunday the run ends with no message.
+
+## The message
+
+A header, a one-line headline (overdue of waiting, and stale), four boxes (New today,
+1-7 days, Overdue, Stale) with the Mozilla and external split, a "By reviewer" list,
+and a note with the definitions. Each box label and each reviewer name links to one
+Phabricator search with those revisions (`/differential/?ids=...`, the oldest 60). The
+links are rebuilt on every run, so each day's message has that day's lists. A link
+never expires: an old one shows the same revisions with their current status.
+
+On Saturday and Sunday the run ends with no message.
 
 ## Broker
 

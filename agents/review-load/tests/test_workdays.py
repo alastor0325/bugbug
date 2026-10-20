@@ -1,11 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from hackbot_agents.review_load.workdays import (
-    bucket_index,
-    is_weekend,
-    work_days_between,
-)
+from hackbot_agents.review_load.workdays import is_weekend, work_days_between
 
 # 2026-10-16 is a Friday.
 FRI = datetime(2026, 10, 16, 9, tzinfo=UTC)
@@ -56,11 +52,3 @@ def test_naive_datetimes_are_refused():
 )
 def test_is_weekend(moment, weekend):
     assert is_weekend(moment) is weekend
-
-
-@pytest.mark.parametrize(
-    ("age", "index"),
-    [(0, 0), (0.99, 0), (1, 1), (2.9, 1), (3, 2), (6.9, 2), (7, 3), (30, 3)],
-)
-def test_bucket_index(age, index):
-    assert bucket_index(age, [1, 3, 7]) == index

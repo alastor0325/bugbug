@@ -6,160 +6,180 @@ from hackbot_agents.review_load.config import ReportSettings
 from hackbot_agents.review_load.load import build_report
 from hackbot_agents.review_load.message import (
     MAX_LINK_IDS,
-    bucket_labels,
+    MAX_SECTION_CHARS,
     build_blocks,
     build_text,
     list_link,
 )
-from testdata import ALICE, GROUP, OUTSIDER, revision, ts
+from testdata import ALICE, BOB, GROUP, OUTSIDER, revision, ts
 
 NOW = datetime(2026, 10, 19, 12, tzinfo=UTC)
 GROUP_LABEL = "#example-reviewers"
-WATCHED = {GROUP: GROUP_LABEL, ALICE: "alice"}
+WATCHED = {GROUP: GROUP_LABEL, ALICE: "alice", BOB: "bob"}
+URL = "https://phabricator.services.mozilla.com/differential/?ids="
 
 
-def _report(revisions, max_listed=10, kinds=None):
+def _report(revisions, kinds=None):
     return build_report(
         [parse_revision(r, []) for r in revisions],
         watched=WATCHED,
         author_kinds=kinds or {},
         now=NOW,
-        settings=ReportSettings(slack_channel="#x", max_listed=max_listed),
+        settings=ReportSettings(slack_channel="#x"),
     )
 
 
-def _all_text(blocks):
-    return json.dumps(blocks)
-
-
-def test_bucket_labels():
-    assert bucket_labels([1, 3, 7]) == ["<1", "1-3", "3-7", "7+"]
-    assert bucket_labels([2]) == ["<2", "2+"]
-
-
-def test_header_names_the_group_and_day():
-    blocks = build_blocks(_report([]), GROUP_LABEL)
-    assert blocks[0]["type"] == "header"
-    assert blocks[0]["text"]["text"] == f"Review load for {GROUP_LABEL}, Mon 2026-10-19"
-
-
-def test_empty_report_is_one_line():
-    blocks = build_blocks(_report([]), GROUP_LABEL)
-    assert len(blocks) == 2
-    assert "No reviews are waiting" in blocks[1]["text"]["text"]
-    assert "No reviews are waiting" in build_text(_report([]), GROUP_LABEL)
-
-
-def test_summary_counts_new_and_split():
-    report = _report(
+def _full():
+    return _report(
         [
-            revision(1, created=ts(2026, 10, 19, 6)),
-            revision(2, created=ts(2026, 10, 19, 7), author=OUTSIDER),
-            revision(3, created=ts(2026, 10, 1)),
+            revision(1, created=ts(2025, 1, 6)),
+            revision(
+                2, created=ts(2026, 9, 1), reviewers={GROUP: "added", ALICE: "added"}
+            ),
+            revision(3, created=ts(2026, 9, 2), author=OUTSIDER),
+            revision(4, created=ts(2026, 10, 14), reviewers={BOB: "added"}),
+            revision(5, created=ts(2026, 10, 19, 6)),
         ],
         kinds={OUTSIDER: "external"},
     )
-    text = _all_text(build_blocks(report, GROUP_LABEL))
-    assert "*New in the last work day:* 2 (external 1, unknown 1)" in text
-    assert "*Waiting:* 3" in text
 
 
-def test_table_has_a_row_per_bucket():
-    report = _report([revision(1, created=ts(2026, 10, 1))])
-    text = _all_text(build_blocks(report, GROUP_LABEL))
-    for label in ["<1", "1-3", "3-7", "7+"]:
-        assert label in text
-
-
-def test_overdue_lists_links_and_truncates():
-    report = _report(
-        [revision(i, created=ts(2026, 9, 1) + i) for i in range(1, 5)], max_listed=2
-    )
-    text = _all_text(build_blocks(report, GROUP_LABEL))
-    assert "<https://phabricator.services.mozilla.com/D1|D1>" in text
-    assert "<https://phabricator.services.mozilla.com/D2|D2>" in text
-    assert "D3|" not in text
-    assert "and 2 more" in text
-
-
-def test_titles_are_escaped():
-    raw = revision(1, created=ts(2026, 9, 1))
-    raw["fields"]["title"] = "Fix <a> & <b>"
-    text = _all_text(build_blocks(_report([raw]), GROUP_LABEL))
-    assert "Fix &lt;a&gt; &amp; &lt;b&gt;" in text
-
-
-def test_per_reviewer_line():
-    report = _report([revision(1, reviewers={GROUP: "added", ALICE: "added"})])
-    text = _all_text(build_blocks(report, GROUP_LABEL))
-    assert f"{GROUP_LABEL} 1 (1 overdue), alice 1 (1 overdue)" in text
-
-
-def test_text_fallback_summarises():
-    report = _report([revision(1, created=ts(2026, 10, 1))])
-    assert build_text(report, GROUP_LABEL) == (
-        f"Review load for {GROUP_LABEL}: 1 waiting, 0 new, 1 overdue"
-    )
-
-
-def test_stale_line():
-    report = _report(
-        [revision(1, created=ts(2025, 1, 6)), revision(2, created=ts(2026, 10, 1))]
-    )
-    text = _all_text(build_blocks(report, GROUP_LABEL))
-    assert "*Stale (60+ work days, not counted above):* 1 (unknown 1)" in text
-    assert "D1|" not in text
+def _by_type(blocks, kind):
+    return [b for b in blocks if b["type"] == kind]
 
 
 def test_revisions_url():
-    assert revisions_url([7, 3]) == (
-        "https://phabricator.services.mozilla.com/differential/?ids=7,3"
-    )
-
-
-def test_only_stale_is_not_empty():
-    report = _report([revision(1, created=ts(2025, 1, 6))])
-    text = _all_text(build_blocks(report, GROUP_LABEL))
-    assert "No reviews are waiting" not in text
-    assert "*Stale" in text
+    assert revisions_url([7, 3]) == f"{URL}7,3"
 
 
 def test_list_link_caps_the_ids():
     report = _report(
         [revision(i, created=ts(2026, 9, 1)) for i in range(1, MAX_LINK_IDS + 3)]
     )
-    link = list_link(report.overdue, "overdue")
-    assert f"overdue (oldest {MAX_LINK_IDS} of {MAX_LINK_IDS + 2})" in link
-    assert f",{MAX_LINK_IDS}|" in link
+    link = list_link([r.revision.id for r in report.overdue], "Overdue")
+    assert link.startswith(f"<{URL}1,2,")
+    assert f",{MAX_LINK_IDS}|Overdue>" in link
     assert f",{MAX_LINK_IDS + 1}" not in link
 
 
-def test_one_line_of_lists():
-    report = _report(
-        [
-            revision(1, created=ts(2025, 1, 6)),
-            revision(2, created=ts(2026, 9, 1)),
-            revision(3, created=ts(2026, 9, 2)),
-            revision(4, created=ts(2026, 10, 14)),
-            revision(5, created=ts(2026, 10, 19, 6)),
-        ],
-        max_listed=1,
-    )
-    [line] = [
-        b["text"]["text"]
-        for b in build_blocks(report, GROUP_LABEL)
-        if b["text"]["text"].startswith("*Open in Phabricator:*")
+def test_layout():
+    blocks = build_blocks(_full(), GROUP_LABEL)
+    assert [b["type"] for b in blocks] == [
+        "header",
+        "section",
+        "section",
+        "divider",
+        "section",
+        "context",
     ]
-    url = "https://phabricator.services.mozilla.com/differential/?ids="
-    assert line == (
-        f"*Open in Phabricator:* <{url}5|new (1)> | <{url}4|1-7 days (1)> | "
-        f"<{url}2,3|overdue (2)> | <{url}1|stale (1)>"
+
+
+def test_header():
+    [header] = _by_type(build_blocks(_full(), GROUP_LABEL), "header")
+    assert header["text"] == {
+        "type": "plain_text",
+        "text": f"Review load: {GROUP_LABEL}, Mon 19 Oct",
+    }
+
+
+def test_headline():
+    headline = build_blocks(_full(), GROUP_LABEL)[1]["text"]["text"]
+    assert headline == "*2 overdue* of 4 waiting  ·  1 stale"
+
+
+def test_boxes():
+    fields = build_blocks(_full(), GROUP_LABEL)[2]["fields"]
+    assert [f["text"] for f in fields] == [
+        f"<{URL}5|New today>\n*1*  ·  unknown 1",
+        f"<{URL}4|1-7 days>\n*1*  ·  unknown 1",
+        f"*<{URL}2,3|Overdue>*\n*2*  ·  external 1, unknown 1",
+        f"<{URL}1|Stale>\n*1*  ·  unknown 1",
+    ]
+
+
+def test_new_label_follows_the_config():
+    report = build_report(
+        [parse_revision(revision(1, created=ts(2026, 10, 1)), [])],
+        watched=WATCHED,
+        author_kinds={},
+        now=NOW,
+        settings=ReportSettings(slack_channel="#x", new_work_days=2),
+    )
+    fields = build_blocks(report, GROUP_LABEL)[2]["fields"]
+    assert fields[0]["text"].startswith("Under 2 days\n")
+    assert fields[1]["text"].startswith("2-7 days\n")
+
+
+def test_an_empty_box_has_no_link():
+    report = _report([revision(1, created=ts(2026, 10, 1))])
+    fields = build_blocks(report, GROUP_LABEL)[2]["fields"]
+    assert fields[0]["text"] == "New today\n*0*"
+    assert fields[3]["text"] == "Stale\n*0*"
+
+
+def test_by_reviewer():
+    text = build_blocks(_full(), GROUP_LABEL)[4]["text"]["text"]
+    assert text == (
+        "*By reviewer*\n"
+        f"<{URL}2,3,5|{GROUP_LABEL}>  3 waiting, *2 overdue*\n"
+        f"<{URL}2|alice>  1 waiting, *1 overdue*\n"
+        f"<{URL}4|bob>  1 waiting"
     )
 
 
-def test_empty_lists_are_left_out():
+def test_by_reviewer_splits_long_sections():
+    many = {GROUP: GROUP_LABEL} | {f"PHID-USER-{i:020d}": f"user{i}" for i in range(40)}
+    revisions = [
+        revision(n, created=ts(2026, 9, 1), reviewers={p: "added" for p in many})
+        for n in range(1000000, 1000000 + MAX_LINK_IDS)
+    ]
+    report = build_report(
+        [parse_revision(r, []) for r in revisions],
+        watched=many,
+        author_kinds={},
+        now=NOW,
+        settings=ReportSettings(slack_channel="#x"),
+    )
+    blocks = build_blocks(report, GROUP_LABEL)
+    sections = [b["text"]["text"] for b in blocks if "text" in b][2:]
+    assert len(sections) > 1
+    assert all(len(s) <= MAX_SECTION_CHARS for s in sections)
+    assert sections[0].startswith("*By reviewer*\n")
+    assert sum(s.count("  60 waiting") for s in sections) == len(many)
+
+
+def test_context():
+    [context] = _by_type(build_blocks(_full(), GROUP_LABEL), "context")
+    assert context["elements"][0]["text"] == (
+        "Days are work days, Mon to Fri. Overdue: waiting 7+ work days. "
+        "Stale: 60+ work days, not counted in waiting. "
+        "Waiting: external 1, unknown 3. "
+        "Open a label or name to see the list in Phabricator."
+    )
+
+
+def test_quiet_day():
+    blocks = build_blocks(_report([]), GROUP_LABEL)
+    assert [b["type"] for b in blocks] == ["header", "section", "context"]
+    assert blocks[1]["text"]["text"] == "*No reviews waiting.*"
+
+
+def test_quiet_day_with_stale():
     report = _report([revision(1, created=ts(2025, 1, 6))])
-    text = _all_text(build_blocks(report, GROUP_LABEL))
-    assert "|stale (1)>" in text
-    assert "new (" not in text
-    assert "overdue (" not in text
+    blocks = build_blocks(report, GROUP_LABEL)
+    assert blocks[1]["text"]["text"] == f"*No reviews waiting.*  ·  <{URL}1|1 stale>"
+
+
+def test_titles_never_reach_the_message():
+    raw = revision(1, created=ts(2026, 9, 1))
+    raw["fields"]["title"] = "Fix <a> & <b>"
+    assert "Fix" not in json.dumps(build_blocks(_report([raw]), GROUP_LABEL))
+
+
+def test_text_fallback():
+    assert build_text(_full(), GROUP_LABEL) == (
+        f"Review load for {GROUP_LABEL}: 4 waiting, 2 overdue, 1 new, 1 stale"
+    )
+    assert build_text(_report([]), GROUP_LABEL) == (
+        f"Review load for {GROUP_LABEL}: no reviews waiting"
+    )

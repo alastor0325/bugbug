@@ -63,7 +63,7 @@ async def run_review_load(
         num_turns=0,
         config=config.name,
         waiting=report.total,
-        new=report.new.total,
+        new=len(report.new),
         overdue=len(report.overdue),
         posted=not dry_run,
     )

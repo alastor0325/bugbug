@@ -21,13 +21,10 @@ aosmond = "Andrew Osmond"
 
 [report]
 slack_channel = "#media-playback"
-# Age buckets in work days from the review request: <1, 1-3, 3-7 and 7+.
-age_buckets_work_days = [1, 3, 7]
-# Older than this, a review is overdue and listed by name.
+# Ages in work days; see ReportSettings in config.py.
+new_work_days = 1
 overdue_work_days = 7
-# Older than this, a review is only counted on one "stale" line.
 stale_work_days = 60
-max_listed = 10
 
 [authors]
 # A patch author with a Bugzilla email in one of these domains is Mozilla staff.

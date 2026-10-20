@@ -4,6 +4,7 @@ import pytest
 from hackbot_agents.review_load.conduit import parse_revision
 from hackbot_agents.review_load.config import AuthorSettings, ReportSettings
 from hackbot_agents.review_load.load import (
+    author_split,
     build_report,
     classify_author,
     direct_only,
@@ -97,7 +98,7 @@ def _report(revisions, kinds=None):
 
 
 class TestBuildReport:
-    def test_counts_by_bucket_and_author(self):
+    def test_groups_by_age(self):
         report = _report(
             [
                 rev(1, created=ts(2026, 10, 19, 6)),
@@ -107,10 +108,10 @@ class TestBuildReport:
             ],
             kinds={CAROL: "staff", OUTSIDER: "external"},
         )
-        assert [b.total for b in report.buckets] == [1, 1, 1, 1]
-        assert report.buckets[1].by_author == {"external": 1}
-        assert report.buckets[3].by_author == {"staff": 1}
-        assert report.new == report.buckets[0]
+        assert [r.revision.id for r in report.new] == [1]
+        assert [r.revision.id for r in report.middle] == [3, 2]
+        assert [r.revision.id for r in report.overdue] == [4]
+        assert author_split(report.middle) == {"staff": 1, "external": 1}
         assert report.total == 4
 
     def test_unknown_author_kind(self):
@@ -175,13 +176,23 @@ class TestBuildReport:
             ]
         )
         assert [r.label for r in report.per_reviewer] == ["bob", "alice"]
+        assert [r.revision_ids for r in report.per_reviewer] == [(1, 2), (2,)]
+
+    def test_per_reviewer_ties_break_on_overdue(self):
+        report = _report(
+            [
+                rev(1, created=ts(2026, 10, 19, 6), reviewers={ALICE: "added"}),
+                rev(2, created=ts(2026, 10, 1), reviewers={BOB: "added"}),
+            ]
+        )
+        assert [r.label for r in report.per_reviewer] == ["bob", "alice"]
 
     def test_empty(self):
         report = _report([])
         assert report.total == 0
         assert report.overdue == []
         assert report.per_reviewer == []
-        assert len(report.buckets) == 4
+        assert report.new == report.middle == report.stale_reviews == []
 
 
 class TestStale:
@@ -192,9 +203,8 @@ class TestStale:
         )
         assert report.total == 1
         assert [r.revision.id for r in report.reviews] == [2]
-        assert report.stale.total == 1
-        assert report.stale.by_author == {"staff": 1}
-        assert sum(b.total for b in report.buckets) == 1
+        assert [r.revision.id for r in report.stale_reviews] == [1]
+        assert author_split(report.stale_reviews) == {"staff": 1}
         assert [r.revision.id for r in report.overdue] == [2]
 
     def test_stale_reviews_are_not_in_per_reviewer(self):
@@ -212,7 +222,7 @@ class TestStale:
                 )
             ]
         )
-        assert report.stale.total == 0
+        assert report.stale_reviews == []
         [review] = report.reviews
         assert review.reviewers == ("alice",)
         assert review.since == datetime(2026, 10, 16, tzinfo=UTC)

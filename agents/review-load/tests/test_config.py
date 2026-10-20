@@ -30,9 +30,8 @@ def test_minimal_config_gets_the_defaults(tmp_path):
     assert config.name == "example"
     assert config.review_group == "example-reviewers"
     assert config.members == {"alice": "Alice Example"}
-    assert config.report.age_buckets_work_days == [1, 3, 7]
+    assert config.report.new_work_days == 1
     assert config.report.overdue_work_days == 7
-    assert config.report.max_listed == 10
     assert config.authors.staff_email_domains == ["@mozilla.com"]
     assert config.report.stale_work_days == 60
     assert config.paths == []
@@ -64,16 +63,32 @@ def _config(**report) -> ReviewLoadConfig:
     )
 
 
-@pytest.mark.parametrize("buckets", [[], [3, 1], [1, 1], [0, 3]])
-def test_buckets_must_be_positive_and_ascending(buckets):
+@pytest.mark.parametrize(
+    "limits",
+    [
+        {"new_work_days": 7},
+        {"new_work_days": 8},
+        {"overdue_work_days": 60},
+        {"overdue_work_days": 30, "stale_work_days": 20},
+    ],
+)
+def test_limits_must_ascend(limits):
     with pytest.raises(ValidationError):
-        _config(age_buckets_work_days=buckets)
+        _config(**limits)
 
 
-@pytest.mark.parametrize("field", ["overdue_work_days", "max_listed"])
+@pytest.mark.parametrize(
+    "field", ["new_work_days", "overdue_work_days", "stale_work_days"]
+)
 def test_limits_must_be_positive(field):
     with pytest.raises(ValidationError):
         _config(**{field: 0})
+
+
+@pytest.mark.parametrize("removed", ["age_buckets_work_days", "max_listed"])
+def test_removed_keys_are_refused(removed):
+    with pytest.raises(ValidationError):
+        _config(**{removed: 1})
 
 
 def test_blank_channel_is_refused():
@@ -105,14 +120,6 @@ def test_media_playback_config():
     assert config.review_group == "media-playback-reviewers"
     assert config.report.slack_channel == "#media-playback"
     assert "alwu" in config.members
-
-
-def test_stale_must_be_past_the_last_bucket_and_overdue():
-    with pytest.raises(ValidationError):
-        _config(stale_work_days=7)
-    with pytest.raises(ValidationError):
-        _config(overdue_work_days=30, stale_work_days=20)
-    assert _config(stale_work_days=8).report.stale_work_days == 8
 
 
 def test_paths_are_normalised(tmp_path):

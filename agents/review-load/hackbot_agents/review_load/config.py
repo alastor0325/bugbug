@@ -28,24 +28,17 @@ class _Strict(BaseModel):
 
 class ReportSettings(_Strict):
     slack_channel: Annotated[str, Field(min_length=1)]
-    age_buckets_work_days: list[PositiveInt] = [1, 3, 7]
+    # Ages in work days from the review request. Below `new_work_days` a review is
+    # new; from `overdue_work_days` it is overdue; from `stale_work_days` it is only
+    # counted as stale.
+    new_work_days: PositiveInt = 1
     overdue_work_days: PositiveInt = 7
-    # Older than this, a review is only counted on the "stale" line.
     stale_work_days: PositiveInt = 60
-    max_listed: PositiveInt = 10
-
-    @field_validator("age_buckets_work_days")
-    @classmethod
-    def _ascending(cls, edges: list[int]) -> list[int]:
-        if not edges or any(a >= b for a, b in zip(edges, edges[1:])):
-            raise ValueError("must be a non-empty, strictly ascending list")
-        return edges
 
     @model_validator(mode="after")
-    def _stale_is_last(self) -> "ReportSettings":
-        floor = max(self.age_buckets_work_days[-1], self.overdue_work_days)
-        if self.stale_work_days <= floor:
-            raise ValueError(f"stale_work_days must be more than {floor}")
+    def _ascending(self) -> "ReportSettings":
+        if not self.new_work_days < self.overdue_work_days < self.stale_work_days:
+            raise ValueError("need new_work_days < overdue_work_days < stale_work_days")
         return self
 
 
