@@ -746,7 +746,7 @@ def _check_see_also(value: object, state: TriageState, bug_id: int) -> None:
 def with_fix_tags(current: str, tags: list[str]) -> str:
     """``current`` with ``tags`` at its end; the text already there stays as it is."""
     added = " ".join(tags)
-    if not current.strip():
+    if not current:
         return added
     return current + added if current[-1].isspace() else f"{current} {added}"
 
@@ -758,6 +758,10 @@ def _check_whiteboard(changes: dict, state: TriageState) -> None:
     if (RESOLUTION_FIELDS | MOVE_FIELDS) & set(changes):
         raise ToolError(
             "a fix tag goes only on an analyzed bug; a close or a move is not analyzed"
+        )
+    if not isinstance(state.bug.get("whiteboard"), str):
+        raise ToolError(
+            "the bug's whiteboard was not read, so a tag could erase it; add no fix tag"
         )
     current = state.whiteboard
     present = current.casefold()

@@ -1952,13 +1952,22 @@ def _tagged(state, tags):
     ("current", "tags", "expected"),
     [
         ("", [EASY], EASY),
-        (None, [EASY, GFB], f"{EASY} {GFB}"),
+        ("", [EASY, GFB], f"{EASY} {GFB}"),
+        ("   ", [EASY], f"   {EASY}"),
         ("", [GFB, EASY], f"{EASY} {GFB}"),
         ("[av1] [fuzzblocker]", [EASY], f"[av1] [fuzzblocker] {EASY}"),
         ("[av1] ", [EASY, GFB], f"[av1] {EASY} {GFB}"),
         (f"[av1] {EASY}", [GFB], f"[av1] {EASY} {GFB}"),
     ],
-    ids=["easy", "both", "both in any order", "keeps text", "keeps space", "gfb"],
+    ids=[
+        "easy",
+        "both",
+        "keeps only spaces",
+        "both in any order",
+        "keeps text",
+        "keeps space",
+        "gfb",
+    ],
 )
 def test_the_fix_tags_are_appended_to_the_whiteboard(
     bug_new, comments_new, current, tags, expected
@@ -1996,6 +2005,20 @@ def test_every_other_whiteboard_change_is_refused(
     assert len(rec.actions) == 1
     _update(rec, {"severity": "S3"})
     assert rec.actions[-1]["params"]["changes"] == {"severity": "S3"}
+
+
+@pytest.mark.parametrize("whiteboard", [None, 5, "missing"])
+def test_a_fix_tag_is_refused_when_the_whiteboard_was_not_read(
+    bug_new, comments_new, whiteboard
+):
+    bug = dict(bug_new, whiteboard=whiteboard)
+    if whiteboard == "missing":
+        del bug["whiteboard"]
+    rec = _recorder(TriageState(bug=bug, comments=comments_new, now=NOW))
+    _comment(rec)
+    with pytest.raises(ToolError, match="was not read"):
+        _update(rec, {"severity": "S3", "whiteboard": {"add": [EASY]}})
+    assert len(rec.actions) == 1
 
 
 @pytest.mark.parametrize(
