@@ -113,6 +113,20 @@ A local run has no hackbot-api apply step, so it never posts to Slack.
    or `artifacts/<run_id>/` (no Docker). To see the message as Slack shows it, paste
    `blocks` into the [Block Kit Builder](https://app.slack.com/block-kit-builder).
 
+## Post to a test channel (local test period only)
+
+A local run records the Slack message in `summary.json` and posts nothing. To post it
+through an Incoming Webhook, run the agent with `DRY_RUN=false`, then:
+
+```sh
+set -a; source .env; set +a   # REVIEW_LOAD_SLACK_WEBHOOK=https://hooks.slack.com/...
+uv run --package hackbot-agent-review-load \
+  python -m hackbot_agents.review_load.post_webhook ~/hackbot/artifacts/<run_id>
+```
+
+The webhook decides the channel. `post_webhook.py` goes away before the upstream pull
+request; on Hackbot, hackbot-api posts the message.
+
 ## Tests
 
 ```sh
