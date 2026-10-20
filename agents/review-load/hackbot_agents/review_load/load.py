@@ -12,8 +12,9 @@ from .workdays import work_days_between
 
 AuthorKind = Literal["staff", "external", "unknown"]
 
-# A reviewer in one of these states has not acted on the current diff.
-WAITING_STATUSES = frozenset({"added", "blocking"})
+# On a revision in needs-review, a reviewer in one of these states is waited on. A
+# reviewer who requested changes keeps "rejected" after the author asks for review again.
+WAITING_STATUSES = frozenset({"added", "blocking", "rejected", "rejected-older"})
 # Transactions that put a revision back in front of its reviewers.
 RESTART_TYPES = frozenset({"request-review", "reopen", "reclaim", "update"})
 

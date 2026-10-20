@@ -40,7 +40,9 @@ Add a group: copy `configs/media-playback.toml`, change the keys, and run the te
 ## What counts
 
 - A review waits when the revision is `needs-review` and not a draft, and the group or
-  a member is a reviewer in the `added` or `blocking` state. The author's own review
+  a member is a reviewer in the `added`, `blocking`, `rejected` or `rejected-older`
+  state. A reviewer who requested changes keeps `rejected` after the author asks for
+  review again, so they are waited on too. The author's own review
   does not count.
 - A review waits since the later of two times: when that reviewer was last added, and
   when the revision last went back to review (`request-review`, `reopen`, `reclaim` or

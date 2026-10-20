@@ -128,13 +128,15 @@ class TestBuildReport:
             {"reviewers": {GROUP: "resigned"}},
             {"reviewers": {OUTSIDER: "added"}},
             {"reviewers": {ALICE: "added"}, "author": ALICE},
+            {"reviewers": {ALICE: "rejected"}, "status": "needs-revision"},
         ],
     )
     def test_not_waiting(self, kwargs):
         assert _report([rev(1, **kwargs)]).total == 0
 
-    def test_blocking_counts(self):
-        assert _report([rev(1, reviewers={ALICE: "blocking"})]).total == 1
+    @pytest.mark.parametrize("status", ["blocking", "rejected", "rejected-older"])
+    def test_counts_when_back_in_review(self, status):
+        assert _report([rev(1, reviewers={ALICE: status})]).total == 1
 
     def test_a_revision_counts_once_but_for_each_reviewer(self):
         report = _report(
