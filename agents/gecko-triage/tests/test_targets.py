@@ -15,6 +15,7 @@ from hackbot_agents.gecko_triage.targets import (
     comment_bug_ids,
     drop_writes,
     dupe_of,
+    dupe_target_warning,
     fetch_bugs,
     restricted_warning,
     screen_comment,
@@ -417,3 +418,29 @@ def test_the_restricted_warning_lists_the_bugs_the_run_met():
     assert f"bug {REGRESSOR}, bug {RELATED}" in restricted_warning(
         [REGRESSOR, RELATED], None
     )
+
+
+@pytest.mark.parametrize(
+    ("status", "resolution"),
+    [
+        ("RESOLVED", "INVALID"),
+        ("RESOLVED", "WONTFIX"),
+        ("RESOLVED", "WORKSFORME"),
+        ("RESOLVED", "INCOMPLETE"),
+        ("NEW", ""),
+    ],
+)
+def test_a_duplicate_of_an_unfixed_target_needs_a_person(status, resolution):
+    found = {DUPE: _target(status=status, resolution=resolution)}
+    warning = dupe_target_warning(_actions(meta_on=None), BUG, found)
+    assert f"bug {DUPE} is {status} {resolution}".strip() + ", not FIXED" in warning
+
+
+def test_a_duplicate_of_a_fixed_target_needs_no_person():
+    found = {DUPE: _target(status="RESOLVED", resolution="FIXED")}
+    assert dupe_target_warning(_actions(meta_on=None), BUG, found) is None
+
+
+def test_a_run_with_no_duplicate_has_no_dupe_target_warning():
+    actions = _regression([REGRESSOR], severity="S3")
+    assert dupe_target_warning(actions, BUG, {}) is None

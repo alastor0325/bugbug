@@ -190,8 +190,9 @@ a refused close that the run did not record after all, since then the comment ca
 the bug closes while it stays open. The update hook keeps the resolution and `dupe_of`
 of each refused update on the triaged bug that sets a status, a resolution or `dupe_of`,
 whichever check refuses it. A retry that records the same close clears that warning; a
-close with another resolution or another `dupe_of` does not. A run with a
-`close_warning` never vouches.
+close with another resolution or another `dupe_of` does not. A duplicate of a bug that
+is not RESOLVED FIXED, closed with no fix or still open, also sets `close_warning`: that
+target does not show that this bug is fixed. A run with a `close_warning` never vouches.
 
 A known limit: no code ties the corrections to the comment text. The comment comes after
 the verdict, so the main agent has the corrections when it writes it. A person checks the

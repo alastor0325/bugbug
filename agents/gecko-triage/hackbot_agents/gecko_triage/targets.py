@@ -13,7 +13,8 @@ duplicate of a meta bug also fails the run: the hooks know only the team's meta 
 the meta bugs among the duplicate candidates. A comment that names an unreadable or
 restricted bug fails the run too, since the comment cannot be dropped in part and must
 not point at that bug. So does a comment that spells the number of a restricted bug
-that a commit message names.
+that a commit message names. A duplicate of a bug that is not RESOLVED FIXED waits for
+a person (see `dupe_target_warning`).
 """
 
 import asyncio
@@ -273,6 +274,27 @@ def restricted_warning(ids: list[int], found: Mapping[int, dict] | None) -> str 
     return (
         f"the run met {_bug_list(hidden)}, restricted or not readable; a person must "
         "check that the comment does not name or describe these bugs"
+    )
+
+
+def dupe_target_warning(
+    actions: list[dict], bug: int, found: Mapping[int, dict]
+) -> str | None:
+    """Why a person must check the duplicate close: its target is not RESOLVED FIXED.
+
+    A target closed with no fix, or still open, does not show that this bug is fixed.
+    ``found`` holds the `dupe_of` bug, since `screen_writes` raises otherwise.
+    """
+    duplicate = dupe_of(actions, bug)
+    if duplicate is None:
+        return None
+    target = found[duplicate]
+    if target.get("resolution") == "FIXED":
+        return None
+    state = f"{target.get('status')} {target.get('resolution') or ''}".strip()
+    return (
+        f"the duplicate target bug {duplicate} is {state}, not FIXED; a "
+        "person must check that the current tree fixes every path this bug reports"
     )
 
 

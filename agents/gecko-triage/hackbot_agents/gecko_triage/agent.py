@@ -76,6 +76,7 @@ from .targets import (
     Dropped,
     bugs_to_read,
     drop_writes,
+    dupe_target_warning,
     fetch_bugs,
     restricted_warning,
     screen_comment,
@@ -224,7 +225,8 @@ class GeckoTriageResult(Plan, HackbotAgentResult):
     close_verification: Annotated[
         str | None, BeforeValidator(_as_close_verification)
     ] = None
-    # Why the decision and the recorded close disagree, or None when they agree.
+    # Why a person must check the recorded close, or None. See `close_mismatch` and
+    # `dupe_target_warning`.
     close_warning: str | None = None
     # Why a person must check a needinfo before it applies, or None.
     needinfo_warning: str | None = None
@@ -816,7 +818,13 @@ with every comment, from comment 0 to the newest.
   release consequence: a debug-only assertion that is benign in release is S4.
 - **DUPLICATE**: read the `dupe_of` bug. It must cover this bug's symptom and its
   cause: fixing it must fix this bug. It must not be a meta or tracking bug, and it
-  must be in the same component area.
+  must be in the same component area. Read the status and the resolution of the
+  `dupe_of` bug. If it was closed with no fix (INVALID, WONTFIX, WORKSFORME or
+  INCOMPLETE), apply the INVALID test above to this bug, against the current code. If
+  the `dupe_of` bug or its comments name a bug that fixed the problem or added a check,
+  read that change in the current code with the `searchfox` tools and the VCS tools.
+  Make sure that it covers each path and each claim of this report. If a reported path
+  is still open, refute the close.
 - **INCOMPLETE**: every open needinfo is on the reporter and has a date, and none is a
   reminder the reporter set on themselves. The reporter has been quiet for
   {stale_days} days since the newest needinfo or their last reply. The reporter is not
@@ -1206,7 +1214,9 @@ async def run_gecko_triage(
     drop_writes(actions_recorder, dropped)
     actions = actions_recorder.actions
     close_verification = close_verdicts.outcome(closing.recorded_close(actions))
-    close_warning = close_mismatch(plan, actions, close_verdicts)
+    close_warning = close_mismatch(
+        plan, actions, close_verdicts
+    ) or dupe_target_warning(actions, bug, found or {})
 
     return GeckoTriageResult(
         bug_id=bug,

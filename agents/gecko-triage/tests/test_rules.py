@@ -738,3 +738,49 @@ def test_a_restricted_regressor_waits_for_a_person():
         "That run never applies by itself: a person checks that the author's email is "
         "a Bugzilla login." in workflow
     )
+
+
+def test_a_duplicate_of_a_bug_closed_with_no_fix_gets_the_invalid_test():
+    workflow = _flat("workflow.md")
+    assert (
+        "A duplicate target that is closed with no fix (INVALID, WONTFIX, WORKSFORME "
+        "or INCOMPLETE) makes this close an INVALID close." in workflow
+    )
+    assert (
+        "Before you record DUPLICATE, apply the INVALID test to this bug against the "
+        "current tree." in workflow
+    )
+    assert "it is not a duplicate: keep it open." in workflow
+
+
+def test_an_earlier_fix_must_cover_every_claim_in_the_current_tree():
+    workflow = _flat("workflow.md")
+    assert (
+        "read that change in the current tree and make sure that it covers every "
+        "claim of this report" in workflow
+    )
+    assert "If a reported path is still open, this bug is not a duplicate" in workflow
+    assert "what the earlier change covers and what is still open" in workflow
+    assert "add the target and the fixing bug to `see_also`" in workflow
+
+
+def test_a_comment_names_an_earlier_fix_in_its_first_paragraph():
+    workflow = _flat("workflow.md")
+    assert (
+        "In every comment that relies on an earlier fix, name that bug in the first "
+        "paragraph and add it to `see_also`." in workflow
+    )
+
+
+def test_the_close_verifier_checks_the_duplicate_target_resolution_and_fix():
+    prompt = " ".join(make_close_verifier().prompt.split())
+    assert "Read the status and the resolution of the `dupe_of` bug." in prompt
+    assert (
+        "If it was closed with no fix (INVALID, WONTFIX, WORKSFORME or INCOMPLETE), "
+        "apply the INVALID test above to this bug" in prompt
+    )
+    assert (
+        "If the `dupe_of` bug or its comments name a bug that fixed the problem or "
+        "added a check, read that change in the current code" in prompt
+    )
+    assert "If a reported path is still open, refute the close." in prompt

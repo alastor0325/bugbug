@@ -337,7 +337,7 @@ async def test_a_run_installs_the_hooks(fake_client, tmp_path, new_state):
     assert refused and recorder.actions == []
 
 
-def _duplicate_script(recorder, dupe_of, stores):
+def _duplicate_script(recorder, dupe_of, stores, meta=True):
     from hackbot_agents.gecko_triage.config import TEAM_META_BUGS
 
     def script():
@@ -363,11 +363,15 @@ def _duplicate_script(recorder, dupe_of, stores):
             },
             reasoning="r",
         )
-        recorder.record(
-            "bugzilla.update_bug",
-            {"bug_id": dupe_of, "changes": {"blocks": {"add": [min(TEAM_META_BUGS)]}}},
-            reasoning="r",
-        )
+        if meta:
+            recorder.record(
+                "bugzilla.update_bug",
+                {
+                    "bug_id": dupe_of,
+                    "changes": {"blocks": {"add": [min(TEAM_META_BUGS)]}},
+                },
+                reasoning="r",
+            )
 
     return script
 
@@ -383,28 +387,27 @@ def _fake_fetch(monkeypatch, found):
     return calls
 
 
+def _dupe_target(dupe, resolution):
+    from hackbot_agents.gecko_triage.config import TRIAGE_SCOPE
+
+    scope = TRIAGE_SCOPE[0]
+    return {
+        "id": dupe,
+        "groups": [],
+        "product": scope.product,
+        "component": scope.component,
+        "status": "RESOLVED",
+        "resolution": resolution,
+        "keywords": [],
+        "summary": "s",
+    }
+
+
 async def test_the_meta_write_on_a_closed_dupe_target_is_dropped(
     fake_client, tmp_path, new_state, monkeypatch, verdict_stores
 ):
-    from hackbot_agents.gecko_triage.config import TRIAGE_SCOPE
-
     dupe = 9000002
-    scope = TRIAGE_SCOPE[0]
-    calls = _fake_fetch(
-        monkeypatch,
-        {
-            dupe: {
-                "id": dupe,
-                "groups": [],
-                "product": scope.product,
-                "component": scope.component,
-                "status": "RESOLVED",
-                "resolution": "FIXED",
-                "keywords": [],
-                "summary": "s",
-            }
-        },
-    )
+    calls = _fake_fetch(monkeypatch, {dupe: _dupe_target(dupe, "FIXED")})
     recorder = ActionsRecorder()
     fake_client.script = _duplicate_script(recorder, dupe, verdict_stores)
     fake_client.result = _result(
@@ -415,6 +418,35 @@ async def test_the_meta_write_on_a_closed_dupe_target_is_dropped(
     assert [a["params"]["bug_id"] for a in recorder.actions] == [BUG, BUG]
     assert result.auto_apply is False
     assert f"bug {dupe}" in result.result and "closed" in result.result
+
+
+@pytest.mark.parametrize(
+    ("resolution", "warning"),
+    [
+        ("FIXED", None),
+        (
+            "INVALID",
+            "the duplicate target bug 9000002 is RESOLVED INVALID, not FIXED; a person "
+            "must check that the current tree fixes every path this bug reports",
+        ),
+    ],
+)
+async def test_a_duplicate_of_an_unfixed_target_waits_for_a_person(
+    fake_client, tmp_path, new_state, monkeypatch, verdict_stores, resolution, warning
+):
+    dupe = 9000002
+    _fake_fetch(monkeypatch, {dupe: _dupe_target(dupe, resolution)})
+    recorder = ActionsRecorder()
+    fake_client.script = _duplicate_script(recorder, dupe, verdict_stores, meta=False)
+    fake_client.result = _result(
+        f'```json\n{{"decision": "duplicate", "duplicate_of": {dupe}, '
+        '"issue_type": "drm"}\n```'
+    )
+    result = await _run(tmp_path, new_state, recorder)
+    assert len(recorder.actions) == 2
+    assert result.close_verification == "confirmed"
+    assert result.auto_apply is (warning is None)
+    assert result.close_warning == warning
 
 
 async def test_a_duplicate_of_an_unreadable_bug_fails_the_run(

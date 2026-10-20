@@ -108,7 +108,8 @@ verifier once, and never after the comment. After a `refute`, or with no verdict
 cannot close the bug. When a tool result of the verifier is too large and the CLI saves it to a file, the
 verifier refutes, and the verdict tool refuses its confirm. A refused
 close that no retry recorded, a late verifier or a decision that does not match the
-resolution sets `findings.close_warning`, and the run waits for a person. A move needs
+resolution sets `findings.close_warning`, and the run waits for a person. So does a
+duplicate of a bug that is not RESOLVED FIXED. A move needs
 no verdict. The README's "Close verification" section tells how.
 
 An INCOMPLETE close can come up to 14 days after the bug becomes closable. The BugBot

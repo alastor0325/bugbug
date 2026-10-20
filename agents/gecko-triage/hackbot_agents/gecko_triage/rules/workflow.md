@@ -149,6 +149,19 @@ propose or name a bug that `get_bugs` lists as inaccessible. When the older bug 
 this bug's trigger and cause, propose the duplicate, and put the new details in the
 comment. Prefer NEW when you are unsure: a wrong duplicate sends a human to the wrong bug.
 
+**A target closed with no fix.** Read the status and the resolution of the older bug. A
+duplicate target that is closed with no fix (INVALID, WONTFIX, WORKSFORME or INCOMPLETE)
+makes this close an INVALID close. Before you record DUPLICATE, apply the INVALID test to
+this bug against the current tree. If a failure that the reported input or code path can
+reach is still there, the bug is not INVALID and it is not a duplicate: keep it open.
+
+**An earlier fix.** When the older bug or its comments say that another bug fixed the
+problem or added a check, read that change in the current tree and make sure that it
+covers every claim of this report. If a reported path is still open, this bug is not a
+duplicate. Keep it open as "Analyzed". In the first paragraph of the comment, say what
+the earlier change covers and what is still open, and add the target and the fixing bug
+to `see_also`.
+
 **A related bug.** Add a bug to `see_also` when it is related to this bug but is not a
 duplicate. An example is the earlier bug in a cluster of reports. Another example is a bug
 with the same cause in another component. Give its bug id. Never add a meta bug, and never
@@ -327,6 +340,15 @@ open in this run.
   that names a resolution in any case, such as invalid or DUPLICATE, or that asks to
   close or resolve the bug.
 - When it ends with no verdict, do not close. Record "Analyzed" or "Needs info".
+
+For a duplicate, the verifier reads the status and the resolution of the target. When
+the target was closed with no fix, it applies the INVALID test to this bug. When the
+target names a bug that fixed the problem, it reads that change in the current code and
+refutes the close if a reported path is still open. A duplicate of a bug that is not
+RESOLVED FIXED always waits for a person.
+
+In every comment that relies on an earlier fix, name that bug in the first paragraph and
+add it to `see_also`.
 
 The verifier only reads the bug, the code and the duplicate target. It never runs
 Firefox, a test or an attachment. When only a run can confirm the close, it refutes with
