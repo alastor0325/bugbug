@@ -112,8 +112,11 @@ read private comments.
    `remove_recorded_actions`, an in-process MCP server (`rerecord.py`) bound to the
    recorder. It removes every recorded action, the `dupe_of` change too, and the agent
    records them again. Every hook runs again. The close verdicts stay, so a verdict
-   after the first comment stays late. A run can use it 2 times. A `PreToolUse` hook
-   refuses it to every subagent, and no subagent has it in its tools.
+   after the first comment stays late. A run can use it 2 times. The `PreToolUse` hook
+   `removal_caller_guard` refuses it to every subagent. That hook is the barrier: the
+   CLI's built-in general-purpose agent has every tool, MCP tools too. A run that
+   removed its actions and ends with no comment fails, unless its decision is
+   `watching`, so BugBot runs it again.
 6. `may_apply_unattended` in `agent.py` sets `findings.auto_apply` when the run has a
    team, the run recorded a comment and the final message carries a decision. A close
    also needs its confirm, as "Close verification" says. The

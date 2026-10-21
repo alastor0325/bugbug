@@ -12,7 +12,8 @@ The close verdict store keeps its state: the comment marker, the verdicts, the r
 closes and the spawn counts. So a verdict that came after the first comment stays late,
 a refute still refuses every close and every closing comment, and a refused close still
 warns unless the run records it again. A run may remove its actions `MAX_REMOVALS`
-times. Only the main agent may call the tool.
+times. A run that removed them and ends with no comment fails, unless its decision needs
+no comment. Only the main agent may call the tool.
 """
 
 from dataclasses import dataclass
@@ -24,6 +25,8 @@ from hackbot_runtime.actions import ActionsRecorder
 SERVER_NAME = "rerecord"
 REMOVE_RECORDED_ACTIONS_TOOL = f"mcp__{SERVER_NAME}__remove_recorded_actions"
 MAX_REMOVALS = 2
+# The decisions that need no comment; `skipped` comes from the preflight.
+NO_COMMENT_DECISIONS = frozenset({"watching", "skipped"})
 
 
 @dataclass
@@ -70,6 +73,23 @@ every field change again, in the same order; every check runs again. You can use
 {MAX_REMOVALS} times per run.""",
     handler=remove_recorded_actions_tool,
 )
+
+
+def missing_comment_refusal(
+    removals: Removals, actions: list[dict], decision: str | None
+) -> str | None:
+    """Why a run that removed its actions fails: it did not record its comment again.
+
+    The run then fails, so BugBot runs it again, instead of ending ok with no comment.
+    """
+    if not removals.used or decision in NO_COMMENT_DECISIONS:
+        return None
+    if any(a["type"] == "bugzilla.add_comment" for a in actions):
+        return None
+    return (
+        "the run removed its recorded actions and did not record a comment again, "
+        f"but the decision is {decision}"
+    )
 
 
 def removals_server(removals: Removals):

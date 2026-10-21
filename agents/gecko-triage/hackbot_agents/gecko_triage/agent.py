@@ -631,8 +631,8 @@ def make_log_analyst() -> AgentDefinition:
         (
             "Reads one log (MOZ_LOG, about:logging or a crash log) with the "
             "check-log skill and reports the error signals and likely root cause. "
-            "Give it the symptom and the attachment id, or the path of a log that "
-            "fetch_attachment extracted."
+            "Give it the symptom and the attachment id, the path of a log that "
+            "fetch_attachment extracted, or the URL of a CI log."
         ),
         _LOG_ANALYST_PROMPT,
         ["Read", "Bash", "Grep", "Glob", attachments.FETCH_ATTACHMENT_TOOL],
@@ -982,6 +982,7 @@ async def run_gecko_triage(
     # The `mozilla_vcs` hook adds the commit authors and bugs; the needinfo check reads
     # the authors, the post-run check the bugs.
     commits = authors.CommitFacts()
+    removals = rerecord.Removals(actions_recorder)
     install_hooks(
         actions_recorder,
         bug,
@@ -1004,9 +1005,7 @@ async def run_gecko_triage(
             attachments.SERVER_NAME: attachments.attachments_server(bug),
             dupes.SERVER_NAME: dupes.concepts_server(concepts),
             closing.SERVER_NAME: closing.verdicts_server(close_verdicts),
-            rerecord.SERVER_NAME: rerecord.removals_server(
-                rerecord.Removals(actions_recorder)
-            ),
+            rerecord.SERVER_NAME: rerecord.removals_server(removals),
             ACTIONS_SERVER_NAME: actions_server,
         },
         agents={
@@ -1080,6 +1079,9 @@ async def run_gecko_triage(
             file=sys.stderr,
         )
     recorded = actions_recorder.list_actions()
+    if reason := rerecord.missing_comment_refusal(removals, recorded, plan.decision):
+        # Failing gets the run retried; an ok run would end with no comment.
+        raise AgentError(f"bug {bug}: {reason}")
     if reason := analyzed_refusal(plan, recorded, state):
         # Failing gets the run retried; nothing reaches the bug under the wrong label.
         raise AgentError(f"bug {bug}: {reason}")

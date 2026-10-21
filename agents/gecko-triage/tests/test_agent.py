@@ -913,6 +913,39 @@ async def test_a_run_that_records_its_close_again_keeps_the_confirm(
     assert result.auto_apply is True
 
 
+@pytest.mark.parametrize(
+    ("decision", "fails"), [("needs_info", True), ("watching", False)]
+)
+async def test_a_run_that_removed_its_comment_and_did_not_record_it_again_fails(
+    fake_client, tmp_path, new_state, monkeypatch, decision, fails
+):
+    _fake_fetch(monkeypatch, {})
+    bound = []
+    real = rerecord.removals_server
+    monkeypatch.setattr(
+        rerecord, "removals_server", lambda r: bound.append(r) or real(r)
+    )
+    recorder = ActionsRecorder()
+
+    async def script():
+        recorder.record(
+            "bugzilla.add_comment",
+            {"bug_id": BUG, "text": "The the note.", "is_private": False},
+            reasoning="r",
+        )
+        await rerecord.remove_recorded_actions_tool(bound[-1])
+
+    fake_client.script = script
+    fake_client.result = _result(
+        f'```json\n{{"decision": "{decision}", "issue_type": "drm"}}\n```'
+    )
+    if fails:
+        with pytest.raises(AgentError, match="did not record a comment again"):
+            await _run(tmp_path, new_state, recorder)
+    else:
+        assert (await _run(tmp_path, new_state, recorder)).decision == "watching"
+
+
 async def test_a_run_that_does_not_close_has_no_close_verification(
     fake_client, tmp_path, new_state
 ):

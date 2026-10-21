@@ -13,6 +13,7 @@ from hackbot_agents.gecko_triage.rerecord import (
     MAX_REMOVALS,
     REMOVE_RECORDED_ACTIONS_TOOL,
     Removals,
+    missing_comment_refusal,
     removal_caller_guard,
     removal_caller_refusal,
     remove_recorded_actions_tool,
@@ -231,3 +232,26 @@ async def test_a_refused_close_still_warns_after_a_re_record_without_it(new_stat
 
 def test_the_hooks_name_the_tool_in_their_docstring():
     assert "rerecord.py" in hooks.__doc__
+
+
+@pytest.mark.parametrize("decision", ["needs_info", "analyzed", "invalid", None])
+def test_a_removal_with_no_comment_again_fails_the_run(new_state, decision):
+    rec = _recorder(new_state)
+    _comment(rec)
+    _update(rec, {"severity": "S3", "priority": "P3"})
+    removals = Removals(rec, used=1)
+    for action in rec.list_actions():
+        rec.remove_action(action["action_id"])
+    reason = missing_comment_refusal(removals, rec.list_actions(), decision)
+    assert "did not record a comment again" in reason
+
+
+def test_a_removal_with_a_comment_again_or_no_comment_needed_passes(new_state):
+    rec = _recorder(new_state)
+    assert missing_comment_refusal(Removals(rec, used=1), [], "watching") is None
+    assert missing_comment_refusal(Removals(rec), [], "needs_info") is None
+    _comment(rec)
+    assert (
+        missing_comment_refusal(Removals(rec, used=1), rec.list_actions(), "analyzed")
+        is None
+    )
