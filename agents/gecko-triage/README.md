@@ -96,6 +96,9 @@ read private comments.
    read fails the run, so BugBot retries it. A bug read that does not end in 3 minutes
    also fails the run. A history read that does not end in 2 minutes gives no history,
    and the agent runs.
+   The user prompt gives the model the bug's fields and its public comments from this
+   read, so the model does not read them again. `render_bug` in `agent.py` drops a
+   comment that is not marked public, also when the broker already dropped it.
 3. `preflight.py` ends the run, at zero cost, on the skips `docs/bugzilla.md` lists. A
    skipped run is `status: "ok"` with `num_turns: 0`, `decision: "skipped"` and the
    reason in `result`.

@@ -401,7 +401,7 @@ async def test_a_no_team_run_end_to_end(no_team, fake_client, tmp_path, other_st
     result = await _run(tmp_path, other_state, recorder)
     options = fake_client.options
     assert options.add_dirs == [str(RULES_DIR)]
-    assert fake_client.prompt.endswith(rules_reminder())
+    assert rules_reminder() in fake_client.prompt
     assert "no team rules" in fake_client.prompt
     hunter = options.agents["duplicate_hunter"].prompt
     assert f"product `Core`: {OTHER['component']}" in hunter

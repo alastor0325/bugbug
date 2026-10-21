@@ -18,10 +18,12 @@ own component. There are no team rules, no meta bugs, no capture block and no ne
 experts. With no team, skip the team-specific steps. You can still move the bug to the
 component that owns the code, as "Close or move" says.
 
-## Step 1: fetch the bug
+## Step 1: read the bug
 
-Fetch the bug with all its comments and attachments. Read every comment, from comment 0
-to the newest. The agent keeps no memory between runs, so the bug is the only record.
+The bug's fields and all its public comments are in the user prompt, under **The bug**.
+Do not fetch them again. Fetch its attachment list with `get_bug_attachments`. Read
+every comment, from comment 0 to the newest. The agent keeps no memory between runs, so
+the bug is the only record.
 Then read **Where this bug stands** in the system prompt: the open needinfo flags, who set
 them and how old they are.
 

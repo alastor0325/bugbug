@@ -1,6 +1,7 @@
 """Tests for one run of the agent, with the Claude session replaced by a fake."""
 
 import contextlib
+import json
 
 import pytest
 from agent_tools.registry import ToolError
@@ -18,6 +19,7 @@ from hackbot_agents.gecko_triage import agent, attachments, closing, dupes, rere
 from hackbot_agents.gecko_triage.__main__ import AgentInputs
 from hackbot_agents.gecko_triage.authors import CommitFacts
 from hackbot_agents.gecko_triage.closing import CloseVerdicts
+from hackbot_agents.gecko_triage.state import TriageState
 from hackbot_runtime import AgentError
 from hackbot_runtime.actions import ActionsRecorder
 
@@ -1212,3 +1214,66 @@ def test_the_fix_tags_finding_keeps_only_known_tags(value, expected):
     base = {"bug_id": BUG, "num_turns": 1, "total_cost_usd": 0.0}
     assert agent.GeckoTriageResult(**base, fix_tags=value).fix_tags == expected
     assert agent.GeckoTriageResult(**base).fix_tags == []
+
+
+async def test_the_user_prompt_holds_the_bug_and_every_public_comment(
+    fake_client, tmp_path, new_state
+):
+    await _run(tmp_path, new_state)
+    prompt = fake_client.prompt
+    assert f"Bug to work on: {BUG}" in prompt
+    assert json.dumps(new_state.bug["summary"]) in prompt
+    for comment in new_state.comments:
+        assert f"### Comment {comment['count']}," in prompt
+        assert comment["text"] in prompt
+        assert prompt.count(comment["text"]) == 1
+    assert '"raw_text"' not in prompt and "raw_text" not in prompt
+
+
+@pytest.mark.parametrize("mark", [True, 1, None, "false"])
+async def test_a_comment_not_marked_public_never_reaches_the_prompt(
+    fake_client, tmp_path, bug_new, comments_new, mark
+):
+    secret = dict(
+        comments_new[-1], count=7, text="SECRET private text", is_private=mark
+    )
+    if mark is None:
+        del secret["is_private"]
+    state = TriageState(bug=bug_new, comments=[*comments_new, secret], now=NOW)
+    await _run(tmp_path, state)
+    assert "SECRET" not in fake_client.prompt
+    assert "### Comment 7," not in fake_client.prompt
+    assert comments_new[0]["text"] in fake_client.prompt
+
+
+def test_render_bug_keeps_a_long_thread_whole():
+    comments = [
+        {
+            "count": n,
+            "creator": "a@example.com",
+            "creation_time": "t",
+            "text": "x" * 5000,
+            "is_private": False,
+        }
+        for n in range(60)
+    ]
+    text = agent.render_bug({"id": BUG, "summary": "s"}, comments)
+    assert all(f"### Comment {n}," in text for n in range(60))
+    assert text.count("x" * 5000) == 60
+
+
+def test_render_bug_names_the_attachment_of_a_comment():
+    text = agent.render_bug(
+        {"id": BUG},
+        [
+            {
+                "count": 2,
+                "creator": "a@example.com",
+                "creation_time": "t",
+                "text": "log",
+                "is_private": False,
+                "attachment_id": 42,
+            }
+        ],
+    )
+    assert "attachment 42" in text
