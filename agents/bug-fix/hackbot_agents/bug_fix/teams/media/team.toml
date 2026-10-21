@@ -1,0 +1,39 @@
+# The media team: the components it owns. Another team copies this directory to
+# `teams/<team>/` and changes the values and `rules/implementation.md`.
+
+label = "Firefox Audio/Video"
+# Checklists the reviewer reads besides the rules in Firefox's review-context.toml.
+# Media lists its own until review-context.toml has a rule for dom/media.
+review_docs = ["dom/media/docs/review/*.md"]
+
+[[components]]
+product = "Core"
+component = "Audio/Video"
+
+[[components]]
+product = "Core"
+component = "Audio/Video: cubeb"
+
+[[components]]
+product = "Core"
+component = "Audio/Video: GMP"
+
+[[components]]
+product = "Core"
+component = "Audio/Video: MediaStreamGraph"
+
+[[components]]
+product = "Core"
+component = "Audio/Video: Playback"
+
+[[components]]
+product = "Core"
+component = "Audio/Video: Recording"
+
+[[components]]
+product = "Core"
+component = "Web Audio"
+
+[[components]]
+product = "Core"
+component = "Audio/Video: Web Codecs"
