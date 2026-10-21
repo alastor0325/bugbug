@@ -100,7 +100,8 @@ read private comments.
    reason in `result`.
 4. `dupes.py` searches the team's components for duplicate leads, and puts the best
    ones in the prompt for `duplicate_hunter` to check first. With no team, it searches
-   the bug's own component. The "Duplicate search" section below tells how.
+   the bug's own component. The "Duplicate search" section below tells how. The
+   source checkout runs at the same time as this search.
 5. The model triages the bug with the general rules and the team rules, and records its
    actions. With no team, it uses the general rules only. The hooks in `hooks.py` check
    each action as it is recorded; their docstring lists the limits. A refusal reaches

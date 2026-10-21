@@ -1,5 +1,8 @@
 """Tests for the entry point: a skipped bug costs neither a checkout nor a model turn."""
 
+import asyncio
+import threading
+
 import pytest
 from conftest import NOW
 from hackbot_agents.gecko_triage import __main__ as entry
@@ -112,3 +115,31 @@ async def test_a_bug_to_triage_reaches_the_model_after_the_checkout(
     assert calls["run"]["source_repo"] == "/repo"
     assert calls["run"]["max_turns"] == 12
     assert calls["run"]["max_budget_usd"] == 3.5
+
+
+async def test_the_checkout_runs_beside_the_duplicate_search(
+    wired, new_state, monkeypatch
+):
+    use_state, calls = wired
+    use_state(new_state)
+    searching, cloning = threading.Event(), threading.Event()
+
+    class BlockingContext(FakeContext):
+        async def prepare_repo(self):
+            # A blocking clone, as `ensure_source_repo` does.
+            cloning.set()
+            self.prepared = searching.wait(5)
+
+    async def find_candidates(server, bug):
+        searching.set()
+        for _ in range(200):
+            if cloning.is_set():
+                break
+            await asyncio.sleep(0.01)
+        calls["cloning_during_search"] = cloning.is_set()
+        return []
+
+    monkeypatch.setattr(entry, "find_candidates", find_candidates)
+    ctx = BlockingContext()
+    assert await entry.main(ctx) == "ran"
+    assert calls["cloning_during_search"] and ctx.prepared

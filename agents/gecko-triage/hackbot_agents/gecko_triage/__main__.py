@@ -66,15 +66,16 @@ async def main(ctx: HackbotContext) -> GeckoTriageResult:
             result=f"Skipped bug {inputs.bug_id}: {reason}. No triage was run.",
         )
 
-    searchfox_rev, duplicate_candidates = await asyncio.gather(
-        resolve_index_revision(), find_candidates(bugzilla_mcp_server, state.bug)
+    # `prepare_repo` blocks on the clone, so it runs in a thread beside the searches.
+    _, searchfox_rev, duplicate_candidates = await asyncio.gather(
+        asyncio.to_thread(asyncio.run, ctx.prepare_repo()),
+        resolve_index_revision(),
+        find_candidates(bugzilla_mcp_server, state.bug),
     )
     if not searchfox_rev:
         print(
             "[gecko_triage] no searchfox revision; linking tip-of-tree", file=sys.stderr
         )
-
-    await ctx.prepare_repo()
 
     return await run_gecko_triage(
         task=TRIAGE_TASK,
