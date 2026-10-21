@@ -305,12 +305,14 @@ async def fetch_bugs(
     try:
         async with broker_session(url, FETCH_TIMEOUT) as call:
             res = await call("get_bugs", {"ids": ids, "include_fields": TARGET_FIELDS})
+        bugs = res.get("bugs") or []
+        wanted = set(ids)
+        return {
+            b["id"]: b for b in bugs if isinstance(b, dict) and b.get("id") in wanted
+        }
     except Exception as e:  # see docstring
         print(
             f"[gecko_triage] reading bugs {ids} failed ({type(e).__name__}: {e})",
             file=sys.stderr,
         )
         return None
-    wanted = set(ids)
-    bugs = res.get("bugs") or []
-    return {b["id"]: b for b in bugs if isinstance(b, dict) and b.get("id") in wanted}

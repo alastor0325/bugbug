@@ -268,6 +268,12 @@ async def test_the_fetch_gives_up_after_the_timeout(monkeypatch):
     assert await fetch_bugs({"type": "http", "url": "http://b/mcp"}, [1]) is None
 
 
+@pytest.mark.parametrize("reply", [[], None, "junk"])
+async def test_an_odd_reply_gives_no_bugs_and_no_error(monkeypatch, reply):
+    fake_broker(monkeypatch, {"get_bugs": reply})
+    assert await fetch_bugs({"type": "http", "url": "http://b/mcp"}, [1]) is None
+
+
 async def test_the_fetch_reads_the_bugs(monkeypatch):
     calls = fake_broker(
         monkeypatch, {"get_bugs": {"bugs": [_target(), {"id": "junk"}, "junk"]}}

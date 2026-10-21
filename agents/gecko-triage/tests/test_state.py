@@ -499,6 +499,30 @@ async def test_fetch_state_reads_the_history_after_a_change(monkeypatch):
     assert state.bot_has_last_word
 
 
+async def test_a_hung_history_read_still_gives_the_state(monkeypatch):
+    bug = quiet(load("bug_new.json")["bugs"][0], last_change_time_non_bot=AFTER)
+    comments = load("comments_returning.json")["bugs"]["9000001"]["comments"][:3]
+
+    async def hang(args):
+        await asyncio.sleep(10)
+
+    fake_broker(
+        monkeypatch,
+        {
+            "get_bugs": {
+                "count": 1,
+                "bugs": [dict(bug, comments=comments)],
+                "inaccessible": [],
+            },
+            "get_bug_history": hang,
+        },
+    )
+    monkeypatch.setattr(state_module, "HISTORY_TIMEOUT", 0.01)
+    state = await fetch_state({"url": "http://broker/mcp"}, 9000001, now=NOW)
+    assert state is not None and state.history is None
+    assert not state.bot_has_last_word
+
+
 async def test_a_history_failure_still_gives_the_state(monkeypatch):
     bug = quiet(load("bug_new.json")["bugs"][0], last_change_time_non_bot=AFTER)
     comments = load("comments_returning.json")["bugs"]["9000001"]["comments"][:3]

@@ -56,10 +56,11 @@ def _ctx(**kw):
     )
 
 
-def _fake_broker(fake):
+def _fake_broker(fake, timeouts=None):
     class Session:
         def __init__(self, url, timeout):
-            pass
+            if timeouts is not None:
+                timeouts.append(timeout)
 
         async def __aenter__(self):
             return fake.search
@@ -310,9 +311,23 @@ async def test_a_slow_query_is_dropped_at_the_budget():
     assert await gather_within([], 1) == []
 
 
+async def test_an_outer_timeout_cancels_every_search():
+    started = []
+
+    async def slow():
+        started.append(asyncio.current_task())
+        await asyncio.sleep(10)
+
+    with pytest.raises(TimeoutError):
+        async with asyncio.timeout(0.05):
+            await gather_within([slow(), slow()], 5)
+    assert len(started) == 2 and all(t.done() for t in started)
+
+
 async def test_find_candidates_searches_words_and_signatures(corpus, monkeypatch):
     fake = FakeBugzilla(corpus)
-    monkeypatch.setattr(dupes, "broker_search", _fake_broker(fake))
+    timeouts = []
+    monkeypatch.setattr(dupes, "broker_search", _fake_broker(fake, timeouts))
     bug = {
         "id": 9100668,
         "product": "Core",
@@ -325,6 +340,7 @@ async def test_find_candidates_searches_words_and_signatures(corpus, monkeypatch
     assert {c["id"] for c in found} >= {9091245, 9096008}
     sent = [c.get("v1") for c in fake.calls]
     assert r"\b(skip)" in sent and "mozilla::AudioSink::PopFrames" in sent
+    assert timeouts == [dupes.SEARCH_TIMEOUT]
 
 
 async def test_find_candidates_never_raises(monkeypatch):
@@ -478,10 +494,12 @@ async def test_the_concept_tool_never_raises_on_a_broker_failure(monkeypatch):
 
 async def test_the_concept_tool_searches_the_broker(corpus, monkeypatch):
     fake = FakeBugzilla(corpus)
-    monkeypatch.setattr(dupes, "broker_search", _fake_broker(fake))
+    timeouts = []
+    monkeypatch.setattr(dupes, "broker_search", _fake_broker(fake, timeouts))
     result = await search_concepts_tool(_ctx(), [FADE, PAUSE, DEVICE])
     assert result["candidates"][0]["id"] == 9094151
     assert len(fake.calls) == 8
+    assert timeouts == [dupes.CONCEPT_BUDGET + dupes.CONNECT_GRACE]
 
 
 def test_the_concept_tool_name_and_server():

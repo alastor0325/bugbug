@@ -387,10 +387,14 @@ async def gather_within(coros: list, budget: float) -> list:
     tasks = [asyncio.ensure_future(c) for c in coros]
     if not tasks:
         return []
-    _, pending = await asyncio.wait(tasks, timeout=budget)
-    for task in pending:
-        task.cancel()
-    await asyncio.gather(*pending, return_exceptions=True)
+    try:
+        _, pending = await asyncio.wait(tasks, timeout=budget)
+    finally:
+        # Also when an outer timeout cancels the wait, so no search outlives the session.
+        pending = [t for t in tasks if not t.done()]
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
     results = []
     for task in tasks:
         if task.cancelled():

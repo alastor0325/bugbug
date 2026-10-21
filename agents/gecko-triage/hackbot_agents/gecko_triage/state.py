@@ -15,6 +15,7 @@ The agent's comment is a `BOT_ACCOUNT` comment tagged `AGENT_TAG`, or any commen
 cost. It also feeds the hooks, which limit what the agent may write, and the prompt.
 """
 
+import asyncio
 import datetime as dt
 import sys
 from dataclasses import dataclass, field
@@ -42,8 +43,10 @@ BUG_FIELDS = (
     "blocks,regressed_by,regressions,see_also,creation_time,last_change_time,last_change_time_non_bot,"
     "cf_crash_signature,type"
 )
-# A hung broker must not hold the job until the job timeout.
-STATE_TIMEOUT = 120
+# A hung broker must not hold the job until the job timeout. The bug read fails the
+# lookup at STATE_TIMEOUT; the history read only gives up at HISTORY_TIMEOUT.
+STATE_TIMEOUT = 180
+HISTORY_TIMEOUT = 120
 
 
 def parse_time(value: object) -> dt.datetime | None:
@@ -339,11 +342,16 @@ async def fetch_state(
     if not url:
         return None
     try:
-        async with broker_session(url, STATE_TIMEOUT) as call:
-            bug_res = await call(
-                "get_bugs",
-                {"ids": [bug], "include_fields": BUG_FIELDS, "include_comments": True},
-            )
+        async with broker_session(url, STATE_TIMEOUT + HISTORY_TIMEOUT) as call:
+            async with asyncio.timeout(STATE_TIMEOUT):
+                bug_res = await call(
+                    "get_bugs",
+                    {
+                        "ids": [bug],
+                        "include_fields": BUG_FIELDS,
+                        "include_comments": True,
+                    },
+                )
             bugs = bug_res.get("bugs") or []
             if not bugs and bug in (bug_res.get("inaccessible") or ()):
                 return TriageState(bug={"id": bug}, now=now or _now(), restricted=True)
@@ -375,10 +383,11 @@ async def _history(call: Call, bug: int, since: dt.datetime) -> tuple[dict, ...]
     A failure only means that the agent runs, so it does not fail the state lookup.
     """
     try:
-        res = await call(
-            "get_bug_history",
-            {"bug_id": bug, "new_since": since.strftime("%Y-%m-%dT%H:%M:%SZ")},
-        )
+        async with asyncio.timeout(HISTORY_TIMEOUT):
+            res = await call(
+                "get_bug_history",
+                {"bug_id": bug, "new_since": since.strftime("%Y-%m-%dT%H:%M:%SZ")},
+            )
     except Exception as e:
         print(
             f"[gecko_triage] history lookup for bug {bug} failed "
