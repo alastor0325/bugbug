@@ -92,6 +92,8 @@ class BugFixInputs(BaseModel):
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
+    # The team whose rules the run follows: a directory under the agent's `teams/`.
+    team: Annotated[str | None, Field(pattern=r"^[a-z][a-z0-9-]*$")] = None
 
     @model_validator(mode="after")
     def _validate_mode(self) -> BugFixInputs:
