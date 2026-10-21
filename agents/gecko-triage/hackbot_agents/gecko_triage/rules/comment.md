@@ -132,6 +132,18 @@ and the decision is `needs_info`.
 proves the cause. Then name the check that can confirm it. Never write "only X" unless a
 test shows it. For example, do not write "only HEVC" when nobody tested VP9.
 
+## A hand-off comment
+
+When the comment hands the bug to a developer, say whether it is a regression. Write one
+of three answers: a known regression, not known, or not a regression. Give the version
+range when you know it.
+
+When no log is attached, ask the reporter in the same comment for the log that can show
+the bug. Do not ask a reporter who is a developer, as "Audience" says. Name the
+`MOZ_LOG` modules for that log. When the team's capture block gives that log, write its
+placeholder. This request is a needinfo on the reporter, so the decision is
+`needs_info`.
+
 ## The capture block
 
 The team file may define a capture block: the numbered steps that ask the reporter for

@@ -458,4 +458,4 @@ When a bug leaves the team's scope (reassigned, or a developer from another team
 driving it), say so in the comment. On a move, needinfo the developer of the target team
 as "Needs info" says. Without a move, needinfo only an expert from the team's list, when
 "Needs info" allows it. Otherwise needinfo nobody. There is nothing for the agent to wait
-for.
+for. The comment follows "A hand-off comment" in `comment.md`.

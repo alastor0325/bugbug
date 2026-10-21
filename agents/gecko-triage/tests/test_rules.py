@@ -932,3 +932,22 @@ def test_the_rules_ask_for_less_certainty_and_a_wider_check():
         "The cause explains every failure in the bug. A cause of only some failures is "
         "not sufficient." in analyzed
     )
+
+
+def test_a_hand_off_says_if_it_is_a_regression_and_asks_for_the_log():
+    comment = _flat("comment.md")
+    for text in (
+        "## A hand-off comment",
+        "When the comment hands the bug to a developer, say whether it is a regression.",
+        "Write one of three answers: a known regression, not known, or not a "
+        "regression.",
+        "Give the version range when you know it.",
+        "When no log is attached, ask the reporter in the same comment for the log that "
+        "can show the bug.",
+        'Do not ask a reporter who is a developer, as "Audience" says.',
+        "Name the `MOZ_LOG` modules for that log.",
+        "This request is a needinfo on the reporter, so the decision is `needs_info`.",
+    ):
+        assert text in comment, text
+    workflow = _flat("workflow.md")
+    assert 'The comment follows "A hand-off comment" in `comment.md`.' in workflow
