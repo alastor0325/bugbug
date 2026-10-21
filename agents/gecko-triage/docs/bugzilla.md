@@ -8,7 +8,8 @@ and every change it can make.
 Open, public defects in the components the run's team lists (see `configuration.md`). A
 run with no team looks at one bug in its own component.
 
-It skips a bug, before any model turn, when any of these is true:
+The agent never triages a restricted or security bug. The preflight skips a bug, before
+any model turn, when any of these is true:
 
 - the bug is in another component, when the run has a team;
 - the bug is in a product outside the `no_team.products` list, when the run has no team;

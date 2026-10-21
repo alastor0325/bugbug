@@ -1,6 +1,6 @@
 # Configuring gecko-triage
 
-One agent serves every team. A run names its team with the optional `team` input
+One agent serves every Gecko team. A run names its team with the optional `team` input
 (`TEAM` in the job). The run reads that team's directory and the shared files. This page
 says what each holds, how manual or automatic mode is set, and how a team joins.
 
