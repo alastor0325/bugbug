@@ -79,4 +79,3 @@ write the fix, not only when it is reviewed.
 - Write it by the rules in `.claude/skills/firefox-commits/SKILL.md` in the source tree.
   Leave the reviewer out of the title: the person who takes the patch picks one.
 - Never use `--` or an em dash as an aside. Use a comma, a colon or two sentences.
-- Never add a `Co-Authored-By` line or any other trailer to the commit message.
