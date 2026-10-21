@@ -17,14 +17,17 @@ from claude_agent_sdk import (
     AgentDefinition,
     ClaudeAgentOptions,
     ClaudeSDKClient,
+    HookMatcher,
     McpServerConfig,
     ResultMessage,
 )
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
+from hackbot_runtime.changes import base_commit
 from hackbot_runtime.claude import Reporter
 
+from . import gates
 from .config import (
     BUG_FIX_ACTIONS,
     BUGZILLA_READ_TOOLS,
@@ -32,9 +35,11 @@ from .config import (
     PHABRICATOR_READ_TOOLS,
     SOURCE_WRITE_TOOLS,
 )
+from .teamconfig import RULES_PATH, load_team
 
 HERE = Path(__file__).resolve().parent
 PROMPTS = HERE / "prompts"
+RULES_DIR = HERE / "rules"
 # The SDK's 1 MB default is too small for large messages.
 MAX_BUFFER_SIZE = 10 * 1024 * 1024
 
@@ -53,6 +58,29 @@ def render_prompt(name: str, **fields: object) -> str:
     break out of its ``{comment}`` placeholder.
     """
     return (PROMPTS / name).read_text().format(**fields)
+
+
+_PLATFORM_NAMES = {"linux": "Linux", "darwin": "macOS", "win32": "Windows"}
+
+
+def runner_platform(value: str) -> str:
+    """The name of the platform this run is on, from ``sys.platform``."""
+    return _PLATFORM_NAMES.get(value, value)
+
+
+def build_system_prompt(rules_dir: Path, team_dir: Path | None) -> str:
+    """The system prompt, with the team's section appended when a team is set."""
+    prompt = render_prompt("system.md", rules_dir=str(rules_dir.resolve()))
+    if team_dir is None:
+        return prompt
+    section = render_prompt(
+        "team.md",
+        label=load_team(team_dir).label,
+        platform=runner_platform(sys.platform),
+        max_rounds=gates.MAX_REVIEW_ROUNDS,
+        rules=(team_dir / RULES_PATH).read_text().strip(),
+    )
+    return f"{prompt}\n\n{section}"
 
 
 def select_workflow(
@@ -139,6 +167,52 @@ def _write_mozconfig(fx_ctx: FirefoxContext) -> None:
     )
 
 
+def make_reviewer(team_dir: Path, base: str) -> AgentDefinition:
+    """The read-only subagent that reviews a team run's patch with a fresh context."""
+    team = load_team(team_dir)
+    return AgentDefinition(
+        description=(
+            "Reviews the current patch against the team's rules and review "
+            "checklists, with a fresh context. It ends with `BLOCKING: <n>`."
+        ),
+        prompt=render_prompt(
+            "reviewer.md",
+            label=team.label,
+            base=base,
+            review_docs=", ".join(f"`{d}`" for d in team.review_docs) or "none",
+            rules=(team_dir / RULES_PATH).read_text().strip(),
+        ),
+        tools=["Read", "Grep", "Glob", "Bash"],
+        model="inherit",
+    )
+
+
+def team_session(team_dir: Path, repo: Path) -> dict:
+    """The options a team run adds: the reviewer, the gates and their hooks."""
+    state = gates.Gates(repo)
+    return {
+        "mcp_servers": {gates.SERVER_NAME: gates.gates_server(state)},
+        "agents": {gates.REVIEWER: make_reviewer(team_dir, base_commit(repo))},
+        "allowed_tools": [gates.RECORD_GATE_TOOL],
+        "hooks": {
+            "PreToolUse": [
+                HookMatcher(
+                    matcher=f"{gates.SUBMIT_TOOL}|{gates.UPDATE_TOOL}",
+                    hooks=[gates.submit_guard(state)],
+                )
+            ],
+            "PostToolUse": [
+                HookMatcher(
+                    matcher=gates.SPAWN_TOOLS,
+                    hooks=[gates.review_hook(state)],
+                )
+            ],
+        },
+        # A one-shot run must wait for the reviewer's result.
+        "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"},
+    }
+
+
 async def run_bug_fix(
     *,
     bugzilla_mcp_server: McpServerConfig,
@@ -149,7 +223,8 @@ async def run_bug_fix(
     comment: str | None = None,
     revision_id: int | None = None,
     bugzilla_needinfo_flag_id: int | None = None,
-    rules_dir: Path | None = None,
+    rules_dir: Path = RULES_DIR,
+    team_dir: Path | None = None,
     model: str | None = None,
     max_turns: int | None = None,
     effort: str | None = None,
@@ -162,9 +237,6 @@ async def run_bug_fix(
     Returns a :class:`BugFixResult` on success; raises :class:`AgentError` if the
     agent ends in an error.
     """
-    if rules_dir is None:
-        rules_dir = HERE / "rules"
-
     print(f"[bug_fix] triaging bug {bug}", file=sys.stderr)
 
     # Firefox build/eval MCP server (in-process; no tokens). The runtime
@@ -189,7 +261,8 @@ async def run_bug_fix(
     )
     enabled_action_tools = actions_to_tool_names(BUG_FIX_ACTIONS)
 
-    system_prompt = render_prompt("system.md", rules_dir=str(rules_dir.resolve()))
+    system_prompt = build_system_prompt(rules_dir, team_dir)
+    team = team_session(team_dir, source_repo) if team_dir else {}
 
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
@@ -198,8 +271,9 @@ async def run_bug_fix(
             "phabricator": phabricator_mcp_server,
             "firefox": firefox_server,
             ACTIONS_SERVER_NAME: actions_server,
+            **team.get("mcp_servers", {}),
         },
-        agents={"investigator": make_investigator()},
+        agents={"investigator": make_investigator(), **team.get("agents", {})},
         cwd=str(source_repo.resolve()),
         add_dirs=[str(rules_dir.resolve())],
         permission_mode="bypassPermissions",
@@ -214,12 +288,15 @@ async def run_bug_fix(
             *PHABRICATOR_READ_TOOLS,
             *enabled_action_tools,
             *FIREFOX_TOOLS,
+            *team.get("allowed_tools", []),
         ],
         model=model,
         max_turns=max_turns,
         **({"effort": effort} if effort else {}),
         setting_sources=[],
         max_buffer_size=MAX_BUFFER_SIZE,
+        hooks=team.get("hooks"),
+        env=team.get("env", {}),
     )
 
     result_msg: ResultMessage | None = None

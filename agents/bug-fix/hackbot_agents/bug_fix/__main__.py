@@ -1,8 +1,12 @@
+from pathlib import Path
+
 from hackbot_runtime import HackbotContext, checkout_revision, run_async
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import BugFixResult, run_bug_fix
+from .preflight import fetch_bug
+from .teamconfig import TEAMS_DIR, team_dir, team_for_bug
 
 
 class AgentInputs(BaseSettings):
@@ -14,11 +18,19 @@ class AgentInputs(BaseSettings):
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
+    # The team whose rules the run follows, read from `TEAM` as a name under `teams/`
+    # and kept as that directory. When unset, the team owning the bug's component.
+    team: Path | None = None
 
     model_config = SettingsConfigDict(extra="ignore")
 
     def broker_endpoint(self, path: str) -> str:
         return f"{self.broker_url.rstrip('/')}/{path.lstrip('/')}"
+
+    @field_validator("team", mode="before")
+    @classmethod
+    def _team_dir(cls, team: str | None) -> Path | None:
+        return team_dir(TEAMS_DIR, team) if team is not None else None
 
     @property
     def bugzilla_mcp_url(self) -> str:
@@ -63,6 +75,10 @@ async def main(ctx: HackbotContext) -> BugFixResult:
     else:
         await ctx.prepare_repo()
 
+    team = inputs.team or team_for_bug(
+        TEAMS_DIR, await fetch_bug(inputs.bugzilla_mcp_url, inputs.bug_id)
+    )
+
     return await run_bug_fix(
         bugzilla_mcp_server={
             "type": "http",
@@ -78,6 +94,7 @@ async def main(ctx: HackbotContext) -> BugFixResult:
         revision_id=inputs.revision_id,
         comment=inputs.comment,
         bugzilla_needinfo_flag_id=inputs.bugzilla_needinfo_flag_id,
+        team_dir=team,
         model=inputs.model,
         max_turns=inputs.max_turns,
         effort=inputs.effort,

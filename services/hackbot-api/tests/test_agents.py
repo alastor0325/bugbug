@@ -45,6 +45,15 @@ def test_bugzilla_needinfo_flag_id_selects_follow_up_mode():
     assert env["COMMENT"] == inputs.comment
 
 
+def test_bug_fix_team_is_passed_as_env():
+    assert model_to_env(BugFixInputs(bug_id=1, team="media"))["TEAM"] == "media"
+
+
+def test_bug_fix_team_must_be_a_plain_name():
+    with pytest.raises(ValidationError, match="team"):
+        BugFixInputs(bug_id=1, team="../media")
+
+
 def test_bugzilla_needinfo_requires_comment_context():
     with pytest.raises(ValidationError, match="comment"):
         BugFixInputs(bug_id=1, bugzilla_needinfo_flag_id=2187233)

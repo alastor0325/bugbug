@@ -1,0 +1,51 @@
+# Teams
+
+A team gives the bug-fix agent its own rules for bugs in the team's code. A run uses a
+team when the bug's product and component are listed in that team's `team.toml`, or
+when the `TEAM` input names the team. A run with no team works as it does without this
+folder.
+
+## Add a team
+
+Copy `media/` to `<team>/`. The name is lower-case letters, digits and `-`.
+
+```
+<team>/
+  team.toml                # who the team is and which bugs are its own
+  rules/implementation.md  # how the team wants a patch written and tested
+```
+
+`team.toml`:
+
+```toml
+label = "Firefox Audio/Video"               # the team's name in the prompt
+review_docs = ["dom/media/docs/review/*.md"] # checklists the reviewer reads (globs)
+
+[[components]]                              # one table per Bugzilla component
+product = "Core"
+component = "Audio/Video"
+```
+
+The match on product and component is exact. A component that is not listed gets no
+team.
+
+`rules/implementation.md` is plain text that is added to the system prompt, after the
+general rules. When the two conflict, the team rules win. Keep it short: list only what
+a reviewer of the team would ask a patch to change.
+
+## What a team run does
+
+A team run must go through this loop before it may record a patch. Hooks enforce it,
+and they refuse the patch actions until every step passes on the current diff:
+
+1. Platform check: stop with a short comment if the bug cannot occur on the platform
+   the run is on.
+2. A new test fails without the fix, then passes with it.
+3. A read-only `reviewer` subagent reviews the diff against the team rules and
+   `review_docs`, in a fresh context. Review again after a fix, at most 3 rounds.
+4. Verify: format, lint and build.
+5. Associated tests: the tests that cover the changed code pass, or fail the same way
+   without the patch.
+
+After the run, the agent adds a comment to the revision with a table of these checks.
+The code is in `gates.py` and `comment.py`, and the loop text is in `prompts/team.md`.
