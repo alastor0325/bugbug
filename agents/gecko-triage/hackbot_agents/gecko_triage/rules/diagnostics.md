@@ -94,8 +94,9 @@ code. A crash id with a clear signature in the team's code is enough for "Analyz
 ## Test and CI failures
 
 For a test or CI failure, check every failing platform. Two platforms can fail for
-different causes. Give `log_analyst` the log URL or the attachment of each failing
-platform. Decide the cause only after you have its reports.
+different causes. Give `log_analyst` the task id, the log URL, the Treeherder link or the
+attachment of each failing platform. It fetches a CI log with `fetch_ci_log`; never fetch
+a CI log yourself. Decide the cause only after you have its reports.
 
 For an intermittent or a test-failure bug, also check the newest runs. Use WebFetch on
 the Treeherder failures of the bug, for the last 7 days:

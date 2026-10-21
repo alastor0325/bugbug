@@ -113,6 +113,7 @@ REMOVED_RULE_TEXT = (
     ("rules/diagnostics.md", "say in the comment that the newest runs pass"),
     ("rules/comment.md", "a known regression, not known"),
     ("rules/comment.md", "When no log is attached, ask"),
+    ("prompts/log_analyst.md", "download it with `curl`"),
 )
 
 

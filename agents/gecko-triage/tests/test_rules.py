@@ -352,7 +352,8 @@ KEY_PHRASES = (
     ),
     ("diagnostics.md", "ask the reporter for a test with the sandbox off."),
     ("diagnostics.md", "`MOZ_DISABLE_GPU_SANDBOX=1`, on Windows or macOS."),
-    ("log_analyst", "For a CI log URL, download it with `curl`"),
+    ("log_analyst", "Never use curl or WebFetch to fetch a log."),
+    ("diagnostics.md", "never fetch a CI log yourself."),
     (
         "diagnostics.md",
         "Never state what a spec requires without a `spec_checker` report behind it.",

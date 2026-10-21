@@ -51,7 +51,7 @@ from hackbot_runtime.searchfox import (
 from pydantic import BaseModel, BeforeValidator, Field, model_validator
 from searchfox import AsyncSearchfoxClient
 
-from . import attachments, authors, closing, dupes, rerecord
+from . import attachments, authors, ci_logs, closing, dupes, rerecord
 from .actions_view import needinfo_requestees, updates
 from .config import (
     ALLOWED_LINK_HOSTS,
@@ -696,10 +696,18 @@ def make_log_analyst() -> AgentDefinition:
             "Reads one log (MOZ_LOG, about:logging or a crash log) with the "
             "check-log skill and reports the error signals and likely root cause. "
             "Give it the symptom and the attachment id, the path of a log that "
-            "fetch_attachment extracted, or the URL of a CI log."
+            "fetch_attachment extracted, or the task id, log URL or Treeherder link "
+            "of a CI log."
         ),
         _LOG_ANALYST_PROMPT,
-        ["Read", "Bash", "Grep", "Glob", attachments.FETCH_ATTACHMENT_TOOL],
+        [
+            "Read",
+            "Bash",
+            "Grep",
+            "Glob",
+            attachments.FETCH_ATTACHMENT_TOOL,
+            ci_logs.FETCH_CI_LOG_TOOL,
+        ],
     )
 
 
@@ -1067,6 +1075,7 @@ async def run_gecko_triage(
             "searchfox": searchfox_server,
             "mozilla_vcs": vcs_server,
             attachments.SERVER_NAME: attachments.attachments_server(bug),
+            ci_logs.SERVER_NAME: ci_logs.ci_logs_server(bug),
             dupes.SERVER_NAME: dupes.concepts_server(concepts),
             closing.SERVER_NAME: closing.verdicts_server(close_verdicts),
             rerecord.SERVER_NAME: rerecord.removals_server(removals),
@@ -1091,6 +1100,7 @@ async def run_gecko_triage(
             *SEARCHFOX_TOOLS,
             *MOZILLA_VCS_TOOLS,
             attachments.FETCH_ATTACHMENT_TOOL,
+            ci_logs.FETCH_CI_LOG_TOOL,
             dupes.SEARCH_CONCEPTS_TOOL,
             closing.RECORD_CLOSE_VERDICT_TOOL,
             rerecord.REMOVE_RECORDED_ACTIONS_TOOL,

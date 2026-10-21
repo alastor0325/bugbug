@@ -15,7 +15,14 @@ from conftest import (
     _result,
     _run,
 )
-from hackbot_agents.gecko_triage import agent, attachments, closing, dupes, rerecord
+from hackbot_agents.gecko_triage import (
+    agent,
+    attachments,
+    ci_logs,
+    closing,
+    dupes,
+    rerecord,
+)
 from hackbot_agents.gecko_triage.__main__ import AgentInputs
 from hackbot_agents.gecko_triage.authors import CommitFacts
 from hackbot_agents.gecko_triage.closing import CloseVerdicts
@@ -54,6 +61,17 @@ async def test_the_run_offers_fetch_attachment_bound_to_its_bug(
     agents = options.agents
     for name in ("bug_investigator", "log_analyst", "investigator"):
         assert "mcp__attachments__fetch_attachment" in agents[name].tools, name
+
+
+async def test_the_run_offers_fetch_ci_log_to_the_log_analyst_only(
+    fake_client, tmp_path, new_state
+):
+    await _run(tmp_path, new_state)
+    options = fake_client.options
+    assert options.mcp_servers[ci_logs.SERVER_NAME]["type"] == "sdk"
+    assert ci_logs.FETCH_CI_LOG_TOOL in options.allowed_tools
+    for name, sub in options.agents.items():
+        assert (ci_logs.FETCH_CI_LOG_TOOL in sub.tools) == (name == "log_analyst"), name
 
 
 async def test_the_run_offers_search_concepts_to_the_duplicate_hunter_only(

@@ -877,32 +877,41 @@ def http_get_json(url: str, limit: int, deadline: float | None = None) -> dict:
     request = urllib.request.Request(
         url, headers={"Accept": "application/json", "User-Agent": "gecko-triage"}
     )
+    with urllib.request.urlopen(request, timeout=time_left(deadline)) as reply:
+        return read_json(reply, url, limit, deadline)
+
+
+def read_chunks(reply, deadline: float):
+    """The chunks of ``reply``, each read waiting only for the time left."""
+    while True:
+        set_read_timeout(reply, time_left(deadline))
+        try:
+            chunk = reply.read1(HTTP_CHUNK)
+        except TimeoutError as e:
+            raise Refused(f"the download took longer than {HTTP_TIMEOUT} s") from e
+        if not chunk:
+            return
+        yield chunk
+
+
+def read_json(reply, url: str, limit: int, deadline: float) -> dict:
+    """The JSON body of ``reply``; refuses one over ``limit`` bytes."""
     body = bytearray()
-    with urllib.request.urlopen(request, timeout=_left(deadline)) as reply:
-        while True:
-            _set_timeout(reply, _left(deadline))
-            try:
-                chunk = reply.read1(HTTP_CHUNK)
-            except TimeoutError as e:
-                raise Refused(f"the download took longer than {HTTP_TIMEOUT} s") from e
-            if not chunk:
-                break
-            body += chunk
-            if len(body) > limit:
-                raise Refused(
-                    f"the reply from {url.split('?')[0]} is over {limit} bytes"
-                )
+    for chunk in read_chunks(reply, deadline):
+        body += chunk
+        if len(body) > limit:
+            raise Refused(f"the reply from {url.split('?')[0]} is over {limit} bytes")
     return json.loads(body)
 
 
-def _left(deadline: float) -> float:
+def time_left(deadline: float) -> float:
     left = deadline - time.monotonic()
     if left <= 0:
         raise Refused(f"the download took longer than {HTTP_TIMEOUT} s")
     return left
 
 
-def _set_timeout(reply, seconds: float) -> None:
+def set_read_timeout(reply, seconds: float) -> None:
     """Make the next socket read on ``reply`` wait at most ``seconds``."""
     sock = getattr(getattr(getattr(reply, "fp", None), "raw", None), "_sock", None)
     if sock is not None:
@@ -921,20 +930,32 @@ def _record(
     path: Path | None,
     reason: str,
 ) -> None:
+    append_manifest(
+        root,
+        bug_id,
+        {
+            "attachment_id": attachment_id,
+            "source_url": source,
+            "path": str(path) if path else None,
+            "reason": reason,
+        },
+    )
+
+
+def append_manifest(root: Path, bug_id: int, row: dict) -> None:
+    """Add one row to the manifest in ``root``, with the time and a short reason."""
     root.mkdir(parents=True, exist_ok=True)
     row = {
         "ts": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "bug_id": bug_id,
-        "attachment_id": attachment_id,
-        "source_url": source,
-        "path": str(path) if path else None,
-        "reason": short(reason),
+        **row,
+        "reason": short(row["reason"]),
     }
     with (root / MANIFEST_NAME).open("a") as f:
         f.write(json.dumps(row) + "\n")
 
 
-def _private_root(root: Path) -> str | None:
+def private_root(root: Path) -> str | None:
     """Make ``root`` a folder only this user can use; why it cannot be, or None."""
     try:
         root.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -973,7 +994,7 @@ _LOCKS: dict[tuple, threading.Lock] = {}
 _LOCKS_GUARD = threading.Lock()
 
 
-def _lock(key: tuple) -> threading.Lock:
+def fetch_lock(key: tuple) -> threading.Lock:
     with _LOCKS_GUARD:
         return _LOCKS.setdefault(key, threading.Lock())
 
@@ -1013,7 +1034,7 @@ def fetch_attachment(
             return None, f"attachment {attachment_id} is private or missing"
         return att, attachment_refusal(att, bug_id, max_bytes)
 
-    if unsafe := _private_root(root):
+    if unsafe := private_root(root):
         return {"bug_id": bug_id, "attachment_id": attachment_id, "refused": unsafe}
     deadline = time.monotonic() + FETCH_TIME_BUDGET
     if (
@@ -1025,7 +1046,7 @@ def fetch_attachment(
             f"the attachment id must be a positive integer, not {attachment_id!r}"
         )
     folder = root / f"bug-{bug_id}-{attachment_id}"
-    with _lock((str(root), bug_id, attachment_id)):
+    with fetch_lock((str(root), bug_id, attachment_id)):
         done = folder / RESULT_NAME
         path = None
         try:

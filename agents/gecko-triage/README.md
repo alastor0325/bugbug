@@ -222,7 +222,7 @@ comment in review.
 | ------------------ | -------------------------------------------------------- | ------------------------- |
 | `bug_investigator` | Investigates the root cause before an "Analyzed" comment | `bug-start` (triage mode) |
 | `profile_analyst`  | Reads one Firefox Profiler capture                       | `analyze-profile`         |
-| `log_analyst`      | Reads one log, attached or extracted                     | `check-log`               |
+| `log_analyst`      | Reads one log, attached, extracted or from CI            | `check-log`               |
 | `spec_checker`     | Checks a behavior against a spec, gives a verdict        | `spec-check`              |
 | `duplicate_hunter` | Searches for an existing report, with `search_concepts`  | none                      |
 | `close_verifier`   | Tries to prove a proposed close wrong, before it is kept | none                      |
@@ -240,6 +240,26 @@ later call may improve (`retry`, such as a missing ffmpeg or a timeout) is not k
 under generated names. For up to 3 videos it runs `ffprobe` and extracts at most six
 JPEG frames with `ffmpeg` (one frame when the duration is unknown), under CPU, memory
 and time limits. The rules tell the model to fetch attachments only with this tool.
+
+`log_analyst` alone reads CI logs, with the `fetch_ci_log` tool (`ci_logs.py`), an
+in-process MCP server of its own. It takes a Taskcluster task id with an optional run, a
+`live_backing.log` URL on `firefoxci.taskcluster-artifacts.net` or
+`firefox-ci-tc.services.mozilla.com`, or a `treeherder.mozilla.org` link with
+`selectedTaskRun`, or with `job_id` or `selectedJob` and `repo`. The link comes from bug
+text, so the tool only parses it with `urllib.parse`: https only, the exact host, no user
+name, no port and the exact log path. A Treeherder job id is mapped to its task with
+the Treeherder API (`/api/project/<repo>/jobs/<job_id>/`, fields `task_id` and
+`retry_id`); without a run, the newest run in the Taskcluster queue status is read, or
+run 0. The tool then downloads
+`https://firefoxci.taskcluster-artifacts.net/<task>/<run>/public/logs/live_backing.log`
+itself and never opens the given URL. That host serves the log directly, with gzip
+content encoding, so no redirect is expected; a redirect is followed only to the same log
+of the same task and run on that host, and any other redirect is refused. The download
+stops past 64 MiB of decoded log ("too large, not read") and after 120 seconds. The log
+goes to `/tmp/gecko-triage-ci-logs/task-<task>-run-<run>.log`, with a row in
+`/tmp/gecko-triage-ci-logs/manifest.jsonl`. The prompt tells `log_analyst` never to use
+curl or WebFetch to fetch a log; Bash can still reach the network, so that part is a rule,
+not a guard.
 
 The image fetches the plugin at a pinned commit, and the run stops before the model if
 the plugin version or a skill does not match `TOOLKIT_VERSION` and `TOOLKIT_SKILLS` in
