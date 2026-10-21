@@ -874,3 +874,28 @@ def test_the_rules_say_how_to_fix_an_error_in_the_recorded_comment(new_state):
         "If you find an error in the recorded comment, call `remove_recorded_actions`"
         in prompt
     )
+
+
+def test_a_regressor_needs_proof_and_a_ci_failure_needs_a_confirmed_one(new_state):
+    workflow = _flat("workflow.md")
+    for text in (
+        "**A regressor needs proof.** Set `regressed_by` only from a bisection or "
+        "mozregression result, a bot's regression note, or a developer's statement.",
+        "Never set `regressed_by` from code reading or timing alone.",
+        'Name a suspected change in the comment, and call it "the probable cause".',
+        "Do not add the `regression` keyword to a test or CI failure that has no "
+        "confirmed regressor.",
+        "`regressed_by`. This case also needs the proof above.",
+        "If it names the regressor with the proof that step 3 asks for, add it to "
+        "`regressed_by`. Otherwise name the change only in the comment.",
+    ):
+        assert text in workflow, text
+    assert "your analysis names the change" not in workflow
+    assert "or you find the change that caused it" not in workflow
+    prompt = " ".join(load_system_prompt(new_state, ()).split())
+    assert "Never from code reading or timing alone, and never a guess." in prompt
+    assert "only when the regressor is known" not in prompt
+    investigator = " ".join(make_bug_investigator().prompt.split())
+    assert "the regressor if you found it and how you found it" in investigator
+    docs = " ".join((AGENT_ROOT / "docs" / "bugzilla.md").read_text().split())
+    assert "Never from code reading or timing alone." in docs

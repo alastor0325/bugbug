@@ -112,21 +112,27 @@ A crash bug gets its functional area, for example the decoder or the audio devic
 is no crash value. A `watching` run also records `issue_type`. With no team, or a team
 with no list, `issue_type` is null.
 
-A regression (it used to work, it broke in a version, or you find the change that caused
-it) gets the `regression` keyword, even when the regressor is not known yet. When the
-regressor is known (a bisection, a "regressed by" note, or your analysis names the
-change), also add it to `regressed_by`. A bot comment that names the regressor (a crash
-bot such as Clouseau, or BugBot's regression note) counts as known. When two changes could
-be the regressor, pick the one that first shipped the behavior: its landing version must
-not be later than the first version that shows the bug. Never guess a regressor id.
+A regression (it used to work, or it broke in a version) gets the `regression` keyword,
+even when the regressor is not known yet. Do not add the `regression` keyword to a test
+or CI failure that has no confirmed regressor. The release bot sets status flags from
+that keyword.
+
+**A regressor needs proof.** Set `regressed_by` only from a bisection or mozregression
+result, a bot's regression note, or a developer's statement. A crash bot such as
+Clouseau, or BugBot's regression note, is a bot's regression note. Never set
+`regressed_by` from code reading or timing alone. Name a suspected change in the
+comment, and call it "the probable cause". Never guess a regressor id.
+
+When two changes could be the regressor, pick the one that first shipped the behavior:
+its landing version must not be later than the first version that shows the bug.
 
 When the regressor is a restricted bug that the agent cannot read, do not set
-`regressed_by`. The broker returns nothing for such a bug. Find the author of the
-regressing change from its commit: the `mozilla_vcs` tools, such as `file_history` and
-`get_commit_info`, give the commit author's email. Needinfo that author, and in the
-comment ask them to set the Regressed by field. The bug must have the `regression`
-keyword, so add it in the same change when it is missing, and the bug must have no
-`regressed_by` yet.
+`regressed_by`. This case also needs the proof above. The broker returns nothing for
+such a bug. Find the author of the regressing change from its commit: the `mozilla_vcs`
+tools, such as `file_history` and `get_commit_info`, give the commit author's email.
+Needinfo that author, and in the comment ask them to set the Regressed by field. The bug
+must have the `regression` keyword, so add it in the same change when it is missing, and
+the bug must have no `regressed_by` yet.
 
 In the comment, help the author find the change. Name the function and the source file
 that the change touched, and never a test file of the change. Give the date when the
@@ -285,7 +291,8 @@ When the bug looks fixable (the root cause is clear, or the data is enough to st
 investigation), spawn `bug_investigator` with the bug id **before** you write the comment.
 Write the comment from its findings: the root cause with its citations, the affected code
 and the fix direction. If it finds that information is still missing, go to "Needs info"
-and still set severity and priority. If it names the regressor, add it to `regressed_by`.
+and still set severity and priority. If it names the regressor with the proof that step 3
+asks for, add it to `regressed_by`. Otherwise name the change only in the comment.
 
 A comment with the analysis may also ask for a capture to confirm the analysis. Put the
 analysis first, then the request under "Next steps", with a needinfo on the reporter. The

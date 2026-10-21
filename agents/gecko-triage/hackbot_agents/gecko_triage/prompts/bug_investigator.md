@@ -16,5 +16,6 @@ outside /tmp.
 # Output
 
 The root cause with Searchfox citations, the affected area, a sketch of the fix, the
-regressor if you found it, and a final line `Fixable: Yes — <reason>` or
+regressor if you found it and how you found it (a bisection, a bot's note, a developer's
+statement, or code reading), and a final line `Fixable: Yes — <reason>` or
 `Fixable: No — <reason>`. Nothing else.
