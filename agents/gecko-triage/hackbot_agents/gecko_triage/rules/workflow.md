@@ -228,9 +228,10 @@ Needinfo the reporter and the other people who confirmed the problem in the comm
 Needinfo at most three people, and nobody who already has an open needinfo. The
 `needinfo` flag needs the full email address.
 
-Needinfo a developer only together with a move, when the team's expert list names the
-person for the bug's area and its condition holds, or when the code history names them
-("No matching expert" below).
+Needinfo a developer only in these cases. On a move, needinfo the target team's
+developer. With or without a move, you may needinfo a listed expert when the bug is in
+the expert's area and the condition holds. You may needinfo the commit author that the
+code history names, for a restricted regressor (step 3) or under "No matching expert".
 
 On a move to another component, needinfo a developer of that component, so the team that
 owns the code sees the bug. Find them from the recent changes to the code
@@ -403,7 +404,8 @@ and ask for mozregression; for a site-specific issue, consider a server-side cha
 ## Handing off
 
 When a bug leaves the team's scope (reassigned, or a developer from another team is now
-driving it), say so in the comment. Needinfo a developer only as "Needs info" says.
-Otherwise the hand-off itself needs no needinfo. A log request in
+driving it), say so in the comment. On a move, needinfo the target team's developer.
+Without a move, needinfo only a listed expert, or a commit author in the two cases that
+"Needs info" names. Otherwise the hand-off itself needs no needinfo. A log request in
 the same comment is a needinfo on the reporter, as "A hand-off comment" in `comment.md`
 says.

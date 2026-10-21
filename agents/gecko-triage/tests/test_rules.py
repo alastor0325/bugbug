@@ -278,6 +278,11 @@ KEY_PHRASES = (
         "changes who wrote it.",
     ),
     ("workflow.md", "unless the prompt says that comments were left out"),
+    ("workflow.md", "With or without a move, you may needinfo a listed expert"),
+    (
+        "workflow.md",
+        "Without a move, needinfo only a listed expert, or a commit author",
+    ),
     ("workflow.md", "do not ask again. Say that the bug waits for X."),
     # One comment.
     ("system.md", "**`bugzilla_add_comment`**, once."),
