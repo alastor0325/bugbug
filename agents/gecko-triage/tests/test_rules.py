@@ -696,7 +696,10 @@ def test_a_restricted_regressor_gets_a_needinfo_on_its_author_not_regressed_by()
     assert "say only that a recent change caused the regression" not in workflow
     assert "In the comment, help the author find the change." in workflow
     assert "never a test file of the change" in workflow
-    assert 'Write "the probable cause". Do not quote the change.' in workflow
+    assert (
+        'Write "the probable cause" unless the regressor is a known regressor. Do not '
+        "quote the change." in workflow
+    )
     assert "Do not quote a code comment, a test file or a commit message." in workflow
     assert "Never say why the change was made or what defect it fixes." in workflow
     assert "Never say that it is a security change." in workflow
@@ -876,22 +879,33 @@ def test_the_rules_say_how_to_fix_an_error_in_the_recorded_comment(new_state):
     )
 
 
-def test_a_regressor_needs_proof_and_a_ci_failure_needs_a_confirmed_one(new_state):
+def test_a_regressor_needs_proof_and_a_ci_failure_needs_a_known_one(new_state):
     workflow = _flat("workflow.md")
     for text in (
-        "**A regressor needs proof.** Set `regressed_by` only from a bisection or "
-        "mozregression result, a bot's regression note, or a developer's statement.",
-        "Never set `regressed_by` from code reading or timing alone.",
-        'Name a suspected change in the comment, and call it "the probable cause".',
-        "Do not add the `regression` keyword to a test or CI failure that has no "
-        "confirmed regressor.",
-        "`regressed_by`. This case also needs the proof above.",
-        "If it names the regressor with the proof that step 3 asks for, add it to "
-        "`regressed_by`. Otherwise name the change only in the comment.",
+        "**A known regressor.** A known regressor is a change that a bisection, a "
+        "mozregression result, a bot's regression note or a developer's statement "
+        "names.",
+        "Crash bots such as Clouseau and BugBot write regression notes.",
+        "Set `regressed_by` only to a known regressor.",
+        "Never set it from code reading or timing alone.",
+        'When only your evidence points at a change, write "the probable cause" in the '
+        "comment.",
+        "Do not add the `regression` keyword to a test or CI failure that has no known "
+        "regressor.",
+        "Send the needinfo below also when only your evidence points at the change, "
+        "because the author decides.",
+        "If it names a known regressor, add it to `regressed_by`. Otherwise name the "
+        "change in the comment as the probable cause.",
     ):
         assert text in workflow, text
-    assert "your analysis names the change" not in workflow
-    assert "or you find the change that caused it" not in workflow
+    for gone in (
+        "your analysis names the change",
+        "or you find the change that caused it",
+        "confirmed regressor",
+        "This case also needs the proof above.",
+        "is a bot's regression note",
+    ):
+        assert gone not in workflow, gone
     prompt = " ".join(load_system_prompt(new_state, ()).split())
     assert "Never from code reading or timing alone, and never a guess." in prompt
     assert "only when the regressor is known" not in prompt
@@ -904,25 +918,39 @@ def test_a_regressor_needs_proof_and_a_ci_failure_needs_a_confirmed_one(new_stat
 def test_the_rules_ask_for_less_certainty_and_a_wider_check():
     comment = _flat("comment.md")
     for text in (
-        '**Say how sure you are.** Write "probable" or "possible" when no log, test or '
-        "profile proves the cause.",
+        '**Say how sure you are.** Write "probable" when no log, test or profile '
+        "proves the cause.",
         "Then name the check that can confirm it.",
+        'A regressor is "probable" unless it is a known regressor, as step 3 in '
+        "`workflow.md` defines.",
         'Never write "only X" unless a test shows it.',
     ):
         assert text in comment, text
+    assert '"possible"' not in comment
     diagnostics = _flat("diagnostics.md")
     for text in (
         "## Test and CI failures",
-        "For a test or CI failure, read the log of every failing platform.",
-        "Also read the newest runs of the test, because a failure can stop.",
-        "Decide the cause only after you read all of them.",
+        "For a test or CI failure, check every failing platform.",
+        "Give `log_analyst` the log URL or the attachment of each failing platform.",
+        "Decide the cause only after you have its reports.",
+        "For an intermittent or a test-failure bug, also check the newest runs.",
+        "https://treeherder.mozilla.org/api/failuresbybug/?startday=YYYY-MM-DD"
+        "&endday=YYYY-MM-DD&tree=all&bug=<id>",
+        "An empty list means that the failure did not occur in that period.",
         "## A hang in the RDD or GPU process",
         "Before you name a code fix, ask the reporter for a test with the sandbox off.",
-        "`MOZ_DISABLE_RDD_SANDBOX=1`",
-        "`MOZ_DISABLE_GPU_SANDBOX=1`",
+        "`MOZ_DISABLE_RDD_SANDBOX=1`, on Windows, Linux or macOS.",
+        "`MOZ_DISABLE_GPU_SANDBOX=1`, on Windows or macOS.",
         "Ask them to start Firefox normally again after the test.",
     ):
         assert text in diagnostics, text
+    for gone in ("read the log of every failing platform", "a failure can stop"):
+        assert gone not in diagnostics, gone
+    analyst = make_log_analyst()
+    assert "For a CI log URL, download it with `curl`" in " ".join(
+        analyst.prompt.split()
+    )
+    assert "the URL of a CI log" in analyst.description
     workflow = _flat("workflow.md")
     assert '"Test and CI failures" and "A hang in the RDD or GPU process"' in workflow
     analyzed = workflow[
@@ -934,20 +962,27 @@ def test_the_rules_ask_for_less_certainty_and_a_wider_check():
     )
 
 
-def test_a_hand_off_says_if_it_is_a_regression_and_asks_for_the_log():
+def test_a_hand_off_gives_the_regression_status_and_asks_for_a_log_narrowly():
     comment = _flat("comment.md")
     for text in (
         "## A hand-off comment",
-        "When the comment hands the bug to a developer, say whether it is a regression.",
-        "Write one of three answers: a known regression, not known, or not a "
-        "regression.",
+        "When the comment hands the bug to a developer, give the regression status: a "
+        "regression, not a regression, or not known yet.",
         "Give the version range when you know it.",
-        "When no log is attached, ask the reporter in the same comment for the log that "
-        "can show the bug.",
-        'Do not ask a reporter who is a developer, as "Audience" says.',
-        "Name the `MOZ_LOG` modules for that log.",
-        "This request is a needinfo on the reporter, so the decision is `needs_info`.",
+        "A hand-off alone does not make the decision `needs_info`.",
+        "ask the reporter for a log only when all of these are true:",
+        "- No log, test or profile proves the cause.",
+        "- A log can show the cause.",
+        "- Nobody asked for that log before.",
+        "That ask is a needinfo on the reporter, so the decision is `needs_info`.",
+        "Never ask for a log in a move to another team.",
+        "With a team capture block, write its placeholder.",
+        "With no capture block, name the `MOZ_LOG` modules for the log.",
+        "Do not ask a reporter who is a developer.",
     ):
         assert text in comment, text
+    for gone in ("a known regression, not known", "When no log is attached, ask"):
+        assert gone not in comment, gone
     workflow = _flat("workflow.md")
     assert 'The comment follows "A hand-off comment" in `comment.md`.' in workflow
+    assert "Otherwise the hand-off needs no needinfo" in workflow

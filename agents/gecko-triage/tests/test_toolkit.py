@@ -135,7 +135,10 @@ def test_log_analyst_fetches_attachments_with_the_tool():
     assert FETCH_ATTACHMENT_TOOL in agent.tools
     assert "`fetch_attachment`" in agent.prompt
     assert "rest/bug/attachment/" not in agent.prompt
-    assert "urllib" not in agent.prompt and "curl" not in agent.prompt
+    assert "urllib" not in agent.prompt
+    prompt = " ".join(agent.prompt.split())
+    assert "Never use `curl` for a Bugzilla attachment." in prompt
+    assert prompt.count("curl") == 2
 
 
 def test_fetch_attachment_goes_to_the_agents_that_read_attachments():

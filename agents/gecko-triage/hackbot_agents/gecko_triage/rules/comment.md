@@ -128,21 +128,27 @@ and any related or regressor bug by number, since a reader may not look at `bloc
 label. If the comment asks the reporter for anything, that is a needinfo on the reporter,
 and the decision is `needs_info`.
 
-**Say how sure you are.** Write "probable" or "possible" when no log, test or profile
-proves the cause. Then name the check that can confirm it. Never write "only X" unless a
-test shows it. For example, do not write "only HEVC" when nobody tested VP9.
+**Say how sure you are.** Write "probable" when no log, test or profile proves the cause.
+Then name the check that can confirm it. A regressor is "probable" unless it is a known
+regressor, as step 3 in `workflow.md` defines. Never write "only X" unless a test shows
+it. For example, do not write "only HEVC" when nobody tested VP9.
 
 ## A hand-off comment
 
-When the comment hands the bug to a developer, say whether it is a regression. Write one
-of three answers: a known regression, not known, or not a regression. Give the version
-range when you know it.
+When the comment hands the bug to a developer, give the regression status: a regression,
+not a regression, or not known yet. Give the version range when you know it.
 
-When no log is attached, ask the reporter in the same comment for the log that can show
-the bug. Do not ask a reporter who is a developer, as "Audience" says. Name the
-`MOZ_LOG` modules for that log. When the team's capture block gives that log, write its
-placeholder. This request is a needinfo on the reporter, so the decision is
-`needs_info`.
+A hand-off alone does not make the decision `needs_info`. In the same comment, ask the
+reporter for a log only when all of these are true:
+
+- No log, test or profile proves the cause.
+- A log can show the cause.
+- Nobody asked for that log before.
+
+That ask is a needinfo on the reporter, so the decision is `needs_info`. Never ask for a
+log in a move to another team. With a team capture block, write its placeholder. With no
+capture block, name the `MOZ_LOG` modules for the log. Do not ask a reporter who is a
+developer.
 
 ## The capture block
 

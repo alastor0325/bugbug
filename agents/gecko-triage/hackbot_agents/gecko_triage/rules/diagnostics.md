@@ -94,17 +94,27 @@ code. A crash id with a clear signature in the team's code is enough for "Analyz
 
 ## Test and CI failures
 
-For a test or CI failure, read the log of every failing platform. Two platforms can fail
-for different causes. Also read the newest runs of the test, because a failure can stop.
-Decide the cause only after you read all of them. When the newest runs pass, say so in
-the comment.
+For a test or CI failure, check every failing platform. Two platforms can fail for
+different causes. Give `log_analyst` the log URL or the attachment of each failing
+platform. Decide the cause only after you have its reports.
+
+For an intermittent or a test-failure bug, also check the newest runs. Use WebFetch on
+the Treeherder failures of the bug, for the last 7 days:
+
+```
+https://treeherder.mozilla.org/api/failuresbybug/?startday=YYYY-MM-DD&endday=YYYY-MM-DD&tree=all&bug=<id>
+```
+
+An empty list means that the failure did not occur in that period. Then say in the
+comment that the newest runs pass.
 
 ## A hang in the RDD or GPU process
 
 A hang or a busy thread in the RDD or GPU process can come from the sandbox. Before you
 name a code fix, ask the reporter for a test with the sandbox off. For the RDD process,
-they start Firefox with `MOZ_DISABLE_RDD_SANDBOX=1`. For the GPU process, they use
-`MOZ_DISABLE_GPU_SANDBOX=1`. Ask them to start Firefox normally again after the test.
+they start Firefox with `MOZ_DISABLE_RDD_SANDBOX=1`, on Windows, Linux or macOS. For the
+GPU process, they use `MOZ_DISABLE_GPU_SANDBOX=1`, on Windows or macOS. Ask them to start
+Firefox normally again after the test.
 
 ## Required information
 

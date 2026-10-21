@@ -73,8 +73,8 @@ carries a new about:support, since prefs and state may have changed.
 
 Follow `diagnostics.md`, sections "Profiles", "Logs", "Archives, memory reports,
 screenshots and videos", "Crash ids", "Test and CI failures" and "A hang in the RDD or
-GPU process", and the team's `diagnostics.md`. Attempt the
-analysis before step 5. The artifacts may already be sufficient.
+GPU process", and the team's `diagnostics.md`. Attempt the analysis before step 5. The
+artifacts may already be sufficient.
 
 **Artifact analysis is blocking.** If an artifact the conclusion depends on cannot be read
 because of our tooling, say so plainly in the comment and in the plan's `unread` list,
@@ -114,32 +114,34 @@ is no crash value. A `watching` run also records `issue_type`. With no team, or 
 with no list, `issue_type` is null.
 
 A regression (it used to work, or it broke in a version) gets the `regression` keyword,
-even when the regressor is not known yet. Do not add the `regression` keyword to a test
-or CI failure that has no confirmed regressor. The release bot sets status flags from
-that keyword.
+also when it has no known regressor yet. Do not add the `regression` keyword to a test
+or CI failure that has no known regressor. The release bot sets status flags from that
+keyword.
 
-**A regressor needs proof.** Set `regressed_by` only from a bisection or mozregression
-result, a bot's regression note, or a developer's statement. A crash bot such as
-Clouseau, or BugBot's regression note, is a bot's regression note. Never set
-`regressed_by` from code reading or timing alone. Name a suspected change in the
-comment, and call it "the probable cause". Never guess a regressor id.
+**A known regressor.** A known regressor is a change that a bisection, a mozregression
+result, a bot's regression note or a developer's statement names. Crash bots such as
+Clouseau and BugBot write regression notes. Set `regressed_by` only to a known
+regressor. Never set it from code reading or timing alone. When only your evidence
+points at a change, write "the probable cause" in the comment. Never guess a regressor
+id.
 
 When two changes could be the regressor, pick the one that first shipped the behavior:
 its landing version must not be later than the first version that shows the bug.
 
 When the regressor is a restricted bug that the agent cannot read, do not set
-`regressed_by`. This case also needs the proof above. The broker returns nothing for
-such a bug. Find the author of the regressing change from its commit: the `mozilla_vcs`
-tools, such as `file_history` and `get_commit_info`, give the commit author's email.
-Needinfo that author, and in the comment ask them to set the Regressed by field. The bug
-must have the `regression` keyword, so add it in the same change when it is missing, and
-the bug must have no `regressed_by` yet.
+`regressed_by`. Send the needinfo below also when only your evidence points at the
+change, because the author decides. The broker returns nothing for such a bug. Find the
+author of the regressing change from its commit: the `mozilla_vcs` tools, such as
+`file_history` and `get_commit_info`, give the commit author's email. Needinfo that
+author, and in the comment ask them to set the Regressed by field. The bug must have the
+`regression` keyword, so add it in the same change when it is missing, and the bug must
+have no `regressed_by` yet.
 
 In the comment, help the author find the change. Name the function and the source file
 that the change touched, and never a test file of the change. Give the date when the
 change landed. Give the symptom that connects the change to this bug, for example a log
-line. Write "the probable cause". Do not quote the change. Do not quote a code comment, a
-test file or a commit message.
+line. Write "the probable cause" unless the regressor is a known regressor. Do not quote
+the change. Do not quote a code comment, a test file or a commit message.
 
 The comment never names or describes a restricted bug. Never write its bug number in any
 form. Never add a URL to the change or to the commit that names it. Never say why the
@@ -289,11 +291,11 @@ someone who confirmed the bug. Do this only when the comment asks them for somet
 ## Analyzed
 
 When the bug looks fixable (the root cause is clear, or the data is enough to start an
-investigation), spawn `bug_investigator` with the bug id **before** you write the comment.
-Write the comment from its findings: the root cause with its citations, the affected code
-and the fix direction. If it finds that information is still missing, go to "Needs info"
-and still set severity and priority. If it names the regressor with the proof that step 3
-asks for, add it to `regressed_by`. Otherwise name the change only in the comment.
+investigation), spawn `bug_investigator` with the bug id **before** you write the
+comment. Write the comment from its findings: the root cause with its citations, the
+affected code and the fix direction. If it finds that information is still missing, go
+to "Needs info" and still set severity and priority. If it names a known regressor, add
+it to `regressed_by`. Otherwise name the change in the comment as the probable cause.
 
 A comment with the analysis may also ask for a capture to confirm the analysis. Put the
 analysis first, then the request under "Next steps", with a needinfo on the reporter. The
@@ -457,5 +459,5 @@ and ask for mozregression; for a site-specific issue, consider a server-side cha
 When a bug leaves the team's scope (reassigned, or a developer from another team is now
 driving it), say so in the comment. On a move, needinfo the developer of the target team
 as "Needs info" says. Without a move, needinfo only an expert from the team's list, when
-"Needs info" allows it. Otherwise needinfo nobody. There is nothing for the agent to wait
-for. The comment follows "A hand-off comment" in `comment.md`.
+"Needs info" allows it. Otherwise the hand-off needs no needinfo, and there is nothing for
+the agent to wait for. The comment follows "A hand-off comment" in `comment.md`.
