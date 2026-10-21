@@ -962,11 +962,10 @@ def install_hooks(
     """Register every hook on ``recorder``, in the order they must run.
 
     The comment hook refuses first. The placeholder hook then expands the blocks the
-    style hook exempts, and the capture hook checks the capture steps. The feedback
-    footer hook rewrites the runtime's trailer.
-    The link and style hooks check the result, and the permalink hook expands source
-    paths. The marker hook runs last, once every check passed, so a close verdict
-    knows whether it came before the comment.
+    style hook exempts, and the capture hook checks the capture steps. The link and
+    style hooks check the result, and the permalink hook expands source paths. The
+    marker hook runs last, once every check passed, so a close verdict knows whether it
+    came before the comment.
     """
     recorder.add_hook("bugzilla.add_comment", add_comment_hook(recorder, bug_id))
     recorder.add_hook("bugzilla.add_comment", block_placeholder_hook)
