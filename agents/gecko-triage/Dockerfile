@@ -85,11 +85,6 @@ RUN useradd --create-home --shell /bin/bash agent \
 
 USER agent
 
-# The commit the image is built from, for findings.agent_version. agents/cloudbuild.yaml
-# passes it; without it, the version falls back to the package version.
-ARG GIT_COMMIT=""
-ENV GECKO_TRIAGE_COMMIT=$GIT_COMMIT
-
 CMD ["python", "-m", "hackbot_agents.gecko_triage"]
 
 FROM base AS broker

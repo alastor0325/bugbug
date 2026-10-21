@@ -1,20 +1,16 @@
 """The version of the code that made a run, recorded as `findings.agent_version`.
 
 A local run reads the short commit of its git checkout. The Docker image has no `.git`,
-so it reads `GECKO_TRIAGE_COMMIT`, which the image takes from the `GIT_COMMIT` build
-arg. Without either, the version is the package version with `+unknown`.
+so its version is the package version with `+unknown`.
 """
 
-import os
 import subprocess
 import sys
-from collections.abc import Mapping
 from functools import cache
 from importlib import metadata
 from pathlib import Path
 
 PACKAGE = "hackbot-agent-gecko-triage"
-COMMIT_ENV = "GECKO_TRIAGE_COMMIT"
 HERE = Path(__file__).resolve().parent
 
 
@@ -44,13 +40,9 @@ def package_version() -> str:
         return "0.0.0"
 
 
-def agent_version(where: Path = HERE, env: Mapping[str, str] = os.environ) -> str:
-    """The git commit, else the image's commit, else the package version."""
-    return (
-        git_commit(where)
-        or (env.get(COMMIT_ENV) or "").strip()
-        or f"{package_version()}+unknown"
-    )
+def agent_version(where: Path = HERE) -> str:
+    """The git commit, else the package version."""
+    return git_commit(where) or f"{package_version()}+unknown"
 
 
 @cache

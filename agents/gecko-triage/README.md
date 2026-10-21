@@ -353,10 +353,8 @@ that the comment does not name or describe them. Either one sets `auto_apply` to
 `agent_version` names the code that made the run, on every run that returns findings,
 skipped runs included. A failed run raises and carries no `agent_version`. A local run
 gives the short commit of its git checkout, with `-dirty` when the tree has changes. The
-image has no `.git`, so it reads `GECKO_TRIAGE_COMMIT`. The image takes it from the
-`GIT_COMMIT` build arg, which `agents/cloudbuild.yaml` sets to `$COMMIT_SHA`. Without
-either, the version is the package version with `+unknown`. An unknown version never
-fails a run.
+image has no `.git`, so its version is the package version with `+unknown`. An unknown
+version never fails a run.
 
 ## Tests
 

@@ -6,7 +6,6 @@ from pathlib import Path
 from hackbot_agents.gecko_triage import version
 from hackbot_agents.gecko_triage.agent import GeckoTriageResult
 from hackbot_agents.gecko_triage.version import (
-    COMMIT_ENV,
     agent_version,
     current_agent_version,
     git_commit,
@@ -44,8 +43,7 @@ def _repo(tmp_path: Path) -> str:
 def test_a_git_checkout_gives_its_short_commit(tmp_path):
     sha = _repo(tmp_path)
     assert git_commit(tmp_path) == sha
-    # The checkout wins over the image's env var.
-    assert agent_version(tmp_path, {COMMIT_ENV: "image"}) == sha
+    assert agent_version(tmp_path) == sha
     # A dirty tree is visible.
     (tmp_path / "f").write_text("y")
     assert git_commit(tmp_path) == f"{sha}-dirty"
@@ -82,18 +80,11 @@ def test_a_failing_git_gives_no_commit(monkeypatch):
 
         monkeypatch.setattr(version.subprocess, "run", fail)
         assert git_commit() is None, error
-        assert agent_version(env={COMMIT_ENV: "image"}) == "image"
-
-
-def test_the_image_gives_the_commit_in_its_env(monkeypatch, tmp_path):
-    monkeypatch.setattr(version, "git_commit", lambda where: None)
-    assert agent_version(tmp_path, {COMMIT_ENV: " abc1234 \n"}) == "abc1234"
 
 
 def test_the_last_fallback_is_the_package_version(monkeypatch, tmp_path):
     monkeypatch.setattr(version, "git_commit", lambda where: None)
-    for env in ({}, {COMMIT_ENV: ""}, {COMMIT_ENV: "  "}):
-        assert agent_version(tmp_path, env) == f"{package_version()}+unknown"
+    assert agent_version(tmp_path) == f"{package_version()}+unknown"
 
 
 def test_an_unknown_version_never_fails_the_run(monkeypatch):
@@ -114,8 +105,7 @@ def test_every_result_names_the_agent_version():
     assert result.model_dump()["agent_version"]
 
 
-def test_the_image_takes_the_commit_as_a_build_arg():
-    text = DOCKERFILE.read_text()
-    assert "ARG GIT_COMMIT" in text
-    assert f"ENV {COMMIT_ENV}=$GIT_COMMIT" in text
-    assert "--build-arg GIT_COMMIT=$COMMIT_SHA" in CLOUDBUILD.read_text()
+def test_the_image_takes_no_commit_build_arg():
+    # A standard version for every Hackbot agent belongs in the runtime.
+    assert "GIT_COMMIT" not in DOCKERFILE.read_text()
+    assert "GIT_COMMIT" not in CLOUDBUILD.read_text()
