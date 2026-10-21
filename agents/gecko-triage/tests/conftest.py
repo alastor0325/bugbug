@@ -473,3 +473,13 @@ def _fake_fetch(monkeypatch, found):
 
     monkeypatch.setattr(agent, "fetch_bugs", fetch)
     return calls
+
+
+def full_prompt(state, known_docs=(), duplicate_candidates=None) -> str:
+    """What the model reads at the start of a run: the system prompt, then the user one."""
+    return "\n\n".join(
+        (
+            agent.load_system_prompt(),
+            agent.render_user_prompt(BUG, "t", state, known_docs, duplicate_candidates),
+        )
+    )

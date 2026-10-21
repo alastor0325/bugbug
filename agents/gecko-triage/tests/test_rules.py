@@ -3,6 +3,7 @@
 import re
 
 import pytest
+from conftest import BUG, _run, full_prompt
 from hackbot_agents.gecko_triage.agent import (
     PROMPTS_DIR,
     RULES_DIR,
@@ -16,6 +17,8 @@ from hackbot_agents.gecko_triage.agent import (
     make_spec_checker,
     render_needinfo_experts,
     render_scope_for_search,
+    render_user_prompt,
+    rule_files,
 )
 from hackbot_agents.gecko_triage.config import (
     TEAM,
@@ -87,10 +90,43 @@ def test_a_team_missing_a_rules_file_is_refused(tmp_path):
         team_dir(tmp_path, "other")
 
 
-def test_the_prompt_points_at_both_rule_sets(new_state):
-    prompt = load_system_prompt(new_state, ())
-    assert str(RULES_DIR.resolve()) in prompt
-    assert str((TEAMS_DIR / "media" / "rules").resolve()) in prompt
+def test_the_system_prompt_carries_every_rule_file_once_in_a_stable_order():
+    prompt = load_system_prompt()
+    files = rule_files()
+    assert files[0] == ("general", RULES_DIR / "workflow.md")
+    assert ("general", RULES_DIR / "README.md") not in files
+    assert {p for _, p in files} == {
+        *(p for p in RULES_DIR.glob("*.md") if p.name != "README.md"),
+        *TEAM_RULES_DIR.glob("*.md"),
+    }
+    starts = []
+    for kind, path in files:
+        header = f'<rule_file set="{kind}" name="{path.name}">'
+        assert prompt.count(header) == 1, header
+        assert path.read_text().strip() in prompt
+        starts.append(prompt.index(header))
+    assert starts == sorted(starts)
+    assert str(RULES_DIR.resolve()) not in prompt
+
+
+def test_the_system_prompt_is_the_same_for_every_bug(new_state, returning_state):
+    assert load_system_prompt() == load_system_prompt()
+    for state in (new_state, returning_state):
+        user = render_user_prompt(BUG, "t", state, ())
+        assert "<rule_file" not in user
+        assert state.describe() in user
+        assert state.describe() not in load_system_prompt()
+
+
+def test_a_run_reads_no_rule_file_from_disk(fake_client, tmp_path, new_state):
+    import asyncio
+
+    asyncio.run(_run(tmp_path, new_state))
+    options = fake_client.options
+    assert options.add_dirs == []
+    assert options.system_prompt == load_system_prompt()
+    assert "read them before deciding" not in fake_client.prompt.lower()
+    assert fake_client.prompt == render_user_prompt(BUG, "t", new_state, ())
 
 
 def test_the_duplicate_hunter_searches_the_run_teams_components():
@@ -345,7 +381,7 @@ def test_each_rule_is_stated_once(where, phrase):
 
 
 def test_the_prompt_lists_the_team_needinfo_experts(new_state):
-    prompt = load_system_prompt(new_state, ())
+    prompt = full_prompt(new_state)
     assert TEAM.needinfo_experts
     for expert in TEAM.needinfo_experts:
         line = next(x for x in prompt.splitlines() if f"`{expert.email}`" in x)
@@ -372,7 +408,7 @@ def test_a_fallback_list_alone_still_renders(monkeypatch):
 
 
 def test_the_prompt_lists_the_team_issue_types(new_state):
-    prompt = load_system_prompt(new_state, ())
+    prompt = full_prompt(new_state)
     assert TEAM.issue_types
     listed = "\n".join(f"- `{t.value}`: {t.meaning}." for t in TEAM.issue_types)
     assert listed in prompt
@@ -384,7 +420,7 @@ def test_the_prompt_lists_the_team_issue_types(new_state):
 
 
 def test_the_prompt_renders_the_field_change_forms(new_state):
-    prompt = _flat(load_system_prompt(new_state, ()))
+    prompt = _flat(full_prompt(new_state))
     assert '`see_also`: `{"add": [<bug id>]}`' in prompt
     assert f'`whiteboard`: `{{"add": ["{EASY}"]}}`, optionally with `"{GFB}"`' in prompt
 

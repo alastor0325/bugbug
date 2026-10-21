@@ -8,11 +8,11 @@ import sys
 from pathlib import Path
 
 import pytest
+from conftest import full_prompt
 from hackbot_agents.gecko_triage.agent import (
     BASE_TOOLS,
     combined_options,
     hidden_env,
-    load_system_prompt,
     make_bug_investigator,
     make_duplicate_hunter,
     make_investigator,
@@ -343,7 +343,7 @@ def test_no_agent_is_offered_download_attachment(new_state):
         _duplicate_hunter,
     ):
         assert tool not in make().tools, make
-    prompt = load_system_prompt(new_state, ())
+    prompt = full_prompt(new_state)
     assert "download_attachment" not in prompt
     assert "without `include_data`" in prompt and "log_analyst" in prompt
 

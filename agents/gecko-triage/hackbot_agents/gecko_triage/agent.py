@@ -547,15 +547,12 @@ def render_bug(bug: dict, comments: list[dict]) -> str:
 
 def render_team_parts() -> dict[str, str]:
     """The prompt parts that differ with no team: `prompts/parts.toml`, filled in."""
-    rules_dir = str(RULES_DIR.resolve())
     if TEAM is None:
         parts = _PROMPT_PARTS["no_team"]
-        values = {"rules_dir": rules_dir}
+        values = {}
     else:
         parts = _PROMPT_PARTS["team"]
         values = {
-            "rules_dir": rules_dir,
-            "team_rules_dir": str(TEAM_RULES_DIR.resolve()),
             "team_label": TEAM.label,
             "capture_placeholder": CAPTURE_PLACEHOLDER,
             "capture_block": TEAM.comment.capture_block,
@@ -566,35 +563,72 @@ def render_team_parts() -> dict[str, str]:
     return {name: text.format(**values) for name, text in parts.items()}
 
 
-def rules_reminder() -> str:
-    """The user prompt's line on which rule sets apply."""
-    return render_team_parts()["reminder"]
+def rule_files() -> list[tuple[str, Path]]:
+    """The rule files the system prompt carries, in order, each with its set.
+
+    The general `workflow.md` comes first, then the other general files and the team's
+    files, each set by name. `rules/README.md` is for maintainers only.
+    """
+    general = sorted(
+        (p for p in RULES_DIR.glob("*.md") if p.name != "README.md"),
+        key=lambda p: (p.name != "workflow.md", p.name),
+    )
+    files = [("general", p) for p in general]
+    if TEAM_RULES_DIR is not None:
+        files += [("team", p) for p in sorted(TEAM_RULES_DIR.glob("*.md"))]
+    return files
 
 
-def load_system_prompt(
-    state: TriageState,
-    known_docs: tuple[DocRef, ...],
-    duplicate_candidates: list[dict] | None = None,
-) -> str:
+def render_rules() -> str:
+    return "\n\n".join(
+        f'<rule_file set="{kind}" name="{path.name}">\n'
+        f"{path.read_text().strip()}\n</rule_file>"
+        for kind, path in rule_files()
+    )
+
+
+def load_system_prompt() -> str:
+    """The system prompt: the same for every run of a team, so it can be cached."""
     tmpl = (PROMPTS_DIR / "system.md").read_text()
-    scope = scope_for(TEAM, state.bug)
     return tmpl.format(
         **render_team_parts(),
+        rules=render_rules(),
         searchfox_links=SEARCHFOX_LINKS_PROMPT,
         link_hosts=", ".join(f"`{h}`" for h in ALLOWED_LINK_HOSTS),
-        components=render_components(scope),
-        docs=render_docs(known_docs, scope),
-        state=state.describe(),
-        audience=reporter_audience(state.bug),
         keywords=render_keywords(),
         easy_fix_tag=TERMS.whiteboard.easy_fix,
         gfb_tag=TERMS.whiteboard.gfb_candidate,
         needinfo_experts=render_needinfo_experts(),
         issue_types=render_issue_types(),
-        duplicate_candidates=dupes.render_candidates(duplicate_candidates or []),
         resolutions=", ".join(f"`{r}`" for r in sorted(TRIAGE_RESOLUTIONS)),
         mozregression_placeholder=MOZREGRESSION_PLACEHOLDER,
         mozregression_block=MOZREGRESSION_BLOCK,
+    )
+
+
+def render_user_prompt(
+    bug: int,
+    task: str,
+    state: TriageState,
+    known_docs: tuple[DocRef, ...],
+    duplicate_candidates: list[dict] | None = None,
+) -> str:
+    """The user prompt: everything that differs from bug to bug."""
+    scope = scope_for(TEAM, state.bug)
+    return (
+        (PROMPTS_DIR / "user.md")
+        .read_text()
+        .format(
+            bug_id=bug,
+            task=task,
+            state=state.describe(),
+            audience=reporter_audience(state.bug),
+            components=render_components(scope),
+            docs=render_docs(known_docs, scope),
+            duplicate_candidates=dupes.render_candidates(duplicate_candidates or []),
+            bug=render_bug(state.bug, state.comments),
+        )
+        .removesuffix("\n")
     )
 
 
@@ -1024,7 +1058,7 @@ async def run_gecko_triage(
         commit_authors=commits.authors,
     )
 
-    system_prompt = load_system_prompt(state, registrations(repo), duplicate_candidates)
+    system_prompt = load_system_prompt()
 
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
@@ -1048,7 +1082,6 @@ async def run_gecko_triage(
             closing.VERIFIER: make_close_verifier(),
         },
         cwd=str(repo),
-        add_dirs=[str(d) for d in (RULES_DIR, TEAM_RULES_DIR) if d is not None],
         permission_mode="bypassPermissions",
         # No effect under `bypassPermissions`; `tools` above is the real limit. Kept in
         # step with it so a future permission mode allows the same set.
@@ -1071,9 +1104,8 @@ async def run_gecko_triage(
         **combined_options(toolkit_dir, close_verdicts, commits),
     )
 
-    user_prompt = (
-        f"Bug to work on: {bug}\n\nTask: {task}\n\n{rules_reminder()}\n\n"
-        + render_bug(state.bug, state.comments)
+    user_prompt = render_user_prompt(
+        bug, task, state, registrations(repo), duplicate_candidates
     )
 
     make_undumpable()

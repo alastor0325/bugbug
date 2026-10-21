@@ -8,8 +8,8 @@ already set. If the agent or a bot alias wrote the newest comment and nothing ch
 after it, the run never started. The one exception is a bug that became closable as
 INCOMPLETE after that comment.
 
-Two rule sets apply. These general rules hold for every team. The team's rules, in the
-team rules directory the system prompt names, add the team's knowledge: `classify.md`,
+Two rule sets apply. These general rules hold for every team. The team's rules, after
+these general rules in the system prompt, add the team's knowledge: `classify.md`,
 `diagnostics.md`, `comment.md`, `severity-priority.md` and `meta-bugs.md`. Where a team
 rule is more specific, it wins.
 
@@ -24,7 +24,7 @@ The bug's fields and all its public comments are in the user prompt, under **The
 Do not fetch them again. Fetch its attachment list with `get_bug_attachments`. Read
 every comment, from comment 0 to the newest. The agent keeps no memory between runs, so
 the bug is the only record.
-Then read **Where this bug stands** in the system prompt: the open needinfo flags, who set
+Then read **Where this bug stands** in the user prompt: the open needinfo flags, who set
 them and how old they are.
 
 **An earlier ask.** Find the last time anyone asked for data on this bug. It can be the
@@ -162,7 +162,7 @@ it. A person also reviews every gecko-triage apply while the agent is human-gate
 ### Step 4a: duplicates
 
 Spawn `duplicate_hunter` once with the discriminating signal and the possible duplicates
-the system prompt lists. It checks those first. On a verdict naming a bug, read that bug's
+the user prompt lists. It checks those first. On a verdict naming a bug, read that bug's
 summary and description yourself before proposing a duplicate (the "Close or move" path).
 Judge the candidate by the defect: fixing the older bug must fix this bug. A different OS,
 an UNCONFIRMED status or a second trigger in the older bug is not a reason to keep this
@@ -371,7 +371,7 @@ benign in release is S4, as `severity-priority.md` says.
 
 ### The cause is in another team's code
 
-The team's code paths are the `Code:` part of each component in the system prompt. When
+The team's code paths are the `Code:` part of each component in the user prompt. When
 the cause is in other code, the bug belongs to the component that owns that code. Move it
 there, as "Close or move" says. Find
 the owner in the `BUG_COMPONENT` of the nearest `moz.build` at or above the file, in its

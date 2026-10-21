@@ -1,6 +1,7 @@
 """Tests for a run with no team: the shared rules only, in the bug's own component."""
 
 import os
+import re
 import subprocess
 import sys
 
@@ -26,6 +27,7 @@ from conftest import (
     _target,
     _text,
     _update,
+    full_prompt,
     with_needinfo,
 )
 from hackbot_agents.gecko_triage import agent, dupes, hooks, preflight
@@ -33,12 +35,10 @@ from hackbot_agents.gecko_triage.agent import (
     RULES_DIR,
     Plan,
     issue_type_refusal,
-    load_system_prompt,
     make_duplicate_hunter,
     make_profile_analyst,
     may_apply_unattended,
     render_needinfo_experts,
-    rules_reminder,
 )
 from hackbot_agents.gecko_triage.config import (
     CAPTURE_PLACEHOLDER,
@@ -187,14 +187,19 @@ def test_there_are_no_needinfo_experts(no_team, other_state):
 
 
 def test_the_prompt_names_no_team_rules_and_no_meta_bug(no_team, other_state):
-    prompt = load_system_prompt(other_state, ())
+    prompt = full_prompt(other_state)
     flat = " ".join(prompt.split())
-    assert str(RULES_DIR.resolve()) in prompt
+    for path in RULES_DIR.glob("*.md"):
+        if path.name != "README.md":
+            assert f'<rule_file set="general" name="{path.name}">' in prompt
+    assert 'set="team"' not in prompt
     assert str(TEAMS_DIR.resolve()) not in prompt
     assert "the team rules in" not in prompt
     assert "This run has no team" in flat
     assert "no meta bug applies" in flat
-    assert CAPTURE_PLACEHOLDER not in prompt
+    # The general rules name the placeholder; only a team's parts may ask for it.
+    parts = re.sub(r"<rule_file .*?</rule_file>", "", prompt, flags=re.DOTALL)
+    assert CAPTURE_PLACEHOLDER not in parts
     assert TEAM.comment.capture_block not in prompt
     assert TEAM.label not in prompt
     assert f"**{OTHER['product']} :: {OTHER['component']}**" in prompt
@@ -205,24 +210,13 @@ def test_the_prompt_names_no_team_rules_and_no_meta_bug(no_team, other_state):
 
 
 def test_the_team_prompt_keeps_its_team_parts(new_state):
-    prompt = load_system_prompt(new_state, ())
+    prompt = full_prompt(new_state)
     flat = " ".join(prompt.split())
     assert "This run has no team" not in flat
     assert CAPTURE_PLACEHOLDER in prompt
     assert TEAM.comment.capture_block in prompt
     assert TEAM.label in prompt
     assert "only meta bugs from the team's `meta-bugs.md`" in flat
-
-
-def test_the_user_prompt_names_no_team_rules(no_team):
-    assert rules_reminder() == (
-        "The general rules the system prompt names apply; this run has no team "
-        "rules. Read them before deciding anything."
-    )
-
-
-def test_the_user_prompt_names_the_team_rules_with_a_team():
-    assert "the team rules the system prompt names apply" in rules_reminder()
 
 
 def test_a_run_with_no_team_never_vouches(no_team):
@@ -348,17 +342,17 @@ def test_a_duplicate_of_a_meta_bug_is_recorded_then_fails_the_run(no_team, other
 
 
 def test_the_prompt_has_no_team_experts_or_capture_rule(no_team, other_state):
-    flat = " ".join(load_system_prompt(other_state, ()).split())
+    flat = " ".join(full_prompt(other_state).split())
     assert "This run has no needinfo experts." in flat
     assert "The team lists these developers" not in flat
     assert "It reports what the capture shows, from the general diagnostics.md." in flat
-    assert "the team's area" not in flat
+    assert "for the team's area, as the team's `diagnostics.md`" not in flat
     analyst = make_profile_analyst()
     assert "team" not in analyst.prompt + analyst.description
 
 
 def test_the_team_prompt_keeps_its_experts_and_capture_rule(new_state):
-    flat = " ".join(load_system_prompt(new_state, ()).split())
+    flat = " ".join(full_prompt(new_state).split())
     assert "The team lists these developers by area." in flat
     assert "the team's area" in flat
     assert "the team's capture rule" in make_profile_analyst().description
@@ -369,7 +363,7 @@ def test_a_no_team_run_has_no_issue_type(no_team, other_state):
     for value in ("drm", "other"):
         refusal = issue_type_refusal(Plan(issue_type=value, issue_type_note="x"))
         assert refusal and "no team list" in refusal, value
-    flat = " ".join(load_system_prompt(other_state, ()).split())
+    flat = " ".join(full_prompt(other_state).split())
     assert "This run has no list of issue types." in flat
     assert '"issue_type": null, "issue_type_note": null' in flat
     assert "`playback-failure`" not in flat
@@ -400,9 +394,9 @@ async def test_a_no_team_run_end_to_end(no_team, fake_client, tmp_path, other_st
     fake_client.result = _result('```json\n{"decision": "analyzed"}\n```')
     result = await _run(tmp_path, other_state, recorder)
     options = fake_client.options
-    assert options.add_dirs == [str(RULES_DIR)]
-    assert rules_reminder() in fake_client.prompt
-    assert "no team rules" in fake_client.prompt
+    assert options.add_dirs == []
+    assert "This run has no team rules." in options.system_prompt
+    assert 'set="team"' not in options.system_prompt
     hunter = options.agents["duplicate_hunter"].prompt
     assert f"product `Core`: {OTHER['component']}" in hunter
     assert result.decision == "analyzed" and len(recorder.actions) == 1
@@ -441,5 +435,5 @@ async def test_a_no_team_run_has_the_close_verifier(
     fake_client.result = _result('```json\n{"decision": "watching"}\n```')
     await _run(tmp_path, other_state)
     assert "close_verifier" in fake_client.options.agents
-    flat = " ".join(load_system_prompt(other_state, ()).split())
+    flat = " ".join(full_prompt(other_state).split())
     assert "Confirm every close with `close_verifier` first." in flat

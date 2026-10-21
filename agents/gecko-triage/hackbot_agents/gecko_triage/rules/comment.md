@@ -74,7 +74,7 @@ when the comment is recorded. A comment outside them is refused with the reason.
 
 ## Audience
 
-The system prompt says who filed the bug.
+The user prompt says who filed the bug.
 
 - **reporter:** a user. Ask for the artifacts the rules list, in the plainest words.
 - **qa:** a QA engineer. Ask for what is missing as you would ask a reporter.

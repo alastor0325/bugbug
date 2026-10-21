@@ -107,7 +107,9 @@ read private comments.
    the bug's own component. The "Duplicate search" section below tells how. The
    source checkout runs at the same time as this search.
 5. The model triages the bug with the general rules and the team rules, and records its
-   actions. With no team, it uses the general rules only. The hooks in `hooks.py` check
+   actions. With no team, it uses the general rules only. The system prompt carries
+   every rule file, so it is the same for each run of a team and can be cached; the
+   user prompt carries what differs per bug. The hooks in `hooks.py` check
    each action as it is recorded; their docstring lists the limits. A refusal reaches
    the model as a tool error it can correct in the same run, and nothing lands in
    `summary.json`.

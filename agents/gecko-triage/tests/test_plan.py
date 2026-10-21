@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 import pytest
+from conftest import full_prompt
 from hackbot_agents.gecko_triage.agent import (
     DECISIONS,
     MAX_ISSUE_TYPE_NOTE,
@@ -17,7 +18,6 @@ from hackbot_agents.gecko_triage.agent import (
     checked_issue_type,
     close_mismatch,
     issue_type_refusal,
-    load_system_prompt,
     may_apply_unattended,
     parse_bug_id,
     parse_decision,
@@ -54,9 +54,9 @@ def _block(body: str) -> str:
 def test_the_system_prompt_renders(new_state):
     # system.md goes through str.format, so a literal brace must be doubled or startup
     # raises KeyError and the run never begins.
-    prompt = load_system_prompt(new_state, ())
-    assert "{rules_dir}" not in prompt and "{state}" not in prompt
-    assert str(RULES.resolve()) in prompt
+    prompt = full_prompt(new_state)
+    assert "{rules}" not in prompt and "{state}" not in prompt and "{bug}" not in prompt
+    assert '<rule_file set="general" name="workflow.md">' in prompt
     assert "The bug has no open needinfo." in prompt or "open needinfo is on" in prompt
     assert "filed by a **reporter**" in prompt
     assert "`stalled`" in prompt and "`regression`" in prompt
@@ -433,7 +433,7 @@ def test_a_team_without_issue_types_takes_no_value(monkeypatch, new_state):
     monkeypatch.setattr(agent, "ISSUE_TYPES", frozenset())
     assert issue_type_refusal(Plan()) is None
     assert "no team list" in issue_type_refusal(Plan(issue_type="drm"))
-    flat = " ".join(load_system_prompt(new_state, ()).split())
+    flat = " ".join(full_prompt(new_state).split())
     assert "This run has no list of issue types." in flat
     assert '"issue_type": null, "issue_type_note": null' in flat
     assert "Record the bug's main symptom" not in flat
