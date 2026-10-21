@@ -17,20 +17,17 @@ that a commit message names. A duplicate of a bug that was closed with no fix wa
 a person (see `dupe_target_warning`).
 """
 
-import asyncio
 import re
 import sys
 from collections.abc import Mapping, Set
 from dataclasses import dataclass
 
 from hackbot_runtime import ActionsRecorder, AgentError
-from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
 
+from .broker_client import broker_session
 from .config import SCOPE_KEYS
 from .hooks import _is_bug_id, _params
 from .preflight import CLOSED_STATUSES, is_meta, is_security
-from .state import _call
 
 LINK_FIELDS = ("regressed_by", "see_also")
 TARGET_FIELDS = "id,summary,groups,component,product,status,resolution,keywords"
@@ -333,7 +330,8 @@ async def fetch_bugs(
     if not url:
         return None
     try:
-        bugs = await asyncio.wait_for(_get_bugs(url, ids), FETCH_TIMEOUT)
+        async with broker_session(url, FETCH_TIMEOUT) as call:
+            res = await call("get_bugs", {"ids": ids, "include_fields": TARGET_FIELDS})
     except Exception as e:  # see docstring
         print(
             f"[gecko_triage] reading bugs {ids} failed ({type(e).__name__}: {e})",
@@ -341,16 +339,5 @@ async def fetch_bugs(
         )
         return None
     wanted = set(ids)
+    bugs = res.get("bugs") or []
     return {b["id"]: b for b in bugs if isinstance(b, dict) and b.get("id") in wanted}
-
-
-async def _get_bugs(url: str, ids: list[int]) -> list[dict]:
-    async with (
-        streamablehttp_client(url) as (read, write, _),
-        ClientSession(read, write) as session,
-    ):
-        await session.initialize()
-        res = await _call(
-            session, "get_bugs", {"ids": ids, "include_fields": TARGET_FIELDS}
-        )
-        return res.get("bugs") or []

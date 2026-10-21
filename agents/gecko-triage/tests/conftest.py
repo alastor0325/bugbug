@@ -5,7 +5,9 @@ import json
 import os
 import re
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -14,7 +16,7 @@ import pytest
 os.environ.setdefault("TEAM", "media")
 
 import hackbot_agents.gecko_triage.__main__  # noqa: E402, F401
-from hackbot_agents.gecko_triage import config  # noqa: E402
+from hackbot_agents.gecko_triage import broker_client, config  # noqa: E402
 from hackbot_agents.gecko_triage.config import BOT_ACCOUNT  # noqa: E402
 from hackbot_agents.gecko_triage.state import TriageState  # noqa: E402
 
@@ -56,6 +58,50 @@ def with_needinfo(
 def quiet(bug: dict, **times) -> dict:
     """``bug`` as it stands right after the bot's comment, unless ``times`` say more."""
     return {**bug, "last_change_time_non_bot": BOT_COMMENTED, **times}
+
+
+def fake_broker(monkeypatch, responses: dict) -> list:
+    """A broker that answers each tool from ``responses``; the calls it got, in order.
+
+    An answer is a JSON body, an Exception for an error reply, or an async function of
+    the args that gives the body.
+    """
+    calls = []
+
+    @asynccontextmanager
+    async def client(url):
+        calls.append(("connect", url))
+        yield "read", "write", None
+
+    class Session:
+        def __init__(self, read, write):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def initialize(self):
+            pass
+
+        async def call_tool(self, tool, args):
+            calls.append((tool, args))
+            body = responses[tool]
+            if callable(body):
+                body = await body(args)
+            if isinstance(body, Exception):
+                return SimpleNamespace(
+                    isError=True, content=[SimpleNamespace(text=str(body))]
+                )
+            return SimpleNamespace(
+                isError=False, content=[SimpleNamespace(text=json.dumps(body))]
+            )
+
+    monkeypatch.setattr(broker_client, "streamablehttp_client", client)
+    monkeypatch.setattr(broker_client, "ClientSession", Session)
+    return calls
 
 
 @pytest.fixture

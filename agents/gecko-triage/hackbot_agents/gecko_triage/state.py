@@ -16,15 +16,13 @@ cost. It also feeds the hooks, which limit what the agent may write, and the pro
 """
 
 import datetime as dt
-import json
 import sys
 from dataclasses import dataclass, field
 from functools import cached_property
 
 from claude_agent_sdk import McpServerConfig
-from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
 
+from .broker_client import Call, broker_session
 from .config import (
     AGENT_TAG,
     BOT_ACCOUNT,
@@ -44,6 +42,8 @@ BUG_FIELDS = (
     "blocks,regressed_by,regressions,see_also,creation_time,last_change_time,last_change_time_non_bot,"
     "cf_crash_signature,type"
 )
+# A hung broker must not hold the job until the job timeout.
+STATE_TIMEOUT = 120
 
 
 def parse_time(value: object) -> dt.datetime | None:
@@ -318,13 +318,6 @@ class TriageState:
         return "\n".join(lines)
 
 
-async def _call(session: ClientSession, tool: str, args: dict) -> dict:
-    res = await session.call_tool(tool, args)
-    if res.isError:
-        raise RuntimeError("".join(getattr(c, "text", "") for c in res.content))
-    return json.loads(res.content[0].text)
-
-
 async def fetch_state(
     bugzilla_mcp_server: McpServerConfig,
     bug: int,
@@ -333,27 +326,24 @@ async def fetch_state(
     """The bug's fields and comments, read through the broker, as a :class:`TriageState`.
 
     Never raises. A bug the broker withholds gives a `restricted` state with no fields.
-    None on a missing url, a broker failure, or a bug that is not returned for another
-    reason; the caller decides what a missing state means for each consumer.
+    None on a missing url, a broker failure, a read that takes more than
+    `STATE_TIMEOUT` seconds, or a bug that is not returned for another reason; the
+    caller decides what a missing state means for each consumer.
     """
     url = bugzilla_mcp_server.get("url")
     if not url:
         return None
     try:
-        async with (
-            streamablehttp_client(url) as (read, write, _),
-            ClientSession(read, write) as session,
-        ):
-            await session.initialize()
-            bug_res = await _call(
-                session, "get_bugs", {"ids": [bug], "include_fields": BUG_FIELDS}
+        async with broker_session(url, STATE_TIMEOUT) as call:
+            bug_res = await call(
+                "get_bugs", {"ids": [bug], "include_fields": BUG_FIELDS}
             )
             bugs = bug_res.get("bugs") or []
             if not bugs and bug in (bug_res.get("inaccessible") or ()):
                 return TriageState(bug={"id": bug}, now=now or _now(), restricted=True)
             if not bugs:
                 return None
-            comments_res = await _call(session, "get_bug_comments", {"bug_id": bug})
+            comments_res = await call("get_bug_comments", {"bug_id": bug})
             state = TriageState(
                 bug=bugs[0],
                 comments=comments_res.get("comments") or [],
@@ -361,7 +351,7 @@ async def fetch_state(
             )
             since = state.changed_after_agent_comment
             if since is not None:
-                state.history = await _history(session, bug, since)
+                state.history = await _history(call, bug, since)
     except Exception as e:  # see docstring
         print(
             f"[gecko_triage] state lookup for bug {bug} failed "
@@ -372,16 +362,13 @@ async def fetch_state(
     return state
 
 
-async def _history(
-    session: ClientSession, bug: int, since: dt.datetime
-) -> tuple[dict, ...] | None:
+async def _history(call: Call, bug: int, since: dt.datetime) -> tuple[dict, ...] | None:
     """The bug's changes after `since`, or None when the broker fails.
 
     A failure only means that the agent runs, so it does not fail the state lookup.
     """
     try:
-        res = await _call(
-            session,
+        res = await call(
             "get_bug_history",
             {"bug_id": bug, "new_since": since.strftime("%Y-%m-%dT%H:%M:%SZ")},
         )

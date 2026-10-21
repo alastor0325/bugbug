@@ -3,6 +3,7 @@
 import asyncio
 
 import pytest
+from conftest import fake_broker
 from hackbot_agents.gecko_triage import targets
 from hackbot_agents.gecko_triage.config import TEAM_META_BUGS, TRIAGE_SCOPE
 from hackbot_agents.gecko_triage.targets import (
@@ -252,36 +253,32 @@ def test_dropping_an_action_removes_it():
 
 
 async def test_the_fetch_never_raises(monkeypatch):
-    async def fail(url, ids):
-        raise OSError("connection refused")
-
-    monkeypatch.setattr(targets, "_get_bugs", fail)
+    fake_broker(monkeypatch, {"get_bugs": OSError("connection refused")})
     assert await fetch_bugs({"type": "http", "url": ""}, [1]) is None
     assert await fetch_bugs({"type": "http", "url": "http://b/mcp"}, [1]) is None
     assert await fetch_bugs({"type": "http", "url": ""}, []) == {}
 
 
 async def test_the_fetch_gives_up_after_the_timeout(monkeypatch):
-    async def hang(url, ids):
+    async def hang(args):
         await asyncio.sleep(10)
 
-    monkeypatch.setattr(targets, "_get_bugs", hang)
+    fake_broker(monkeypatch, {"get_bugs": hang})
     monkeypatch.setattr(targets, "FETCH_TIMEOUT", 0.01)
     assert await fetch_bugs({"type": "http", "url": "http://b/mcp"}, [1]) is None
 
 
 async def test_the_fetch_reads_the_bugs(monkeypatch):
-    calls = []
-
-    async def fake_get(url, ids):
-        calls.append((url, ids))
-        return [_target(), {"id": "junk"}, "junk"]
-
-    monkeypatch.setattr(targets, "_get_bugs", fake_get)
+    calls = fake_broker(
+        monkeypatch, {"get_bugs": {"bugs": [_target(), {"id": "junk"}, "junk"]}}
+    )
     assert await fetch_bugs({"type": "http", "url": "http://b/mcp"}, [DUPE, 1]) == {
         DUPE: _target()
     }
-    assert calls == [("http://b/mcp", [DUPE, 1])]
+    assert calls == [
+        ("connect", "http://b/mcp"),
+        ("get_bugs", {"ids": [DUPE, 1], "include_fields": TARGET_FIELDS}),
+    ]
 
 
 def _commented(text):

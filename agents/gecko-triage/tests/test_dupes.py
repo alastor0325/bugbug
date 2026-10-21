@@ -58,7 +58,7 @@ def _ctx(**kw):
 
 def _fake_broker(fake):
     class Session:
-        def __init__(self, url):
+        def __init__(self, url, timeout):
             pass
 
         async def __aenter__(self):
@@ -70,7 +70,7 @@ def _fake_broker(fake):
     return Session
 
 
-def _broken_broker(url):
+def _broken_broker(url, timeout):
     raise RuntimeError("no broker")
 
 

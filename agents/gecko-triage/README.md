@@ -93,7 +93,8 @@ read private comments.
 1. `config.py` loads the team named by `TEAM` and the shared files. With no `TEAM`, it
    loads the shared files only. An unknown team or a bad file stops the run.
 2. `state.py` reads the bug, all its comments and its open needinfos. A bug it cannot
-   read fails the run, so BugBot retries it.
+   read fails the run, so BugBot retries it. A read that does not end in 2 minutes
+   also fails the run.
 3. `preflight.py` ends the run, at zero cost, on the skips `docs/bugzilla.md` lists. A
    skipped run is `status: "ok"` with `num_turns: 0`, `decision: "skipped"` and the
    reason in `result`.

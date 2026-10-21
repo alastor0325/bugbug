@@ -26,7 +26,6 @@ in a stem, so the text of a stem cannot change the query.
 
 import asyncio
 import itertools
-import json
 import math
 import re
 import sys
@@ -36,10 +35,9 @@ from typing import Annotated
 
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.registry import ToolDefinition, ToolError
-from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
 from pydantic import Field
 
+from .broker_client import broker_session
 from .config import TEAM
 from .preflight import is_meta
 from .teamconfig import scope_for
@@ -406,22 +404,15 @@ async def gather_within(coros: list, budget: float) -> list:
 
 
 @asynccontextmanager
-async def broker_search(url: str):
+async def broker_search(url: str, timeout: float):
     """A ``search(params)`` on the broker's `search_bugs`, over one MCP session.
 
-    The session takes calls in parallel.
+    The session takes calls in parallel, and ends after ``timeout`` seconds.
     """
-    async with (
-        streamablehttp_client(url) as (read, write, _),
-        ClientSession(read, write) as session,
-    ):
-        await session.initialize()
+    async with broker_session(url, timeout) as call:
 
         async def search(params: dict) -> list[dict]:
-            res = await session.call_tool("search_bugs", {"params": params})
-            if res.isError or not res.content:
-                raise RuntimeError(res.content[0].text if res.content else "no result")
-            return json.loads(res.content[0].text).get("bugs") or []
+            return (await call("search_bugs", {"params": params})).get("bugs") or []
 
         yield search
 
@@ -439,9 +430,7 @@ async def find_candidates(bugzilla_mcp_server: dict, bug: dict) -> list[dict]:
     hung broker cannot block the run.
     """
     try:
-        return await asyncio.wait_for(
-            _find_candidates(bugzilla_mcp_server.get("url"), bug), SEARCH_TIMEOUT
-        )
+        return await _find_candidates(bugzilla_mcp_server.get("url"), bug)
     except Exception as e:  # see docstring
         _log(f"duplicate search failed ({e})")
         return []
@@ -455,7 +444,7 @@ async def _find_candidates(url: str | None, bug: dict) -> list[dict]:
     products, components = search_scope(bug)
     queries = [word_query(products, components, w) for w in words]
     queries += [signature_query(products, components, s) for s in sigs]
-    async with broker_search(url) as search:
+    async with broker_search(url, SEARCH_TIMEOUT) as search:
         answers = await gather_within([search(q) for q in queries], WORD_BUDGET)
     word_hits = {w: a for w, a in zip(words, answers) if a is not None}
     sig_hits = {s: a for s, a in zip(sigs, answers[len(words) :]) if a is not None}
@@ -595,7 +584,7 @@ async def run_concept_search(search, ctx: ConceptContext, concepts: list[list[st
 
 
 async def _search_concepts(ctx: ConceptContext, concepts: list[list[str]]) -> dict:
-    async with broker_search(ctx.url) as search:
+    async with broker_search(ctx.url, CONCEPT_BUDGET + CONNECT_GRACE) as search:
         return await run_concept_search(search, ctx, concepts)
 
 
@@ -621,9 +610,7 @@ async def search_concepts_tool(
             str(e), payload={"error": "invalid_concepts", "reason": str(e)}
         ) from None
     try:
-        return await asyncio.wait_for(
-            _search_concepts(ctx, groups), CONCEPT_BUDGET + CONNECT_GRACE
-        )
+        return await _search_concepts(ctx, groups)
     except Exception as e:  # the hunter can still search by hand
         _log(f"concept search failed ({e})")
         return {"candidates": [], "note": f"the search failed: {e}"}

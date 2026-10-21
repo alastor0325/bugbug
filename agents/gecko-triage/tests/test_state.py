@@ -1,12 +1,19 @@
 """Tests for the state questions, answered from recorded Bugzilla responses."""
 
+import asyncio
 import datetime as dt
-import json
-from contextlib import asynccontextmanager
-from types import SimpleNamespace
 
 import pytest
-from conftest import BOT_COMMENTED, LATER, NOW, load, quiet, with_needinfo
+from conftest import (
+    BOT_COMMENTED,
+    LATER,
+    NOW,
+    fake_broker,
+    load,
+    quiet,
+    with_needinfo,
+)
+from hackbot_agents.gecko_triage import broker_client
 from hackbot_agents.gecko_triage import state as state_module
 from hackbot_agents.gecko_triage.config import AGENT_TAG, BOT_ACCOUNT, PEOPLE
 from hackbot_agents.gecko_triage.state import (
@@ -415,51 +422,23 @@ async def test_a_broker_failure_yields_no_state(monkeypatch):
     def boom(url):
         raise ConnectionError("broker is down")
 
-    monkeypatch.setattr(state_module, "streamablehttp_client", boom)
+    monkeypatch.setattr(broker_client, "streamablehttp_client", boom)
     assert await fetch_state({"type": "http", "url": "http://broker/mcp"}, 1) is None
 
 
-def _fake_broker(monkeypatch, responses: dict) -> list:
-    calls = []
+async def test_a_hung_broker_yields_no_state_after_the_timeout(monkeypatch):
+    async def hang(args):
+        await asyncio.sleep(10)
 
-    @asynccontextmanager
-    async def client(url):
-        calls.append(("connect", url))
-        yield "read", "write", None
-
-    class Session:
-        def __init__(self, read, write):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *exc):
-            return False
-
-        async def initialize(self):
-            pass
-
-        async def call_tool(self, tool, args):
-            calls.append((tool, args))
-            body = responses[tool]
-            if isinstance(body, Exception):
-                return SimpleNamespace(
-                    isError=True, content=[SimpleNamespace(text=str(body))]
-                )
-            return SimpleNamespace(
-                isError=False, content=[SimpleNamespace(text=json.dumps(body))]
-            )
-
-    monkeypatch.setattr(state_module, "streamablehttp_client", client)
-    monkeypatch.setattr(state_module, "ClientSession", Session)
-    return calls
+    fake_broker(monkeypatch, {"get_bugs": hang})
+    monkeypatch.setattr(state_module, "STATE_TIMEOUT", 0.01)
+    assert await fetch_state({"url": "http://broker/mcp"}, 9000001) is None
 
 
 async def test_fetch_state_reads_the_bug_and_its_comments(monkeypatch):
     bug = load("bug_new.json")["bugs"][0]
     comments = load("comments_returning.json")["bugs"]["9000001"]["comments"]
-    calls = _fake_broker(
+    calls = fake_broker(
         monkeypatch,
         {
             "get_bugs": {"count": 1, "bugs": [bug], "inaccessible": []},
@@ -486,7 +465,7 @@ async def test_fetch_state_reads_the_history_after_a_change(monkeypatch):
     bug = quiet(load("bug_new.json")["bugs"][0], last_change_time_non_bot=AFTER)
     comments = load("comments_returning.json")["bugs"]["9000001"]["comments"][:3]
     history = [{"when": AFTER, "who": PERSON, "fields": ["cc"]}]
-    calls = _fake_broker(
+    calls = fake_broker(
         monkeypatch,
         {
             "get_bugs": {"count": 1, "bugs": [bug], "inaccessible": []},
@@ -506,7 +485,7 @@ async def test_fetch_state_reads_the_history_after_a_change(monkeypatch):
 async def test_a_history_failure_still_gives_the_state(monkeypatch):
     bug = quiet(load("bug_new.json")["bugs"][0], last_change_time_non_bot=AFTER)
     comments = load("comments_returning.json")["bugs"]["9000001"]["comments"][:3]
-    _fake_broker(
+    fake_broker(
         monkeypatch,
         {
             "get_bugs": {"count": 1, "bugs": [bug], "inaccessible": []},
@@ -520,7 +499,7 @@ async def test_a_history_failure_still_gives_the_state(monkeypatch):
 
 
 async def test_fetch_state_marks_a_withheld_bug_as_restricted(monkeypatch):
-    calls = _fake_broker(
+    calls = fake_broker(
         monkeypatch,
         {"get_bugs": {"count": 0, "bugs": [], "inaccessible": [9000001]}},
     )
@@ -532,7 +511,7 @@ async def test_fetch_state_marks_a_withheld_bug_as_restricted(monkeypatch):
 
 
 async def test_fetch_state_yields_none_for_a_bug_it_cannot_read(monkeypatch):
-    _fake_broker(
+    fake_broker(
         monkeypatch,
         {
             "get_bugs": RuntimeError("access_denied"),
@@ -541,7 +520,7 @@ async def test_fetch_state_yields_none_for_a_bug_it_cannot_read(monkeypatch):
     )
     assert await fetch_state({"url": "http://broker/mcp"}, 9000001) is None
 
-    _fake_broker(
+    fake_broker(
         monkeypatch,
         {
             "get_bugs": {"count": 0, "bugs": [], "inaccessible": []},
@@ -551,7 +530,7 @@ async def test_fetch_state_yields_none_for_a_bug_it_cannot_read(monkeypatch):
     assert await fetch_state({"url": "http://broker/mcp"}, 9000001) is None
 
     bug = load("bug_new.json")["bugs"][0]
-    _fake_broker(
+    fake_broker(
         monkeypatch,
         {
             "get_bugs": {"count": 1, "bugs": [bug], "inaccessible": []},
