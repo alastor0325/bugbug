@@ -143,7 +143,12 @@ def test_a_change_the_agent_reads_takes_the_last_word_away(
 
 
 @pytest.mark.parametrize(
-    "who", ["pilot-bot@example.com", "release-mgmt-account-bot@mozilla.tld"]
+    "who",
+    [
+        "pilot-bot@example.com",
+        "release-mgmt-account-bot@mozilla.tld",
+        "intermittent-bug-filer@mozilla.bugs",
+    ],
 )
 def test_a_bot_change_keeps_the_last_word(bug_new, comments_returning, who):
     history = ({"when": AFTER, "who": who, "fields": ["priority"]},)

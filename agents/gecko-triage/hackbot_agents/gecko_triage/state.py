@@ -43,6 +43,9 @@ BUG_FIELDS = (
     "blocks,regressed_by,regressions,see_also,creation_time,last_change_time,last_change_time_non_bot,"
     "cf_crash_signature,type"
 )
+# BMO automation logins: `*.tld` (release-mgmt-account-bot@mozilla.tld) and `*.bugs`
+# (Treeherder's intermittent-bug-filer@mozilla.bugs).
+AUTOMATION_SUFFIXES = (".tld", ".bugs")
 # A hung broker must not hold the job until the job timeout. The bug read fails the
 # lookup at STATE_TIMEOUT; the history read only gives up at HISTORY_TIMEOUT.
 STATE_TIMEOUT = 180
@@ -234,7 +237,7 @@ class TriageState:
         """An alias of the bot, or a BMO automation account other than `BOT_ACCOUNT`."""
         who = _lower(who)
         return who in self.bot_aliases_lower or (
-            who.endswith(".tld") and who != _lower(BOT_ACCOUNT)
+            who.endswith(AUTOMATION_SUFFIXES) and who != _lower(BOT_ACCOUNT)
         )
 
     @cached_property
