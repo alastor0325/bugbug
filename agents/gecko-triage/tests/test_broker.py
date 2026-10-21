@@ -134,6 +134,17 @@ async def test_get_bugs_drops_private_comments():
     assert [c["id"] for c in res["bugs"][0]["comments"]] == [10]
 
 
+async def test_get_bugs_with_comments_serves_no_restricted_bug():
+    tools, ctx, _ = _tools(
+        {
+            "bug": {"bugs": [dict(RESTRICTED)]},
+            "bug/2/comment": {"bugs": {"2": {"comments": COMMENTS}}},
+        }
+    )
+    res = await tools["get_bugs"](ctx, [2], include_comments=True)
+    assert res["bugs"] == [] and res["inaccessible"] == [2]
+
+
 async def test_get_bug_comments_drops_private_comments():
     tools, ctx, client = _tools(
         {

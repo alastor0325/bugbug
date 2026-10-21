@@ -441,8 +441,11 @@ async def test_fetch_state_reads_the_bug_and_its_comments(monkeypatch):
     calls = fake_broker(
         monkeypatch,
         {
-            "get_bugs": {"count": 1, "bugs": [bug], "inaccessible": []},
-            "get_bug_comments": {"bug_id": 9000001, "comments": comments},
+            "get_bugs": {
+                "count": 1,
+                "bugs": [dict(bug, comments=comments)],
+                "inaccessible": [],
+            },
         },
     )
     state = await fetch_state(
@@ -452,10 +455,15 @@ async def test_fetch_state_reads_the_bug_and_its_comments(monkeypatch):
     )
     assert calls[0] == ("connect", "http://broker/mcp")
     get_bugs = dict(calls)["get_bugs"]
-    assert get_bugs == {"ids": [9000001], "include_fields": BUG_FIELDS}
+    assert get_bugs == {
+        "ids": [9000001],
+        "include_fields": BUG_FIELDS,
+        "include_comments": True,
+    }
     # The broker strips `groups` unless asked, and the restricted skip reads it.
     assert "groups" in get_bugs["include_fields"].split(",")
-    assert dict(calls)["get_bug_comments"] == {"bug_id": 9000001}
+    # One broker call reads the bug and its comments.
+    assert [c[0] for c in calls] == ["connect", "get_bugs"]
 
     assert state.bug == bug and state.comments == comments
     assert state.now == NOW
@@ -468,8 +476,11 @@ async def test_fetch_state_reads_the_history_after_a_change(monkeypatch):
     calls = fake_broker(
         monkeypatch,
         {
-            "get_bugs": {"count": 1, "bugs": [bug], "inaccessible": []},
-            "get_bug_comments": {"bug_id": 9000001, "comments": comments},
+            "get_bugs": {
+                "count": 1,
+                "bugs": [dict(bug, comments=comments)],
+                "inaccessible": [],
+            },
             "get_bug_history": {"bug_id": 9000001, "history": history},
         },
     )
@@ -488,8 +499,11 @@ async def test_a_history_failure_still_gives_the_state(monkeypatch):
     fake_broker(
         monkeypatch,
         {
-            "get_bugs": {"count": 1, "bugs": [bug], "inaccessible": []},
-            "get_bug_comments": {"bug_id": 9000001, "comments": comments},
+            "get_bugs": {
+                "count": 1,
+                "bugs": [dict(bug, comments=comments)],
+                "inaccessible": [],
+            },
             "get_bug_history": RuntimeError("broker down"),
         },
     )
@@ -515,7 +529,6 @@ async def test_fetch_state_yields_none_for_a_bug_it_cannot_read(monkeypatch):
         monkeypatch,
         {
             "get_bugs": RuntimeError("access_denied"),
-            "get_bug_comments": {"bug_id": 9000001, "comments": []},
         },
     )
     assert await fetch_state({"url": "http://broker/mcp"}, 9000001) is None
@@ -524,7 +537,6 @@ async def test_fetch_state_yields_none_for_a_bug_it_cannot_read(monkeypatch):
         monkeypatch,
         {
             "get_bugs": {"count": 0, "bugs": [], "inaccessible": []},
-            "get_bug_comments": {"bug_id": 9000001, "comments": []},
         },
     )
     assert await fetch_state({"url": "http://broker/mcp"}, 9000001) is None
@@ -534,10 +546,26 @@ async def test_fetch_state_yields_none_for_a_bug_it_cannot_read(monkeypatch):
         monkeypatch,
         {
             "get_bugs": {"count": 1, "bugs": [bug], "inaccessible": []},
-            "get_bug_comments": RuntimeError("bugzilla_error"),
         },
     )
     assert await fetch_state({"url": "http://broker/mcp"}, 9000001) is None
+
+
+async def test_a_comments_error_fails_the_read(monkeypatch):
+    bug = load("bug_new.json")["bugs"][0]
+    error = {"code": None, "message": "bugzilla_error"}
+    for reply in (
+        {"count": 1, "bugs": [bug], "inaccessible": [], "comments_error": error},
+        # An empty list with the error is not a bug with no comments.
+        {
+            "count": 1,
+            "bugs": [dict(bug, comments=[])],
+            "inaccessible": [],
+            "comments_error": error,
+        },
+    ):
+        fake_broker(monkeypatch, {"get_bugs": reply})
+        assert await fetch_state({"url": "http://broker/mcp"}, 9000001) is None
 
 
 def test_a_bug_closable_since_the_newest_comment(bug_new, comments_returning):

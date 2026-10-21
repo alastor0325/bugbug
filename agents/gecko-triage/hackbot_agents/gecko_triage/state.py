@@ -336,19 +336,21 @@ async def fetch_state(
     try:
         async with broker_session(url, STATE_TIMEOUT) as call:
             bug_res = await call(
-                "get_bugs", {"ids": [bug], "include_fields": BUG_FIELDS}
+                "get_bugs",
+                {"ids": [bug], "include_fields": BUG_FIELDS, "include_comments": True},
             )
             bugs = bug_res.get("bugs") or []
             if not bugs and bug in (bug_res.get("inaccessible") or ()):
                 return TriageState(bug={"id": bug}, now=now or _now(), restricted=True)
             if not bugs:
                 return None
-            comments_res = await call("get_bug_comments", {"bug_id": bug})
-            state = TriageState(
-                bug=bugs[0],
-                comments=comments_res.get("comments") or [],
-                now=now or _now(),
-            )
+            fields = dict(bugs[0])
+            comments = fields.pop("comments", None)
+            if bug_res.get("comments_error") or not isinstance(comments, list):
+                raise RuntimeError(
+                    f"the comments were not read: {bug_res.get('comments_error')}"
+                )
+            state = TriageState(bug=fields, comments=comments, now=now or _now())
             since = state.changed_after_agent_comment
             if since is not None:
                 state.history = await _history(call, bug, since)
