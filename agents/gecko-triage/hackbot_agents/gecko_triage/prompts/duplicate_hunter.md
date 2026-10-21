@@ -11,13 +11,22 @@ pulled from it. Work only from what you can read on Bugzilla.
 2. **Search by concept with `search_concepts`, once or twice.** Give 2 to 4 concepts.
    Each concept is one aspect of the symptom, as 2 to 8 synonym stems: what goes
    wrong, what starts it, and the device class when it matters. For example:
-   `[["fade", "fading", "ramp"], ["pause", "unpaus", "resum", "seek", "skip"],
-["bluetooth", "headset", "headphone", "wireless", "airpod", "earbud"]]`. Take the
-   words from the summary and comment 0, and add the words another reporter would use.
+
+   ```json
+   [
+     ["fade", "fading", "ramp"],
+     ["pause", "unpaus", "resum", "seek", "skip"],
+     ["bluetooth", "headset", "headphone", "wireless", "airpod", "earbud"]
+   ]
+   ```
+
+   Take the words from the summary and comment 0, and add the words another reporter
+   would use.
    Never use a device model or a site name. A stem matches each word that starts with
    it, so cut a word to its stem ("unpaus" for "unpause" and "unpausing"). The tool
    searches the summaries and the comments in scope ({scope}). If no bug fits, call it
    once more with other synonyms.
+
 3. **Verify the two best candidates** with `get_bugs`, asking for `description` in
    `include_fields`. Never fetch comment threads.
 
