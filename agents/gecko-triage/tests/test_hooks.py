@@ -24,15 +24,16 @@ from hackbot_agents.gecko_triage.config import (
     TERMS,
     TRIAGE_PRIORITIES,
 )
-from hackbot_agents.gecko_triage.hooks import FEEDBACK_FOOTER, install_hooks
+from hackbot_agents.gecko_triage.hooks import install_hooks
 from hackbot_agents.gecko_triage.state import TriageState
 from hackbot_runtime.actions import ActionsRecorder
-from hackbot_runtime.actions.bugzilla import COMMENT_FOOTER, COMMENT_FOOTER_SEPARATOR
+from hackbot_runtime.actions import bugzilla as runtime_bugzilla
+from hackbot_runtime.actions.bugzilla import COMMENT_FOOTER_SEPARATOR
 from hackbot_runtime.actions.claude_sdk import actions_to_tool_names
 from hackbot_runtime.searchfox import PLACEHOLDER as SEARCHFOX_PLACEHOLDER
 
 BUG = 9000001
-REACTION_FOOTER = COMMENT_FOOTER_SEPARATOR + COMMENT_FOOTER
+REACTION_FOOTER = COMMENT_FOOTER_SEPARATOR + runtime_bugzilla._COMMENT_FOOTER
 
 
 def _recorder(
@@ -134,55 +135,17 @@ def test_a_refused_comment_does_not_use_up_the_allowance():
     assert len(rec.actions) == 1
 
 
-def test_the_feedback_footer_hook_leaves_a_text_without_the_trailer_alone():
-    for params in ({"text": "Short note."}, {"text": None}, {}):
-        action = {"params": dict(params)}
-        hooks.feedback_footer_hook(action)
-        assert action["params"] == params
-
-
 def test_a_comment_without_the_runtime_trailer_is_left_alone():
     rec = _recorder()
     assert _comment(rec, text="Short note.")["params"]["text"] == "Short note."
 
 
-def test_the_runtime_reaction_footer_is_rewritten_without_emoji():
-    # The comment needs no memory footer line, and nothing adds one.
+def test_the_style_limits_skip_the_runtime_trailer():
+    # The trailer has emoji and is not the agent's prose, so it is kept as it is.
     rec = _recorder()
     text = _comment(rec)["params"]["text"]
-    assert text == f"Short note.{COMMENT_FOOTER_SEPARATOR}{FEEDBACK_FOOTER}"
-    assert COMMENT_FOOTER not in text
-    assert text.splitlines()[-1] == FEEDBACK_FOOTER
-    assert not any(ord(c) > 0xFFFF for c in text)
-    # The style limits still read only the agent's prose, not the trailer.
-    assert hooks.split_runtime_footer(text) == (
-        "Short note.",
-        COMMENT_FOOTER_SEPARATOR + FEEDBACK_FOOTER,
-    )
-
-
-@pytest.mark.parametrize(
-    "own",
-    [
-        f"\n\n---\n\n{FEEDBACK_FOOTER}",
-        f"\n\n{FEEDBACK_FOOTER}\n",
-        f"\n\n---\n\n{FEEDBACK_FOOTER}" * 2,
-    ],
-)
-def test_a_footer_the_model_wrote_shows_only_once(own):
-    rec = _recorder()
-    sent = "Short note." + own + COMMENT_FOOTER_SEPARATOR + COMMENT_FOOTER
-    text = _comment(rec, text=sent)["params"]["text"]
-    assert text == f"Short note.{COMMENT_FOOTER_SEPARATOR}{FEEDBACK_FOOTER}"
-    assert text.count(FEEDBACK_FOOTER) == 1
-
-
-def test_the_style_limits_skip_the_runtime_trailer(monkeypatch):
-    # A trailer that breaks the limits does not refuse the comment.
-    monkeypatch.setattr(hooks, "FEEDBACK_FOOTER", "A reaction -- " + "word " * 30 + ".")
-    rec = _recorder()
-    _comment(rec)
-    assert len(rec.actions) == 1
+    assert text == f"Short note.{REACTION_FOOTER}"
+    assert hooks.split_runtime_footer(text) == ("Short note.", REACTION_FOOTER)
 
 
 def test_the_full_hook_chain_rewrites_the_comment_in_order(tmp_path):
@@ -203,10 +166,8 @@ def test_the_full_hook_chain_rewrites_the_comment_in_order(tmp_path):
     assert "`Gone.cpp`" in text and SEARCHFOX_PLACEHOLDER not in text
     # The placeholder hook expanded the block.
     assert MOZREGRESSION_BLOCK in text and MOZREGRESSION_PLACEHOLDER not in text
-    # The reaction footer is rewritten without emoji, and it is the last line.
-    assert COMMENT_FOOTER not in text
-    assert not any(ord(c) > 0xFFFF for c in text)
-    assert text.splitlines()[-1] == FEEDBACK_FOOTER
+    # The runtime's reaction footer stays the last part, unchanged.
+    assert text.endswith(REACTION_FOOTER)
     # The refusals run too: a second comment is refused.
     with pytest.raises(ToolError):
         _comment(rec)

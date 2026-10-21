@@ -112,8 +112,8 @@ read private comments.
    `auto_apply_actions=False` every run waits for a person, and with `True` such runs
    apply with nobody in between.
 
-A comment carries no memory line. `feedback_footer_hook` writes the runtime's reaction
-footer again without emoji, and the comment's last line is that footer.
+A comment carries no memory line. Its last line is the runtime's reaction footer, and
+the style limits skip that footer.
 
 ## Duplicate search
 

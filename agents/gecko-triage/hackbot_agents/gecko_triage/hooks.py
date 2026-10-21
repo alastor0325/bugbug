@@ -9,7 +9,6 @@ before appending, so raising here aborts the recording.
 What they enforce:
 
 - one public comment per run, on the triaged bug;
-- the runtime's reaction footer is written again without emoji;
 - no retyped capture steps, no list item that names the capture marker, and no request
   that names the marker without the verbatim capture block;
 - the ASD-STE100 limits on the prose: 25 words per sentence, 6 sentences per paragraph,
@@ -59,7 +58,7 @@ from pathlib import Path
 
 from agent_tools.registry import ToolError
 from hackbot_runtime.actions import ActionHook, ActionsRecorder
-from hackbot_runtime.actions.bugzilla import COMMENT_FOOTER, COMMENT_FOOTER_SEPARATOR
+from hackbot_runtime.actions.bugzilla import COMMENT_FOOTER_SEPARATOR
 from hackbot_runtime.searchfox import PLACEHOLDER as SEARCHFOX_PLACEHOLDER
 from hackbot_runtime.searchfox import permalink_hook, permalink_prefix
 
@@ -159,35 +158,6 @@ def split_runtime_footer(text: str) -> tuple[str, str]:
     if not sep:
         return text, ""
     return head, sep + tail
-
-
-# The runtime's trailer has emoji, which the team style rules forbid.
-FEEDBACK_FOOTER = (
-    "To give feedback on this comment, add a thumbs-up or thumbs-down reaction."
-)
-
-
-def feedback_footer_hook(action: dict) -> None:
-    """Write the runtime's reaction trailer again, without emoji."""
-    params = _params(action)
-    text = params.get("text")
-    if not isinstance(text, str):
-        return
-    body, trailer = split_runtime_footer(text)
-    if trailer:
-        params["text"] = _without_own_footer(body) + trailer.replace(
-            COMMENT_FOOTER, FEEDBACK_FOOTER
-        )
-
-
-def _without_own_footer(body: str) -> str:
-    """``body`` without a feedback footer the model wrote itself, so it shows once."""
-    body = body.rstrip()
-    while body.endswith(FEEDBACK_FOOTER):
-        body = body[: -len(FEEDBACK_FOOTER)].rstrip()
-        if body.endswith("---"):
-            body = body[:-3].rstrip()
-    return body
 
 
 _FENCED_CODE = re.compile(
@@ -1001,7 +971,6 @@ def install_hooks(
     recorder.add_hook("bugzilla.add_comment", add_comment_hook(recorder, bug_id))
     recorder.add_hook("bugzilla.add_comment", block_placeholder_hook)
     recorder.add_hook("bugzilla.add_comment", capture_block_hook)
-    recorder.add_hook("bugzilla.add_comment", feedback_footer_hook)
     recorder.add_hook("bugzilla.add_comment", link_hook)
     recorder.add_hook("bugzilla.add_comment", comment_style_hook)
     recorder.add_hook("bugzilla.add_comment", refuted_close_hook(close_verdicts))
