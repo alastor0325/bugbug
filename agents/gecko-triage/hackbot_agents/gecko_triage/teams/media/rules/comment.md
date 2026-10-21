@@ -23,11 +23,7 @@ and the capture follows, introduced by "If the problem continues after the reset
 The capture is not a `.moz_log` file, and the reporter does not start it from
 profiler.firefox.com.
 
-Write the capture placeholder. The recorder expands it to the team's capture block,
-word for word. The system prompt shows that block.
-
-Never retype or shorten the steps, and never put the video link in a reference-style
-footnote.
+Never put the video link of the team's capture block in a reference-style footnote.
 
 Use the **Graphics** preset (same flow) instead of or in addition to **Media playback**
 when the issue is in the GPU, compositor or overlay path rather than playback. Say so in

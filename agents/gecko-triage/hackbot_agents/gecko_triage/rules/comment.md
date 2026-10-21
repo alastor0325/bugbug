@@ -1,7 +1,6 @@
 # The comment
 
 Applies to every comment the agent records. Some rules point to the team's `comment.md`.
-With no team, skip the team-specific steps.
 
 ## Voice
 
@@ -104,19 +103,13 @@ significant.]
 
 **Next steps**
 
-[The capture block, verbatim, as its own paragraph, when the team's `comment.md` asks for
-it. When a diagnostics.md found high-risk prefs, one line asking for the reset and
-restart comes first, and the block follows, introduced by "If the problem continues
-after the reset:".]
+[The capture block placeholder, as its own paragraph, when the team's `comment.md` asks
+for it.]
 
 [The other missing items, one short line each.]
 
-[The mozregression block, verbatim, as its own paragraph, for a regression.]
+[The mozregression block placeholder, as its own paragraph, for a regression.]
 ```
-
-The blocks are written as their placeholders (`{{gecko_triage.capture_block}}` and
-`{{gecko_triage.mozregression_block}}`), each on its own line, never indented inside a
-list item. The recorder expands them verbatim.
 
 The inventory of what is present and missing is internal; never paste it into the comment.
 
@@ -124,9 +117,7 @@ The inventory of what is present and missing is internal; never paste it into th
 
 The analysis, with one or two sentences per finding, then the next step. Name the meta bug
 and any related or regressor bug by number, since a reader may not look at `blocks` or
-`regressed_by`. Never name a bug that the agent cannot read. No severity or priority
-label. If the comment asks the reporter for anything, that is a needinfo on the reporter,
-and the decision is `needs_info`.
+`regressed_by`. Never name a bug that the agent cannot read.
 
 **Say how sure you are.** Write "probable" when no log, test or profile proves the cause.
 Then name the check that can confirm it. A regressor is "probable" unless it is a known
@@ -149,20 +140,6 @@ That ask is a needinfo on the reporter, so the decision is `needs_info`. Never a
 log in a move to another team. With a team capture block, write its placeholder. With no
 capture block, name the `MOZ_LOG` modules for the log. Do not ask a reporter who is a
 developer.
-
-## The capture block
-
-The team file may define a capture block: the numbered steps that ask the reporter for
-the team's most useful diagnostic. The system prompt shows it under **The capture block**.
-Write its placeholder, and the recorder pastes the block verbatim. The steps are numbered,
-one instruction each, in the imperative, so the block is never retyped. The team's
-`comment.md` says when to ask for it. With no team, there is no capture block. Ask for
-the data in plain words.
-
-## What the comment asks for
-
-The plan's `asked` lists the data the comment asks for. A needinfo that hands the bug to a
-developer is not a request for data, so it is not in `asked`.
 
 ## An error in a recorded comment
 

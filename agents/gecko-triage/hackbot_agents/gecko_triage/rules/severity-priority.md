@@ -5,8 +5,7 @@ also applies to the intermittent case in "WORKSFORME, never prematurely" in `wor
 Severity and priority are **fields**, recorded with `bugzilla_update_bug` after the
 comment, and only when the current value is `--`. A value a developer set is never
 overwritten; disagree in the comment instead. The agent never sets S1: when the standard
-says S1, record S2 and say in the run's summary why a person should consider S1. The
-comment never names a severity or a priority (`comment.md`).
+says S1, record S2 and say in the run's summary why a person should consider S1.
 
 ## Severity
 
@@ -54,16 +53,9 @@ bots. It never sets P5: "will not fix" is a person's decision.
 
 Rate a crash by its effect and its volume, not by the word "crash".
 
-- **S1** only for a crash with data loss, or a crash with a very wide impact as the S1
-  definition says. Record S2 and say in the summary why a person should consider S1.
-- **S2** for a crash of the whole browser: the parent process, or a GPU process loss that
-  the user sees. Also S2 for a high-volume crash or a top crash.
-- **S3** for a content-process (tab) crash with low volume, when a reload recovers.
-- **S2** also for a tab crash that a reload does not recover, for example a crash on
-  every load of a site. It has no workaround.
-- **Debug-only assertion:** rate it by its release-mode consequence. The paragraph on
-  debug-only assertions below says how.
-
+The decision matrix below gives the cases. S1 is only for a crash with data loss, or a
+crash with a very wide impact as the S1 definition says. A tab crash that a reload does
+not recover, for example a crash on every load of a site, has no workaround, so it is S2.
 A crash that only happens in CI, however frequent, is S3: it has no user impact. For a
 crash that users see, frequency counts. The in-tree S2 example names "the frequency of
 occurrence".
@@ -81,8 +73,7 @@ occurrence".
 | Debug-only assertion (`MOZ_ASSERT`, fuzzing), benign in release | S4                              | P3       |
 | Bug of type task or enhancement, such as a feature request      | Do not set (N/A is for a human) | P3       |
 
-The team's `severity-priority.md` adds examples and situations for its area. With no
-team, skip the team-specific steps. Use this table alone.
+The team's `severity-priority.md` adds examples and situations for its area.
 
 **Debug-only assertions.** A `MOZ_ASSERT`, typically filed from fuzzing with the
 `assertion` or `pernosco` keywords, does not exist in release builds. Rate it by its
@@ -93,7 +84,3 @@ not default a debug-only assert to S3.
 **Nightly and DevEdition are not debug-only.** A crash in code that ships in Nightly or
 Developer Edition reaches users, so rate it at least S3, even when the code is
 not in Beta or Release.
-
-**Never set severity or priority as a standalone change.** They travel with the comment:
-Bugzilla rejects a severity change without a comment in the same update, and the recorder
-refuses a field change before the comment is recorded.

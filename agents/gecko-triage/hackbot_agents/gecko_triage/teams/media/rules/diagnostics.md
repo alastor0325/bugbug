@@ -32,9 +32,9 @@ Settings.
 about:support has no effect.
 
 If you find high-risk prefs, make this the primary ask in "Needs info". Ask the reporter
-to reset those prefs, close every Firefox window and restart. Then ask them to reproduce
-the problem and capture a media log. The restart is not optional: the pref change does
-not take effect without it.
+to reset those prefs, close every Firefox window and restart. The restart is not
+optional: the pref change does not take effect without it. The team's `comment.md` says
+where the capture goes.
 
 ### Decision Log
 
@@ -101,11 +101,6 @@ availability.
 
 **Emailed to media-alerts@mozilla.com**: record it as present and not accessible to the
 agent. Do not ask the reporter to re-send it by email.
-
-**Never ask a reporter to email data.** The agent cannot read email, so data sent by email
-does not reach the triage. Ask the reporter to attach the file to the bug, or to add a
-share URL. If the content is private, ask for a public sample that shows the same
-problem.
 
 ## Required information
 

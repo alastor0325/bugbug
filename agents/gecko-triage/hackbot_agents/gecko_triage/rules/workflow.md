@@ -1,31 +1,12 @@
 # Workflow
 
-This ruleset applies to every bug this agent receives. The preflight has already checked
-the bug. It is open and public, and it is in one of the team's components. With no team,
-the scope is the bug's own component. It is not a meta bug, it has no security keyword,
-and it is not opted out. It is not a bug that Mozilla staff filed with a severity
-already set. If the agent or a bot alias wrote the newest comment and nothing changed
-after it, the run never started. The one exception is a bug that became closable as
-INCOMPLETE after that comment.
-
-Two rule sets apply. These general rules hold for every team. The team's rules, after
-these general rules in the system prompt, add the team's knowledge: `classify.md`,
-`diagnostics.md`, `comment.md`, `severity-priority.md` and `meta-bugs.md`. Where a team
-rule is more specific, it wins.
-
-A run can have no team. Then only these general rules apply, and the scope is the bug's
-own component. There are no team rules, no meta bugs, no capture block and no needinfo
-experts. With no team, skip the team-specific steps. You can still move the bug to the
-component that owns the code, as "Close or move" says.
-
 ## Step 1: read the bug
 
 The bug's fields and all its public comments are in the user prompt, under **The bug**.
 Do not fetch them again. Fetch its attachment list with `get_bug_attachments`. Read
 every comment, from comment 0 to the newest. The agent keeps no memory between runs, so
-the bug is the only record.
-Then read **Where this bug stands** in the user prompt: the open needinfo flags, who set
-them and how old they are.
+the bug is the only record. Then read **Where this bug stands** in the user prompt: the
+open needinfo flags, who set them and how old they are.
 
 **An earlier ask.** Find the last time anyone asked for data on this bug. It can be the
 agent, a developer or a triager. Who asked does not matter. Then decide whether the
@@ -83,8 +64,7 @@ because of our tooling, say so plainly in the comment and in the plan's `unread`
 and do not present the analysis as complete. Never turn our tooling gap into a reporter
 ask: asking someone to re-capture a good profile because our reader is stale wastes a
 round trip. We cannot read a log that the reporter sent privately to the team. Put it in
-the `unread` list for that reason. Fetch every archive, memory report, screenshot and
-video with `fetch_attachment` first. "Unread attachments" in `diagnostics.md` says when an
+the `unread` list for that reason. "Unread attachments" in `diagnostics.md` says when an
 attachment is unread.
 
 **Triage scope limit.** Do not read source files, trace call stacks or reason about fix
@@ -111,9 +91,9 @@ Then record `issue_type` in the plan. It is the bug's main symptom: one value fr
 team's list in the system prompt. Use `other` only when no listed value fits the main
 symptom. Never pick `other` because the choice is hard: pick the closest listed value.
 With `other`, `issue_type_note` names the symptom in a few words, with no email address.
-A crash bug gets its functional area, for example the decoder or the audio device. There
-is no crash value. A `watching` run also records `issue_type`. With no team, or a team
-with no list, `issue_type` is null.
+Otherwise `issue_type_note` is null. A crash bug gets its functional area, for example the
+decoder or the audio device. There is no crash value. A `watching` run also records
+`issue_type`.
 
 A regression (it used to work, or it broke in a version) gets the `regression` keyword,
 also when it has no known regressor yet. Do not add the `regression` keyword to a test
@@ -151,18 +131,16 @@ change was made or what defect it fixes. Never say that it is a security change.
 add a sanitizer report, a crash signature or a memory error type that the bug does not
 already show.
 
-The run fails when the comment names a restricted bug. After the run, one read checks
-the bugs in the commit messages you read, the bugs the comment names and the
-`regressed_by`, `see_also` and `dupe_of` bugs. When one of them is restricted or the read
-fails, the run waits for a person, who checks that the comment does not name or describe
-it. A person also reviews every gecko-triage apply while the agent is human-gated.
+The run fails when the comment names a restricted bug.
 
 ## Step 4: duplicates and meta bugs
 
 ### Step 4a: duplicates
 
-Spawn `duplicate_hunter` once with the discriminating signal and the possible duplicates
-the user prompt lists. It checks those first. On a verdict naming a bug, read that bug's
+Spawn `duplicate_hunter` once with the bug id, its component, the discriminating signal
+from the summary and comment 0, and the possible duplicates the user prompt lists. It
+checks those first and answers `VERDICT: <bug_id>` or `VERDICT: NEW`. The verdict is for
+you; never copy the line into a comment. On a verdict naming a bug, read that bug's
 summary and description yourself before proposing a duplicate (the "Close or move" path).
 Judge the candidate by the defect: fixing the older bug must fix this bug. A different OS,
 an UNCONFIRMED status or a second trigger in the older bug is not a reason to keep this
@@ -200,10 +178,9 @@ open. Add one meta bug from the team's `meta-bugs.md` to `blocks`, or two when t
 says so. Name each meta bug in the comment, and put the more specific one in the plan's
 `meta_bug`. When this bug is a duplicate, add the meta bug to the bug it duplicates
 instead, in a second `bugzilla_update_bug` on that bug. Do this only when that bug is
-open, is not a meta bug, and is in one of the team's components. The run drops the
-write on any other bug. On a duplicate, add only the more specific meta bug to the
-`dupe_of` bug. With no team, no meta bug applies. Do not change `blocks`, and change
-nothing on the `dupe_of` bug.
+open, is not a meta bug, is in one of the team's components and does not block the meta
+bug yet. The run drops the write on any other bug. On a duplicate, add only the more
+specific meta bug to the `dupe_of` bug.
 
 ## Step 5: determine the information gaps
 
@@ -233,37 +210,27 @@ look at this bug?" is a hand-off. It does not make the run `needs_info`. Do not 
 hand-off in `asked`.
 
 The decision does not control severity and priority. In Mozilla triage, a triaged bug is a
-bug with severity and priority set. Set them on "Needs info" and on "Analyzed", also when
-the root cause is unknown.
+bug with severity and priority set, so set them as `severity-priority.md` says.
 
 ### Before recording any field change
 
-Check the bug's current values and omit any change whose target is already set. Severity
-and priority are set **only when the current value is `--`**; a value a developer set is
-never overwritten. If you disagree with a set value, say so in the comment.
+Check the bug's current values and omit any change whose target is already set.
 
 ## Needs info
 
-Set severity and priority as `severity-priority.md` says, also when you ask for
-information. Draft a comment that asks only for the items identified as missing in step 5,
-following `comment.md`:
-
-- the specific missing items;
-- about:support, if not already provided;
-- the capture block (its placeholder), when the team's `comment.md` asks for it, as the
-  first item (or right after the pref reset when a `diagnostics.md` found high-risk
-  prefs);
-- the mozregression block (its placeholder), for a regression.
+Draft a comment that asks only for the items identified as missing in step 5, and
+about:support if the bug has none, as "A needs-info comment" in `comment.md` says.
 
 Needinfo the reporter and the other people who confirmed the problem in the comments.
-Needinfo at most three people. The `needinfo` flag needs the full email address.
+Needinfo at most three people, and nobody who already has an open needinfo. The
+`needinfo` flag needs the full email address.
 
 Needinfo a developer only together with a move, when the team's expert list names the
 person for the bug's area and its condition holds, or when the code history names them
 ("No matching expert" below).
 
-On a move to another component ("Close or move"), needinfo a developer of that component,
-so the team that owns the code sees the bug. Find them from the recent changes to the code
+On a move to another component, needinfo a developer of that component, so the team that
+owns the code sees the bug. Find them from the recent changes to the code
 at fault or the component's triage owner. Use only an email you read in Bugzilla data (the
 bug, its history, a component's triage owner, the bug that changed the code): an hg or git
 author address is often not a Bugzilla login, and an unknown requestee makes Bugzilla
@@ -296,29 +263,23 @@ When the bug looks fixable (the root cause is clear, or the data is enough to st
 investigation), spawn `bug_investigator` with the bug id **before** you write the
 comment. Write the comment from its findings: the root cause with its citations, the
 affected code and the fix direction. If it finds that information is still missing, go
-to "Needs info" and still set severity and priority. If it names a known regressor, add
-it to `regressed_by`. Otherwise name the change in the comment as the probable cause.
+to "Needs info". If it names a known regressor, add it to `regressed_by`. Otherwise name
+the change in the comment as the probable cause.
 
 A comment with the analysis may also ask for a capture to confirm the analysis. Put the
 analysis first, then the request under "Next steps", with a needinfo on the reporter. The
 decision is then `needs_info`, because the comment asks for data.
-
-Apply the severity and priority rules in `severity-priority.md` and name the meta bug.
-Record the comment first, then every field change in one `bugzilla_update_bug`.
 
 **Asking the reporter for anything is a needinfo on the reporter**, even after a full
 analysis: a request for a profile, a log, about:support, a sample, steps or a workaround
 test is a reporter action. Never write "no action needed from you" above a request. If you
 need nothing, ask for nothing.
 
-If the investigation reveals missing information, fall back to "Needs info" and still set
-severity and priority when the rules give them.
-
 ### Fix tags
 
-On an analyzed bug, mark a fix that looks small, so that people can find it. Add the tag
-to the whiteboard in `bugzilla_update_bug`, with the other field changes. Add a tag only
-when the decision is `analyzed`. The comment does not need to say it. The tag is enough.
+On an analyzed bug, mark a fix that looks small, so that people can find it. Add a tag
+only when the decision is `analyzed`. The comment does not need to say it. The tag is
+enough.
 
 Add `[gecko-triage:easy-fix]` when the fix is small for an experienced Firefox developer.
 All of these conditions must be true:
@@ -379,18 +340,17 @@ the owner in the `BUG_COMPONENT` of the nearest `moz.build` at or above the file
 
 ## Close or move
 
-| Case                                              | What to record                                                                                                                                                                                     |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Duplicate of bug N                                | a comment naming bug N and why; RESOLVED DUPLICATE with `dupe_of: N`; `duplicate_of: N`; the step 4b meta bug on bug N, only when bug N is open, is not a meta bug and is in the team's components |
-| Works as intended                                 | a comment with the spec or design reference; RESOLVED INVALID (or WONTFIX)                                                                                                                         |
-| Stale needinfo on the reporter, closing permitted | a comment noting no response; RESOLVED INCOMPLETE                                                                                                                                                  |
-| Already fixed                                     | a comment naming the fixing bug or change; RESOLVED FIXED, or DUPLICATE of that bug with no meta bug on the closed fixing bug                                                                      |
-| No path forward                                   | a comment; add the `stalled` keyword                                                                                                                                                               |
-| Wrong component                                   | a comment naming the target; `product` and `component` set to the **target**; the target team's developer needinfoed, as "Needs info" says                                                         |
+| Case                                              | What to record                                                                                                                             |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Duplicate of bug N                                | a comment naming bug N and why; RESOLVED DUPLICATE with `dupe_of: N`; `duplicate_of: N`; the step 4b meta bug on bug N                     |
+| Works as intended                                 | a comment with the spec or design reference; RESOLVED INVALID (or WONTFIX)                                                                 |
+| Stale needinfo on the reporter, closing permitted | a comment noting no response; RESOLVED INCOMPLETE                                                                                          |
+| Already fixed                                     | a comment naming the fixing bug or change; RESOLVED FIXED, or DUPLICATE of that bug with no meta bug on the closed fixing bug              |
+| No path forward                                   | a comment; add the `stalled` keyword                                                                                                       |
+| Wrong component                                   | a comment naming the target; `product` and `component` set to the **target**; the target team's developer needinfoed, as "Needs info" says |
 
-Record every field change in one call, after the comment. A move or a
-resolution can reach the bug with no person in between. Be sure before you record one: a
-wrong duplicate or move sends people to the wrong place.
+Be sure before you record a move or a resolution: a wrong duplicate or move sends people
+to the wrong place.
 
 ### Verify a close before you record it
 
@@ -409,32 +369,13 @@ open in this run.
   close or resolve the bug.
 - When it ends with no verdict, do not close. Record "Analyzed" or "Needs info".
 
-For a duplicate, the verifier reads the status and the resolution of the target. When
-the target was closed with no fix, it applies the INVALID test to this bug. When the
-target names a bug that fixed the problem, it reads that change in the current code and
-refutes the close if a reported path is still open. A duplicate of a bug that was
-closed with a resolution other than FIXED always waits for a person. A duplicate of an
-open bug does not.
-
 In every comment that relies on an earlier fix, name that bug in the first paragraph and
 add it to `see_also`.
 
-The verifier only reads the bug, the code and the duplicate target. It never runs
-Firefox, a test or an attachment. When only a run can confirm the close, it refutes with
-"needs a runtime check". When a tool result is too large and the tool saved it to a
-file, the verifier cannot read it. It refutes with "a tool result was too large to read,
-so the close cannot be verified", and the recorder refuses its confirm.
-The bug then stays open, and a person decides.
-
 The recorder refuses RESOLVED without a confirm for the same resolution and the same
-`dupe_of`. A refused close holds the run for a person, because the comment can say the
-bug closes, unless a retry in the same run records the same close. A move to another
-component needs no check.
-
-The plan's decision must match the close. `invalid` goes with INVALID or WONTFIX,
-`duplicate` goes with DUPLICATE and `duplicate_of` equal to `dupe_of`, and `incomplete`
-goes with INCOMPLETE. A RESOLVED FIXED, or a close that does not match, waits for a
-person.
+`dupe_of`, and every close after a refute. A refused close holds the run for a person,
+because the comment can say the bug closes, unless a retry in the same run records the
+same close. A move to another component needs no check.
 
 ### WORKSFORME, never prematurely
 
@@ -459,8 +400,7 @@ and ask for mozregression; for a site-specific issue, consider a server-side cha
 ## Handing off
 
 When a bug leaves the team's scope (reassigned, or a developer from another team is now
-driving it), say so in the comment. On a move, needinfo the developer of the target team
-as "Needs info" says. Without a move, needinfo only an expert from the team's list, when
-"Needs info" allows it. Otherwise the hand-off itself needs no needinfo. A log request in
+driving it), say so in the comment. Needinfo a developer only as "Needs info" says.
+Otherwise the hand-off itself needs no needinfo. A log request in
 the same comment is a needinfo on the reporter, as "A hand-off comment" in `comment.md`
 says.

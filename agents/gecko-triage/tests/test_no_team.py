@@ -229,12 +229,12 @@ def test_a_run_with_a_team_still_vouches():
     assert may_apply_unattended([COMMENT], Plan(decision="analyzed"))
 
 
-@pytest.mark.parametrize(
-    "name", ["workflow.md", "diagnostics.md", "comment.md", "severity-priority.md"]
-)
-def test_the_general_rules_say_what_to_do_with_no_team(name):
-    text = " ".join((RULES_DIR / name).read_text().split())
-    assert "With no team, skip the team-specific steps." in text
+def test_the_prompt_says_what_to_do_with_no_team(no_team, other_state):
+    flat = " ".join(full_prompt(other_state).split())
+    assert "This run has no team rules. Skip every step that reads one." in flat
+    assert "you can still move the bug to the component that owns the code" in flat
+    for name in ("workflow.md", "diagnostics.md", "comment.md", "severity-priority.md"):
+        assert "With no team" not in (RULES_DIR / name).read_text(), name
 
 
 def test_a_bug_with_no_product_or_component_has_no_scope(no_team, other_bug):
@@ -345,7 +345,6 @@ def test_the_prompt_has_no_team_experts_or_capture_rule(no_team, other_state):
     flat = " ".join(full_prompt(other_state).split())
     assert "This run has no needinfo experts." in flat
     assert "The team lists these developers" not in flat
-    assert "It reports what the capture shows, from the general diagnostics.md." in flat
     assert "for the team's area, as the team's `diagnostics.md`" not in flat
     analyst = make_profile_analyst()
     assert "team" not in analyst.prompt + analyst.description
@@ -353,7 +352,7 @@ def test_the_prompt_has_no_team_experts_or_capture_rule(no_team, other_state):
 
 def test_the_team_prompt_keeps_its_experts_and_capture_rule(new_state):
     flat = " ".join(full_prompt(new_state).split())
-    assert "The team lists these developers by area." in flat
+    assert "The team lists these developers by area" in flat
     assert "the team's area" in flat
     assert "the team's capture rule" in make_profile_analyst().description
 
