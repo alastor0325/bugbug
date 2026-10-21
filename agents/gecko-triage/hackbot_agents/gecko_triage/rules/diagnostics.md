@@ -92,6 +92,20 @@ fetch `https://crash-stats.mozilla.org/api/ProcessedCrash/?crash_id=<id>` with `
 extract the signature, the OS, the crashing module or frame, and any frames in the team's
 code. A crash id with a clear signature in the team's code is enough for "Analyzed".
 
+## Test and CI failures
+
+For a test or CI failure, read the log of every failing platform. Two platforms can fail
+for different causes. Also read the newest runs of the test, because a failure can stop.
+Decide the cause only after you read all of them. When the newest runs pass, say so in
+the comment.
+
+## A hang in the RDD or GPU process
+
+A hang or a busy thread in the RDD or GPU process can come from the sandbox. Before you
+name a code fix, ask the reporter for a test with the sandbox off. For the RDD process,
+they start Firefox with `MOZ_DISABLE_RDD_SANDBOX=1`. For the GPU process, they use
+`MOZ_DISABLE_GPU_SANDBOX=1`. Ask them to start Firefox normally again after the test.
+
 ## Required information
 
 | Bug type   | Required                                                          |

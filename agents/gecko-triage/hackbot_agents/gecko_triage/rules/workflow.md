@@ -72,7 +72,8 @@ carries a new about:support, since prefs and state may have changed.
 ### Step 2b: analyze diagnostic artifacts, if present
 
 Follow `diagnostics.md`, sections "Profiles", "Logs", "Archives, memory reports,
-screenshots and videos" and "Crash ids", and the team's `diagnostics.md`. Attempt the
+screenshots and videos", "Crash ids", "Test and CI failures" and "A hang in the RDD or
+GPU process", and the team's `diagnostics.md`. Attempt the
 analysis before step 5. The artifacts may already be sufficient.
 
 **Artifact analysis is blocking.** If an artifact the conclusion depends on cannot be read
@@ -319,6 +320,8 @@ Add `[gecko-triage:easy-fix]` when the fix is small for an experienced Firefox d
 All of these conditions must be true:
 
 - You found the cause in one function or one file. A suspected cause is not sufficient.
+- The cause explains every failure in the bug. A cause of only some failures is not
+  sufficient.
 - You can give a concrete fix direction.
 - A test can show the fix: a crashtest, a gtest, a mochitest, a WPT or a unit test.
 - The fix needs no design decision, no product decision and no spec decision.

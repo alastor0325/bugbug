@@ -899,3 +899,36 @@ def test_a_regressor_needs_proof_and_a_ci_failure_needs_a_confirmed_one(new_stat
     assert "the regressor if you found it and how you found it" in investigator
     docs = " ".join((AGENT_ROOT / "docs" / "bugzilla.md").read_text().split())
     assert "Never from code reading or timing alone." in docs
+
+
+def test_the_rules_ask_for_less_certainty_and_a_wider_check():
+    comment = _flat("comment.md")
+    for text in (
+        '**Say how sure you are.** Write "probable" or "possible" when no log, test or '
+        "profile proves the cause.",
+        "Then name the check that can confirm it.",
+        'Never write "only X" unless a test shows it.',
+    ):
+        assert text in comment, text
+    diagnostics = _flat("diagnostics.md")
+    for text in (
+        "## Test and CI failures",
+        "For a test or CI failure, read the log of every failing platform.",
+        "Also read the newest runs of the test, because a failure can stop.",
+        "Decide the cause only after you read all of them.",
+        "## A hang in the RDD or GPU process",
+        "Before you name a code fix, ask the reporter for a test with the sandbox off.",
+        "`MOZ_DISABLE_RDD_SANDBOX=1`",
+        "`MOZ_DISABLE_GPU_SANDBOX=1`",
+        "Ask them to start Firefox normally again after the test.",
+    ):
+        assert text in diagnostics, text
+    workflow = _flat("workflow.md")
+    assert '"Test and CI failures" and "A hang in the RDD or GPU process"' in workflow
+    analyzed = workflow[
+        workflow.index("### Fix tags") : workflow.index("### Fixability")
+    ]
+    assert (
+        "The cause explains every failure in the bug. A cause of only some failures is "
+        "not sufficient." in analyzed
+    )

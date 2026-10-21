@@ -128,6 +128,10 @@ and any related or regressor bug by number, since a reader may not look at `bloc
 label. If the comment asks the reporter for anything, that is a needinfo on the reporter,
 and the decision is `needs_info`.
 
+**Say how sure you are.** Write "probable" or "possible" when no log, test or profile
+proves the cause. Then name the check that can confirm it. Never write "only X" unless a
+test shows it. For example, do not write "only HEVC" when nobody tested VP9.
+
 ## The capture block
 
 The team file may define a capture block: the numbered steps that ask the reporter for
