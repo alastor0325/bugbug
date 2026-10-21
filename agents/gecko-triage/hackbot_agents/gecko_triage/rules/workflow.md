@@ -126,9 +126,13 @@ regressing change from its commit: the `mozilla_vcs` tools, such as `file_histor
 `get_commit_info`, give the commit author's email. Needinfo that author, and in the
 comment ask them to set the Regressed by field. The bug must have the `regression`
 keyword, so add it in the same change when it is missing, and the bug must have no
-`regressed_by` yet. In the comment, say only that a recent change caused the regression.
-The comment never names or describes a restricted bug: never write its bug number in
-any form, and never link the change or the commit that names it. The run fails when the
+`regressed_by` yet. In the comment, explain the link so that the author can find the
+change: name the function and the file that the change touched, quote the code before and
+after it, give the landing date, and give the evidence that ties it to this bug, such as
+a log line. Say how sure you are: "the probable cause" until a test without the change
+confirms it. The comment never names or describes a restricted bug: never write its bug
+number in any form, never link the change or the commit that names it, and never say why
+the change was made. The run fails when the
 comment names a restricted bug. After the run, one read checks the bugs in the commit
 messages you read, the bugs the comment names and the `regressed_by`, `see_also` and
 `dupe_of` bugs. When one of them is restricted or the read fails, the run waits for a

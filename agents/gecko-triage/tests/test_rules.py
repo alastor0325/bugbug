@@ -693,7 +693,15 @@ def test_a_restricted_regressor_gets_a_needinfo_on_its_author_not_regressed_by()
         "Needinfo that author, and in the comment ask them to set the Regressed by field."
         in workflow
     )
-    assert "say only that a recent change caused the regression" in workflow
+    assert "say only that a recent change caused the regression" not in workflow
+    assert (
+        "name the function and the file that the change touched, quote the code before "
+        "and after it, give the landing date" in workflow
+    )
+    assert (
+        '"the probable cause" until a test without the change confirms it' in workflow
+    )
+    assert "never say why the change was made" in workflow
     assert "never write its bug number" in workflow
     assert "never write its bug number in any form" in workflow
     assert (
