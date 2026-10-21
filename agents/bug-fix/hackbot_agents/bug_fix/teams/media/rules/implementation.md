@@ -37,4 +37,3 @@
 - Body: a few short sentences of what and why, at the level of behaviour. Do not list
   variable or function names.
 - Never use `--` or an em dash as an aside. Use a comma, a colon or two sentences.
-- Never add a `Co-Authored-By` line or any other trailer to the commit message.

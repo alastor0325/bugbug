@@ -6,6 +6,7 @@ and reaches Bugzilla via an out-of-process MCP broker (HTTP transport)
 that holds the Bugzilla token — the agent process itself never sees it.
 """
 
+import json
 import sys
 from pathlib import Path
 from shlex import quote
@@ -39,6 +40,8 @@ PROMPTS = HERE / "prompts"
 RULES_DIR = HERE / "rules"
 # The SDK's 1 MB default is too small for large messages.
 MAX_BUFFER_SIZE = 10 * 1024 * 1024
+# Claude Code settings for the run: no attribution trailer in commits or PR text.
+CLAUDE_SETTINGS = json.dumps({"attribution": {"commit": "", "pr": ""}})
 
 
 class BugFixResult(HackbotAgentResult):
@@ -234,6 +237,7 @@ async def run_bug_fix(
         max_turns=max_turns,
         **({"effort": effort} if effort else {}),
         setting_sources=[],
+        settings=CLAUDE_SETTINGS,
         max_buffer_size=MAX_BUFFER_SIZE,
     )
 
