@@ -6,11 +6,25 @@ and the action never lands in summary.json.
 """
 
 import datetime as dt
-from pathlib import Path
 
 import pytest
 from agent_tools.registry import ToolError
-from conftest import LATER, NOW, with_needinfo
+from conftest import (
+    BUG,
+    DUPE_TARGET,
+    KNOWN_META,
+    LATER,
+    NOW,
+    REACTION_FOOTER,
+    _comment,
+    _dupe_recorder,
+    _duplicate_of_target,
+    _recorder,
+    _text,
+    _update,
+    _verdicts,
+    with_needinfo,
+)
 from hackbot_agents.gecko_triage import hooks
 from hackbot_agents.gecko_triage import state as state_module
 from hackbot_agents.gecko_triage.closing import CloseVerdict, CloseVerdicts
@@ -25,73 +39,9 @@ from hackbot_agents.gecko_triage.config import (
     TERMS,
     TRIAGE_PRIORITIES,
 )
-from hackbot_agents.gecko_triage.hooks import install_hooks
 from hackbot_agents.gecko_triage.state import TriageState
-from hackbot_runtime.actions import ActionsRecorder
-from hackbot_runtime.actions import bugzilla as runtime_bugzilla
-from hackbot_runtime.actions.bugzilla import COMMENT_FOOTER_SEPARATOR
 from hackbot_runtime.actions.claude_sdk import actions_to_tool_names
 from hackbot_runtime.searchfox import PLACEHOLDER as SEARCHFOX_PLACEHOLDER
-
-BUG = 9000001
-REACTION_FOOTER = COMMENT_FOOTER_SEPARATOR + runtime_bugzilla._COMMENT_FOOTER
-
-
-def _recorder(
-    state=None,
-    bug=BUG,
-    searchfox_rev=None,
-    repo=Path(__file__).parent,
-    meta_candidates=frozenset(),
-    close_verdicts=None,
-    commit_authors=frozenset(),
-):
-    # A comment-only test needs no real state; `require_state` always gives the agent one.
-    state = state or TriageState(bug={}, now=NOW)
-    rec = ActionsRecorder()
-    install_hooks(
-        rec,
-        bug,
-        state,
-        searchfox_rev=searchfox_rev,
-        repo=repo,
-        meta_candidates=meta_candidates,
-        close_verdicts=close_verdicts or CloseVerdicts(),
-        commit_authors=commit_authors,
-    )
-    return rec
-
-
-def _verdicts(*closes, verdict="confirm"):
-    """A store with one ``verdict`` per ``(resolution, dupe_of)`` in ``closes``."""
-    return CloseVerdicts(
-        [CloseVerdict(r, d, verdict, "checked", ()) for r, d in closes]
-    )
-
-
-def _text(body: str) -> str:
-    # What `bugzilla.add_comment` hands the hooks: the model's text, then the runtime's
-    # reaction footer.
-    return f"{body}{REACTION_FOOTER}"
-
-
-SHORT_NOTE = _text("Short note.")
-
-
-def _comment(rec, text=SHORT_NOTE, bug_id=BUG, **params):
-    return rec.record(
-        "bugzilla.add_comment",
-        {"bug_id": bug_id, "text": text, "is_private": False, **params},
-        reasoning="rule X",
-    )
-
-
-def _update(rec, changes, bug_id=BUG):
-    return rec.record(
-        "bugzilla.update_bug",
-        {"bug_id": bug_id, "changes": changes},
-        reasoning="rule Y",
-    )
 
 
 def test_the_agent_is_given_a_comment_and_a_field_change_and_nothing_else():
@@ -691,8 +641,6 @@ def test_every_other_field_is_refused_by_name(new_state):
 
 # --- blocks, keywords, component, resolution -------------------------------- #
 
-KNOWN_META = sorted(TEAM_META_BUGS)[0]
-
 
 def test_a_known_meta_bug_may_be_added_to_blocks(new_state):
     rec = _recorder(new_state)
@@ -789,23 +737,6 @@ def test_a_duplicate_names_another_bug(new_state):
             _update(rec, changes)
     _update(rec, {"status": "RESOLVED", "resolution": "DUPLICATE", "dupe_of": 1})
     assert len(rec.actions) == 2
-
-
-DUPE_TARGET = 9000004
-
-
-def _dupe_recorder(state, **kwargs):
-    return _recorder(
-        state, close_verdicts=_verdicts(("DUPLICATE", DUPE_TARGET)), **kwargs
-    )
-
-
-def _duplicate_of_target(rec):
-    _comment(rec)
-    _update(
-        rec,
-        {"status": "RESOLVED", "resolution": "DUPLICATE", "dupe_of": DUPE_TARGET},
-    )
 
 
 def test_the_duplicate_target_may_get_the_team_meta_bug(new_state):
@@ -1008,33 +939,24 @@ def test_a_commit_author_may_be_asked_for_a_restricted_regressor(bug_new, commen
     assert action["params"]["changes"]["flags"][0]["requestee"] == AUTHOR
 
 
-def test_a_commit_author_on_a_bug_that_has_the_regression_keyword_may_be_asked(
-    bug_new, comments_new
+@pytest.mark.parametrize(
+    ("bug", "changes"),
+    [
+        ({"keywords": ["regression"]}, {}),
+        ({}, {**REGRESSION, "regressed_by": {"add": [9000003]}}),
+        ({"keywords": ["regression"], "regressed_by": [9000003]}, {}),
+        # The "No matching expert" case: no regression, the history names the developer.
+        ({}, {}),
+    ],
+    ids=["regression-keyword", "regressed-by-change", "has-regressed-by", "history"],
+)
+def test_a_commit_author_the_history_names_may_be_asked(
+    bug_new, comments_new, bug, changes
 ):
-    rec = _author_recorder(bug_new, comments_new, {AUTHOR}, keywords=["regression"])
+    rec = _author_recorder(bug_new, comments_new, {AUTHOR}, **bug)
     _comment(rec)
-    action = _update(rec, _ni(AUTHOR))
+    action = _update(rec, {**changes, **_ni(AUTHOR)})
     assert action["params"]["changes"]["flags"][0]["requestee"] == AUTHOR
-
-
-def test_a_commit_author_may_be_asked_with_a_regressed_by_change(bug_new, comments_new):
-    rec = _author_recorder(bug_new, comments_new, {AUTHOR})
-    _comment(rec)
-    changes = {**REGRESSION, "regressed_by": {"add": [9000003]}, **_ni(AUTHOR)}
-    assert _update(rec, changes)["params"]["changes"]["flags"][0]["requestee"] == AUTHOR
-
-
-def test_a_commit_author_may_be_asked_on_a_bug_that_has_a_regressed_by(
-    bug_new, comments_new
-):
-    rec = _author_recorder(
-        bug_new, comments_new, {AUTHOR}, keywords=["regression"], regressed_by=[9000003]
-    )
-    _comment(rec)
-    assert (
-        _update(rec, _ni(AUTHOR))["params"]["changes"]["flags"][0]["requestee"]
-        == AUTHOR
-    )
 
 
 def test_author_needinfos_names_only_the_people_that_commit_authors_made_askable(
@@ -1055,16 +977,6 @@ def test_author_needinfos_names_only_the_people_that_commit_authors_made_askable
     authors = {AUTHOR, "watcher@example.com"}
     assert hooks.author_needinfos(actions, state, authors) == [AUTHOR]
     assert hooks.author_needinfos(actions, state, set()) == []
-
-
-def test_a_developer_the_code_history_found_may_be_asked(bug_new, comments_new):
-    # The "No matching expert" case: no regression, the history names the developer.
-    rec = _author_recorder(bug_new, comments_new, {AUTHOR})
-    _comment(rec)
-    assert (
-        _update(rec, _ni(AUTHOR))["params"]["changes"]["flags"][0]["requestee"]
-        == AUTHOR
-    )
 
 
 def test_a_commit_author_on_the_bug_is_asked_as_before(bug_new, comments_new):
@@ -1371,19 +1283,15 @@ def test_a_comment_may_name_about_logging_when_it_asks_for_nothing(new_state):
     assert len(rec.actions) == 1
 
 
-def test_a_move_within_the_product_changes_nothing_else(new_state):
+@pytest.mark.parametrize("product", [None, str.upper], ids=["component", "upper"])
+def test_a_move_within_the_product_changes_nothing_else(new_state, product):
     rec = _recorder(new_state)
     _comment(rec)
-    action = _update(rec, {"component": "Graphics"})
-    assert set(action["params"]["changes"]) == {"component"}
-
-
-def test_a_move_within_the_product_in_another_case_changes_nothing_else(new_state):
-    rec = _recorder(new_state)
-    _comment(rec)
-    product = new_state.bug["product"].upper()
-    action = _update(rec, {"product": product, "component": "Graphics"})
-    assert set(action["params"]["changes"]) == {"product", "component"}
+    changes = {"component": "Graphics"}
+    if product:
+        changes["product"] = product(new_state.bug["product"])
+    action = _update(rec, changes)
+    assert set(action["params"]["changes"]) == set(changes)
 
 
 def test_a_needinfo_on_someone_who_already_has_one_is_refused(new_state):
@@ -1486,49 +1394,48 @@ def test_incomplete_is_recorded_when_every_needinfo_is_on_the_reporter_and_stale
         assert len(rec.actions) == 2
 
 
-def test_incomplete_is_refused_after_the_reporter_answered(bug_new, comments_returning):
+def _answered_state(bug_new, comments):
     # The reporter answered on the 14th; on the 27th that is 13 quiet days.
     day_27 = dt.datetime(2026, 10, 27, 9, 0, tzinfo=dt.timezone.utc)
-    rec = _recorder(
-        _stale_reporter_state(bug_new, comments_returning, answered=True, now=day_27)
-    )
-    _comment(rec)
-    with pytest.raises(ToolError) as e:
-        _update(rec, {"status": "RESOLVED", "resolution": "INCOMPLETE"})
-    assert "reporter" in str(e.value)
-    assert len(rec.actions) == 1
+    return _stale_reporter_state(bug_new, comments, answered=True, now=day_27)
 
 
-def test_incomplete_is_refused_on_a_self_set_reminder(bug_new, comments_returning):
-    rec = _recorder(
-        _stale_reporter_state(
-            bug_new, comments_returning, setter="reporter@example.com"
-        )
-    )
-    _comment(rec)
-    with pytest.raises(ToolError):
-        _update(rec, {"status": "RESOLVED", "resolution": "INCOMPLETE"})
-    assert len(rec.actions) == 1
-
-
-def test_incomplete_is_refused_when_a_needinfo_is_on_anyone_else(
-    bug_new, comments_returning
+@pytest.mark.parametrize(
+    ("make_state", "reason"),
+    [
+        (_answered_state, "reporter"),
+        (
+            lambda bug, comments: _stale_reporter_state(
+                bug, comments, setter="reporter@example.com"
+            ),
+            "INCOMPLETE",
+        ),
+        (
+            lambda bug, comments: _stale_reporter_state(
+                bug, comments, "dev@example.org"
+            ),
+            "INCOMPLETE is allowed only",
+        ),
+        (
+            lambda bug, comments: TriageState(bug=bug, comments=comments, now=NOW),
+            "INCOMPLETE",
+        ),
+    ],
+    ids=[
+        "reporter-answered",
+        "self-set-reminder",
+        "needinfo-on-another",
+        "not-waiting",
+    ],
+)
+def test_incomplete_is_refused_unless_the_reporter_is_quiet(
+    bug_new, comments_returning, make_state, reason
 ):
-    rec = _recorder(
-        _stale_reporter_state(bug_new, comments_returning, "dev@example.org")
-    )
+    rec = _recorder(make_state(bug_new, comments_returning))
     _comment(rec)
-    with pytest.raises(ToolError) as e:
+    with pytest.raises(ToolError, match=reason):
         _update(rec, {"status": "RESOLVED", "resolution": "INCOMPLETE"})
-    assert "INCOMPLETE is allowed only" in str(e.value)
     assert len(rec.actions) == 1
-
-
-def test_incomplete_is_refused_on_a_bug_we_are_not_waiting_on(new_state):
-    rec = _recorder(new_state)
-    _comment(rec)
-    with pytest.raises(ToolError):
-        _update(rec, {"status": "RESOLVED", "resolution": "INCOMPLETE"})
 
 
 def test_every_other_closing_is_refused(bug_new, comments_returning):

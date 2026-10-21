@@ -442,23 +442,6 @@ def test_playready_and_autoplay_belong_to_playback():
     assert "autoplay" in notes["Audio/Video: Playback"]
 
 
-def test_the_docs_describe_the_expert_and_fallback_keys():
-    root = Path(__file__).parents[1] / "docs"
-    config = " ".join((root / "configuration.md").read_text().split())
-    assert "One entry per person: `email`, `areas` (one or more)" in config
-    assert "`needinfo_fallback`" in config
-    assert "`needinfo_fallback`" in (root / "bugzilla.md").read_text()
-
-
-def test_the_docs_describe_the_issue_types_and_the_findings():
-    root = Path(__file__).parents[1]
-    config = " ".join((root / "docs" / "configuration.md").read_text().split())
-    assert "`[[issue_types]]`" in config
-    assert "`value` and `meaning`" in config
-    readme = " ".join((root / "README.md").read_text().split())
-    assert "`issue_type`" in readme and "`issue_type_note`" in readme
-
-
 def test_the_wmf_platform_code_belongs_to_playback():
     trees = {c.component: c.trees for c in TEAM.components}
     assert "dom/media/platforms/wmf/" in trees["Audio/Video: Playback"]

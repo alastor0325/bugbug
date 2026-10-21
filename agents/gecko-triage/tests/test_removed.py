@@ -71,3 +71,67 @@ def test_the_removed_memory_stays_removed():
     for name, text in texts.items():
         for phrase in REMOVED_TEXT:
             assert phrase not in text, f"{phrase!r} in {name}"
+
+
+# (file under the package, phrase): old rule wording that must not come back.
+REMOVED_RULE_TEXT = (
+    ("rules/workflow.md", "Triaged."),
+    ("rules/workflow.md", "## Triaged"),
+    ("rules/workflow.md", "step 2c"),
+    ("rules/workflow.md", "Step 2c"),
+    ("rules/workflow.md", "**4a.**"),
+    ("rules/workflow.md", "the tools refuse"),
+    ("rules/workflow.md", "not changed when asking for information"),
+    ("rules/workflow.md", "only together with a move to their component"),
+    ("rules/workflow.md", "otherwise needinfo nobody"),
+    ("rules/workflow.md", "P/S standard"),
+    ("rules/workflow.md", ":nick"),
+    ("rules/workflow.md", "say only that a recent change caused the regression"),
+    ("rules/workflow.md", "Set `regressed_by` also when"),
+    ("rules/workflow.md", "Searchfox source at the run's revision"),
+    ("rules/workflow.md", "makes this close an INVALID close"),
+    ("rules/workflow.md", "If not, name them in the comment."),
+    ("rules/workflow.md", "your analysis names the change"),
+    ("rules/workflow.md", "or you find the change that caused it"),
+    ("rules/workflow.md", "confirmed regressor"),
+    ("rules/workflow.md", "This case also needs the proof above."),
+    ("rules/workflow.md", "is a bot's regression note"),
+    ("prompts/system.md", "triaged"),
+    ("prompts/system.md", "close / move"),
+    ("prompts/system.md", "only when the regressor is known"),
+    ("rules/diagnostics.md", "only when `fetch_attachment`"),
+    ("rules/diagnostics.md", "read the log of every failing platform"),
+    ("rules/diagnostics.md", "a failure can stop"),
+    ("rules/severity-priority.md", "say in the comment why a human should consider"),
+    ("rules/severity-priority.md", "not crash frequency"),
+    ("rules/severity-priority.md", "Complete loss of core functionality; crash"),
+    ("rules/severity-priority.md", "Crash with a crash-stats id, multiple reporters"),
+    ("teams/media/rules/meta-bugs.md", "when it fits"),
+    ("rules/comment.md", '"possible"'),
+    ("rules/comment.md", "a known regression, not known"),
+    ("rules/comment.md", "When no log is attached, ask"),
+)
+
+
+def test_the_old_rule_wording_stays_removed():
+    for name, phrase in REMOVED_RULE_TEXT:
+        text = " ".join((PACKAGE / name).read_text().split())
+        assert phrase not in text, f"{phrase!r} in {name}"
+
+
+OLD_SECTION_MARK = chr(0xA7) + "1"
+
+
+def test_no_file_in_the_agent_uses_the_old_section_labels():
+    root = PACKAGE.parents[1]
+    seen = 0
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or "__pycache__" in path.parts:
+            continue
+        try:
+            text = path.read_text()
+        except UnicodeDecodeError:
+            continue
+        seen += 1
+        assert OLD_SECTION_MARK not in text, f"{path} says {OLD_SECTION_MARK}"
+    assert seen > 10

@@ -2,6 +2,15 @@
 
 import pytest
 from agent_tools.registry import ToolError
+from conftest import (
+    DUPE_TARGET,
+    KNOWN_META,
+    SHORT_NOTE,
+    _comment,
+    _recorder,
+    _text,
+    _update,
+)
 from hackbot_agents.gecko_triage import closing, hooks, rerecord
 from hackbot_agents.gecko_triage.closing import (
     CloseVerdicts,
@@ -17,15 +26,6 @@ from hackbot_agents.gecko_triage.rerecord import (
     removal_caller_guard,
     removal_caller_refusal,
     remove_recorded_actions_tool,
-)
-from test_hooks import (
-    DUPE_TARGET,
-    KNOWN_META,
-    SHORT_NOTE,
-    _comment,
-    _recorder,
-    _text,
-    _update,
 )
 
 INVALID = {"status": "RESOLVED", "resolution": "INVALID"}

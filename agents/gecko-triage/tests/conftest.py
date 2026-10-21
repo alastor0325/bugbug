@@ -1,6 +1,7 @@
 import copy
 import datetime as dt
 import functools
+import inspect
 import json
 import os
 import re
@@ -16,9 +17,27 @@ import pytest
 os.environ.setdefault("TEAM", "media")
 
 import hackbot_agents.gecko_triage.__main__  # noqa: E402, F401
-from hackbot_agents.gecko_triage import broker_client, config  # noqa: E402
-from hackbot_agents.gecko_triage.config import BOT_ACCOUNT  # noqa: E402
+from claude_agent_sdk import ResultMessage  # noqa: E402
+from hackbot_agents.gecko_triage import (  # noqa: E402
+    agent,
+    broker_client,
+    closing,
+    config,
+)
+from hackbot_agents.gecko_triage.closing import (  # noqa: E402
+    CloseVerdict,
+    CloseVerdicts,
+)
+from hackbot_agents.gecko_triage.config import (  # noqa: E402
+    BOT_ACCOUNT,
+    TEAM_META_BUGS,
+    TRIAGE_SCOPE,
+)
+from hackbot_agents.gecko_triage.hooks import install_hooks  # noqa: E402
 from hackbot_agents.gecko_triage.state import TriageState  # noqa: E402
+from hackbot_runtime.actions import ActionsRecorder  # noqa: E402
+from hackbot_runtime.actions import bugzilla as runtime_bugzilla  # noqa: E402
+from hackbot_runtime.actions.bugzilla import COMMENT_FOOTER_SEPARATOR  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -226,3 +245,231 @@ class FakeBugzilla:
 @pytest.fixture
 def corpus() -> list[dict]:
     return load("dupes_corpus.json")["bugs"]
+
+
+# --- shared builders: the triaged bug, recorded actions and a fake session --- #
+
+BUG = 9000001
+DUPE_TARGET = 9000004
+KNOWN_META = sorted(TEAM_META_BUGS)[0]
+REACTION_FOOTER = COMMENT_FOOTER_SEPARATOR + runtime_bugzilla._COMMENT_FOOTER
+
+
+def _recorder(
+    state=None,
+    bug=BUG,
+    searchfox_rev=None,
+    repo=Path(__file__).parent,
+    meta_candidates=frozenset(),
+    close_verdicts=None,
+    commit_authors=frozenset(),
+):
+    """A recorder with the run's hooks installed."""
+    # A comment-only test needs no real state; `require_state` always gives the agent one.
+    state = state or TriageState(bug={}, now=NOW)
+    rec = ActionsRecorder()
+    install_hooks(
+        rec,
+        bug,
+        state,
+        searchfox_rev=searchfox_rev,
+        repo=repo,
+        meta_candidates=meta_candidates,
+        close_verdicts=close_verdicts or CloseVerdicts(),
+        commit_authors=commit_authors,
+    )
+    return rec
+
+
+def _verdicts(*closes, verdict="confirm"):
+    """A store with one ``verdict`` per ``(resolution, dupe_of)`` in ``closes``."""
+    return CloseVerdicts(
+        [CloseVerdict(r, d, verdict, "checked", ()) for r, d in closes]
+    )
+
+
+def _text(body: str) -> str:
+    # What `bugzilla.add_comment` hands the hooks: the model's text, then the runtime's
+    # reaction footer.
+    return f"{body}{REACTION_FOOTER}"
+
+
+SHORT_NOTE = _text("Short note.")
+
+
+def _comment(rec, text=SHORT_NOTE, bug_id=BUG, **params):
+    return rec.record(
+        "bugzilla.add_comment",
+        {"bug_id": bug_id, "text": text, "is_private": False, **params},
+        reasoning="rule X",
+    )
+
+
+def _update(rec, changes, bug_id=BUG):
+    return rec.record(
+        "bugzilla.update_bug",
+        {"bug_id": bug_id, "changes": changes},
+        reasoning="rule Y",
+    )
+
+
+def _dupe_recorder(state, **kwargs):
+    return _recorder(
+        state, close_verdicts=_verdicts(("DUPLICATE", DUPE_TARGET)), **kwargs
+    )
+
+
+def _duplicate_of_target(rec):
+    _comment(rec)
+    _update(
+        rec,
+        {"status": "RESOLVED", "resolution": "DUPLICATE", "dupe_of": DUPE_TARGET},
+    )
+
+
+# Plain action dicts, as `ActionsRecorder.actions` holds them, for the post-run checks.
+DUPE = 9000002
+TARGET_SCOPE = TRIAGE_SCOPE[0]
+
+
+def _target(**fields):
+    """The `dupe_of` bug as the post-run read returns it."""
+    bug = {
+        "id": DUPE,
+        "groups": [],
+        "product": TARGET_SCOPE.product,
+        "component": TARGET_SCOPE.component,
+        "status": "NEW",
+        "resolution": "",
+        "keywords": [],
+        "summary": "Video stalls",
+    }
+    return {**bug, **fields}
+
+
+def _actions(dupe_of=DUPE, meta_on=DUPE, regressed_by=None):
+    """A comment and a DUPLICATE close, with the meta bug on ``meta_on``."""
+    changes = {"status": "RESOLVED", "resolution": "DUPLICATE", "dupe_of": dupe_of}
+    if regressed_by:
+        changes["regressed_by"] = {"add": regressed_by}
+    actions = [
+        {
+            "action_id": "c",
+            "type": "bugzilla.add_comment",
+            "params": {"bug_id": BUG, "text": "x"},
+        },
+        {
+            "action_id": "u",
+            "type": "bugzilla.update_bug",
+            "params": {"bug_id": BUG, "changes": changes},
+        },
+    ]
+    if meta_on is not None:
+        actions.append(
+            {
+                "action_id": "m",
+                "type": "bugzilla.update_bug",
+                "params": {
+                    "bug_id": meta_on,
+                    "changes": {"blocks": {"add": [KNOWN_META]}},
+                },
+            }
+        )
+    return actions
+
+
+PLAN = '```json\n{"decision": "analyzed", "issue_type": "playback-failure"}\n```'
+
+
+def _result(text=PLAN, is_error=False, subtype="success"):
+    return ResultMessage(
+        subtype=subtype,
+        duration_ms=1,
+        duration_api_ms=1,
+        is_error=is_error,
+        num_turns=3,
+        session_id="s",
+        total_cost_usd=0.5,
+        result=text,
+    )
+
+
+class FakeClient:
+    """Stands in for ClaudeSDKClient: runs ``script`` on the query, then ends."""
+
+    script = None
+    before = ()
+    result = None
+    options = None
+    prompt = None
+
+    def __init__(self, options):
+        FakeClient.options = options
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def query(self, prompt):
+        FakeClient.prompt = prompt
+        if FakeClient.script and inspect.isawaitable(done := FakeClient.script()):
+            await done
+
+    async def receive_response(self):
+        for msg in FakeClient.before:
+            yield msg
+        yield FakeClient.result
+
+
+@pytest.fixture
+def fake_client(monkeypatch):
+    monkeypatch.setattr(agent, "ClaudeSDKClient", FakeClient)
+    monkeypatch.setattr(agent, "make_undumpable", lambda: None)
+    FakeClient.script, FakeClient.result, FakeClient.options = None, _result(), None
+    FakeClient.before = ()
+    return FakeClient
+
+
+@pytest.fixture
+def verdict_stores(monkeypatch):
+    """The close verdict store of each run, as the run binds it to its server."""
+    stores = []
+    real = closing.verdicts_server
+    monkeypatch.setattr(
+        closing, "verdicts_server", lambda store: stores.append(store) or real(store)
+    )
+    return stores
+
+
+def _record_verdict(stores, resolution, dupe_of=None, verdict="confirm"):
+    stores[-1].verdicts.append(
+        CloseVerdict(resolution, dupe_of, verdict, "checked", ())
+    )
+
+
+async def _run(tmp_path, state, recorder=None, searchfox_rev=None, **kwargs):
+    return await agent.run_gecko_triage(
+        task="t",
+        bugzilla_mcp_server={"type": "http", "url": ""},
+        source_repo=tmp_path,
+        toolkit_dir=tmp_path,
+        bug=BUG,
+        state=state,
+        searchfox_rev=searchfox_rev,
+        actions_recorder=recorder or ActionsRecorder(),
+        **kwargs,
+    )
+
+
+def _fake_fetch(monkeypatch, found):
+    """Replaces the post-run read with ``found``; the id lists it was asked for."""
+    calls = []
+
+    async def fetch(server, ids):
+        calls.append(ids)
+        return {i: found[i] for i in ids if i in found}
+
+    monkeypatch.setattr(agent, "fetch_bugs", fetch)
+    return calls

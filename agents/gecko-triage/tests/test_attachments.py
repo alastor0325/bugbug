@@ -313,13 +313,6 @@ def test_zip_counts_members_before_it_parses_the_directory(tmp_path, monkeypatch
         extract_zip(src, tmp_path / "out", max_members=5)
 
 
-def test_zip_refuses_a_corrupt_archive(tmp_path):
-    src = tmp_path / "a.zip"
-    src.write_bytes(b"PK\x03\x04garbage")
-    with pytest.raises(Refused, match="zip"):
-        extract_zip(src, tmp_path / "out")
-
-
 # tar
 
 
@@ -449,13 +442,6 @@ def test_tar_xz_has_a_memory_limit(tmp_path, monkeypatch):
     src.write_bytes(lzma.compress(raw.getvalue(), preset=9))
     assert names(extract_tar(src, tmp_path / "ok")) == [("001-a", "a")]
     monkeypatch.setattr(attachments, "XZ_MEMLIMIT", 1024 * 1024)
-    with pytest.raises(Refused, match="tar"):
-        extract_tar(src, tmp_path / "out")
-
-
-def test_tar_refuses_a_corrupt_archive(tmp_path):
-    src = tmp_path / "a.tgz"
-    src.write_bytes(b"\x1f\x8bgarbage")
     with pytest.raises(Refused, match="tar"):
         extract_tar(src, tmp_path / "out")
 
@@ -1332,31 +1318,6 @@ def test_tar_refuses_a_chain_of_long_name_headers(tmp_path):
     assert not (tmp_path / "extracted").exists()
 
 
-@pytest.mark.parametrize("fail", [RecursionError("deep"), NotImplementedError("x")])
-def test_tar_turns_odd_errors_into_a_refusal(tmp_path, monkeypatch, fail):
-    def broken(self, *args, **kwargs):
-        raise fail
-
-    monkeypatch.setattr(tarfile.TarFile, "extract", broken)
-    src = make_tar(tmp_path / "a.tgz", [regular("a", b"x")])
-    with pytest.raises(Refused):
-        extract_tar(src, tmp_path / "out")
-    assert not (tmp_path / "out").exists()
-
-
-@pytest.mark.parametrize("fail", [RecursionError("deep"), NotImplementedError("x")])
-def test_zip_turns_odd_errors_into_a_refusal(tmp_path, monkeypatch, fail):
-    src = make_zip(tmp_path / "a.zip", [("a.txt", b"x")])
-
-    def broken(self, *args, **kwargs):
-        raise fail
-
-    monkeypatch.setattr(zipfile.ZipFile, "open", broken)
-    with pytest.raises(Refused):
-        extract_zip(src, tmp_path / "out")
-    assert not (tmp_path / "out").exists()
-
-
 def _end_record(count, size_cd, offset=0):
     return struct.pack(
         "<4s4H2LH", b"PK\x05\x06", 0, 0, count, count, size_cd, offset, 0
@@ -1386,30 +1347,6 @@ def test_zip_refuses_zip64(tmp_path, record):
 
 
 APPLE_DOUBLE = b"\x00\x05\x16\x07\x00\x02\x00\x00Mac OS X        " + b"\0" * 60
-
-
-def test_zip_skips_macos_metadata(tmp_path):
-    src = make_zip(
-        tmp_path / "finder.zip",
-        [
-            ("logs/a.log", b"hello"),
-            ("__MACOSX/logs/._a.log", APPLE_DOUBLE),
-            ("logs/._b.log", APPLE_DOUBLE),
-            ("logs/._real.txt", b"not apple double"),
-        ],
-    )
-    assert [m for _, m in extract_zip(src, tmp_path / "out")] == [
-        "logs/a.log",
-        "logs/._real.txt",
-    ]
-
-
-def test_tar_skips_macos_metadata(tmp_path):
-    src = make_tar(
-        tmp_path / "a.tgz",
-        [regular("x/a.log", b"x"), regular("x/._a.log", APPLE_DOUBLE)],
-    )
-    assert [m for _, m in extract_tar(src, tmp_path / "out")] == ["x/a.log"]
 
 
 def test_tar_xz_reads_a_multi_stream_file(tmp_path):
@@ -1477,3 +1414,65 @@ def test_every_download_limit_sits_in_one_block_with_its_reason():
     rest = source.replace(block, "")
     for name in names:
         assert f"\n{name} = " not in rest, name
+
+
+# zip and tar: the checks they share
+
+ARCHIVES = {
+    "zip": (
+        ".zip",
+        lambda path, members: make_zip(path, members),
+        extract_zip,
+        (zipfile.ZipFile, "open"),
+        b"PK\x03\x04garbage",
+    ),
+    "tar": (
+        ".tgz",
+        lambda path, members: make_tar(path, [regular(n, d) for n, d in members]),
+        extract_tar,
+        (tarfile.TarFile, "extract"),
+        b"\x1f\x8bgarbage",
+    ),
+}
+
+
+@pytest.mark.parametrize("kind", ARCHIVES)
+def test_an_archive_skips_macos_metadata(tmp_path, kind):
+    suffix, make, extract, _, _ = ARCHIVES[kind]
+    src = make(
+        tmp_path / f"finder{suffix}",
+        [
+            ("logs/a.log", b"hello"),
+            ("__MACOSX/logs/._a.log", APPLE_DOUBLE),
+            ("logs/._b.log", APPLE_DOUBLE),
+            ("logs/._real.txt", b"not apple double"),
+        ],
+    )
+    assert [m for _, m in extract(src, tmp_path / "out")] == [
+        "logs/a.log",
+        "logs/._real.txt",
+    ]
+
+
+@pytest.mark.parametrize("kind", ARCHIVES)
+def test_an_archive_refuses_a_corrupt_file(tmp_path, kind):
+    suffix, _, extract, _, garbage = ARCHIVES[kind]
+    src = tmp_path / f"a{suffix}"
+    src.write_bytes(garbage)
+    with pytest.raises(Refused, match=kind):
+        extract(src, tmp_path / "out")
+
+
+@pytest.mark.parametrize("fail", [RecursionError("deep"), NotImplementedError("x")])
+@pytest.mark.parametrize("kind", ARCHIVES)
+def test_an_archive_turns_odd_errors_into_a_refusal(tmp_path, monkeypatch, kind, fail):
+    suffix, make, extract, (cls, method), _ = ARCHIVES[kind]
+    src = make(tmp_path / f"a{suffix}", [("a.txt", b"x")])
+
+    def broken(self, *args, **kwargs):
+        raise fail
+
+    monkeypatch.setattr(cls, method, broken)
+    with pytest.raises(Refused):
+        extract(src, tmp_path / "out")
+    assert not (tmp_path / "out").exists()

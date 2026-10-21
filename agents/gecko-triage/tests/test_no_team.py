@@ -5,9 +5,29 @@ import subprocess
 import sys
 
 import pytest
-import test_agent
 from agent_tools.registry import ToolError
-from conftest import LATER, NO_TEAM, NOW, with_needinfo
+from conftest import (
+    BUG,
+    DUPE,
+    DUPE_TARGET,
+    KNOWN_META,
+    LATER,
+    NO_TEAM,
+    NOW,
+    _actions,
+    _comment,
+    _dupe_recorder,
+    _duplicate_of_target,
+    _fake_fetch,
+    _record_verdict,
+    _recorder,
+    _result,
+    _run,
+    _target,
+    _text,
+    _update,
+    with_needinfo,
+)
 from hackbot_agents.gecko_triage import agent, dupes, hooks, preflight
 from hackbot_agents.gecko_triage.agent import (
     RULES_DIR,
@@ -32,23 +52,8 @@ from hackbot_agents.gecko_triage.state import TriageState
 from hackbot_agents.gecko_triage.targets import DupeTargetIsMeta, screen_writes
 from hackbot_agents.gecko_triage.teamconfig import Component, scope_for
 from hackbot_runtime.actions import ActionsRecorder
-from test_agent import _fake_fetch, _record_verdict, _result, _run
-from test_hooks import (
-    BUG,
-    DUPE_TARGET,
-    KNOWN_META,
-    _comment,
-    _dupe_recorder,
-    _duplicate_of_target,
-    _recorder,
-    _text,
-    _update,
-)
-from test_targets import DUPE, _actions, _target
 
 OTHER = {"product": "Core", "component": "Graphics: Layers"}
-fake_client = test_agent.fake_client
-verdict_stores = test_agent.verdict_stores
 COMMENT = {"type": "bugzilla.add_comment", "params": {}}
 
 

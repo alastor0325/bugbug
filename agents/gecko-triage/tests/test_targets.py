@@ -3,7 +3,7 @@
 import asyncio
 
 import pytest
-from conftest import fake_broker
+from conftest import DUPE, _actions, _target, fake_broker
 from hackbot_agents.gecko_triage import targets
 from hackbot_agents.gecko_triage.config import TEAM_META_BUGS, TRIAGE_SCOPE
 from hackbot_agents.gecko_triage.targets import (
@@ -25,51 +25,9 @@ from hackbot_agents.gecko_triage.targets import (
 from hackbot_runtime.actions import ActionsRecorder
 
 BUG = 9000001
-DUPE = 9000002
 REGRESSOR = 9000003
 META = sorted(TEAM_META_BUGS)[0]
 SCOPE = TRIAGE_SCOPE[0]
-
-
-def _target(**fields):
-    bug = {
-        "id": DUPE,
-        "groups": [],
-        "product": SCOPE.product,
-        "component": SCOPE.component,
-        "status": "NEW",
-        "resolution": "",
-        "keywords": [],
-        "summary": "Video stalls",
-    }
-    return {**bug, **fields}
-
-
-def _actions(dupe_of=DUPE, meta_on=DUPE, regressed_by=None):
-    changes = {"status": "RESOLVED", "resolution": "DUPLICATE", "dupe_of": dupe_of}
-    if regressed_by:
-        changes["regressed_by"] = {"add": regressed_by}
-    actions = [
-        {
-            "action_id": "c",
-            "type": "bugzilla.add_comment",
-            "params": {"bug_id": BUG, "text": "x"},
-        },
-        {
-            "action_id": "u",
-            "type": "bugzilla.update_bug",
-            "params": {"bug_id": BUG, "changes": changes},
-        },
-    ]
-    if meta_on is not None:
-        actions.append(
-            {
-                "action_id": "m",
-                "type": "bugzilla.update_bug",
-                "params": {"bug_id": meta_on, "changes": {"blocks": {"add": [META]}}},
-            }
-        )
-    return actions
 
 
 def _regression(regressed_by, **changes):

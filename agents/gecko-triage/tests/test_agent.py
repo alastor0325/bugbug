@@ -1,103 +1,25 @@
 """Tests for one run of the agent, with the Claude session replaced by a fake."""
 
 import contextlib
-import inspect
 
 import pytest
 from agent_tools.registry import ToolError
-from claude_agent_sdk import ResultMessage, SystemMessage
-from conftest import NOW
+from claude_agent_sdk import SystemMessage
+from conftest import (
+    BUG,
+    NOW,
+    FakeClient,
+    _fake_fetch,
+    _record_verdict,
+    _result,
+    _run,
+)
 from hackbot_agents.gecko_triage import agent, attachments, closing, dupes, rerecord
 from hackbot_agents.gecko_triage.__main__ import AgentInputs
 from hackbot_agents.gecko_triage.authors import CommitFacts
-from hackbot_agents.gecko_triage.closing import CloseVerdict, CloseVerdicts
+from hackbot_agents.gecko_triage.closing import CloseVerdicts
 from hackbot_runtime import AgentError
 from hackbot_runtime.actions import ActionsRecorder
-
-BUG = 9000001
-PLAN = '```json\n{"decision": "analyzed", "issue_type": "playback-failure"}\n```'
-
-
-def _result(text=PLAN, is_error=False, subtype="success"):
-    return ResultMessage(
-        subtype=subtype,
-        duration_ms=1,
-        duration_api_ms=1,
-        is_error=is_error,
-        num_turns=3,
-        session_id="s",
-        total_cost_usd=0.5,
-        result=text,
-    )
-
-
-class FakeClient:
-    """Stands in for ClaudeSDKClient: runs ``script`` on the query, then ends."""
-
-    script = None
-    before = ()
-    result = None
-    options = None
-    prompt = None
-
-    def __init__(self, options):
-        FakeClient.options = options
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        return False
-
-    async def query(self, prompt):
-        FakeClient.prompt = prompt
-        if FakeClient.script and inspect.isawaitable(done := FakeClient.script()):
-            await done
-
-    async def receive_response(self):
-        for msg in FakeClient.before:
-            yield msg
-        yield FakeClient.result
-
-
-@pytest.fixture
-def fake_client(monkeypatch):
-    monkeypatch.setattr(agent, "ClaudeSDKClient", FakeClient)
-    monkeypatch.setattr(agent, "make_undumpable", lambda: None)
-    FakeClient.script, FakeClient.result, FakeClient.options = None, _result(), None
-    FakeClient.before = ()
-    return FakeClient
-
-
-@pytest.fixture
-def verdict_stores(monkeypatch):
-    """The close verdict store of each run, as the run binds it to its server."""
-    stores = []
-    real = closing.verdicts_server
-    monkeypatch.setattr(
-        closing, "verdicts_server", lambda store: stores.append(store) or real(store)
-    )
-    return stores
-
-
-def _record_verdict(stores, resolution, dupe_of=None, verdict="confirm"):
-    stores[-1].verdicts.append(
-        CloseVerdict(resolution, dupe_of, verdict, "checked", ())
-    )
-
-
-async def _run(tmp_path, state, recorder=None, searchfox_rev=None, **kwargs):
-    return await agent.run_gecko_triage(
-        task="t",
-        bugzilla_mcp_server={"type": "http", "url": ""},
-        source_repo=tmp_path,
-        toolkit_dir=tmp_path,
-        bug=BUG,
-        state=state,
-        searchfox_rev=searchfox_rev,
-        actions_recorder=recorder or ActionsRecorder(),
-        **kwargs,
-    )
 
 
 async def test_a_run_has_a_turn_and_a_cost_limit_by_default(
@@ -376,17 +298,6 @@ def _duplicate_script(recorder, dupe_of, stores, meta=True):
             )
 
     return script
-
-
-def _fake_fetch(monkeypatch, found):
-    calls = []
-
-    async def fetch(server, ids):
-        calls.append(ids)
-        return {i: found[i] for i in ids if i in found}
-
-    monkeypatch.setattr(agent, "fetch_bugs", fetch)
-    return calls
 
 
 def _dupe_target(dupe, resolution, status="RESOLVED"):

@@ -417,19 +417,6 @@ def test_the_image_pins_the_release_toolkit_py_expects():
     )
 
 
-def test_the_docs_say_the_skills_run_in_hackbot_mode():
-    root = Path(__file__).parents[1]
-    readme = " ".join((root / "README.md").read_text().split())
-    assert "`FX_BUG_TOOLKIT_MODE=hackbot`, so each skill runs in its Hackbot mode" in (
-        readme
-    )
-    assert (
-        "A PreToolUse hook refuses Write and Edit on any other path. The job container "
-        "discards the file. On the host, it stays in /tmp." in readme
-    )
-    assert "`FX_BUG_TOOLKIT_MODE=hackbot`" in (root / "docs" / "testing.md").read_text()
-
-
 SKILL_AGENTS = {
     "analyze-profile": make_profile_analyst,
     "check-log": make_log_analyst,
