@@ -12,6 +12,7 @@ import pytest
 from agent_tools.registry import ToolError
 from conftest import LATER, NOW, with_needinfo
 from hackbot_agents.gecko_triage import hooks
+from hackbot_agents.gecko_triage import state as state_module
 from hackbot_agents.gecko_triage.closing import CloseVerdict, CloseVerdicts
 from hackbot_agents.gecko_triage.config import (
     BOT_ACCOUNT,
@@ -1073,10 +1074,20 @@ def test_a_commit_author_on_the_bug_is_asked_as_before(bug_new, comments_new):
     assert action["params"]["changes"]["flags"][0]["requestee"] == AUTHOR
 
 
+def _set_experts(monkeypatch, emails):
+    for module in (hooks, state_module):
+        monkeypatch.setattr(module, "NEEDINFO_EXPERTS", frozenset(emails))
+
+
+def _set_fallback(monkeypatch, emails):
+    for module in (hooks, state_module):
+        monkeypatch.setattr(module, "NEEDINFO_FALLBACK", frozenset(emails))
+
+
 def test_a_commit_author_does_not_lift_the_one_fallback_person_limit(
     bug_new, comments_new, monkeypatch
 ):
-    monkeypatch.setattr(hooks, "NEEDINFO_FALLBACK", frozenset(TWO_FALLBACK))
+    _set_fallback(monkeypatch, TWO_FALLBACK)
     rec = _recorder(
         _people_state(bug_new, comments_new), commit_authors=set(TWO_FALLBACK)
     )
@@ -1092,7 +1103,7 @@ EXPERT = "expert@example.org"
 
 @pytest.fixture
 def expert(monkeypatch):
-    monkeypatch.setattr(hooks, "NEEDINFO_EXPERTS", frozenset({EXPERT}))
+    _set_experts(monkeypatch, {EXPERT})
     return EXPERT
 
 
@@ -1158,7 +1169,7 @@ def test_a_listed_expert_may_be_asked_with_a_move(bug_new, comments_new, expert)
 
 
 def test_the_bot_is_never_a_listed_expert(bug_new, comments_new, monkeypatch):
-    monkeypatch.setattr(hooks, "NEEDINFO_EXPERTS", frozenset({BOT_ACCOUNT.lower()}))
+    _set_experts(monkeypatch, {BOT_ACCOUNT.lower()})
     rec = _recorder(_people_state(bug_new, comments_new))
     _comment(rec)
     with pytest.raises(ToolError) as e:
@@ -1176,7 +1187,7 @@ TWO_FALLBACK = ("fallback-a@example.com", "fallback-b@example.com")
 
 
 def test_two_fallback_people_in_one_run_are_refused(bug_new, comments_new, monkeypatch):
-    monkeypatch.setattr(hooks, "NEEDINFO_FALLBACK", frozenset(TWO_FALLBACK))
+    _set_fallback(monkeypatch, TWO_FALLBACK)
     rec = _recorder(_people_state(bug_new, comments_new))
     _comment(rec)
     flags = [_ni(e)["flags"][0] for e in TWO_FALLBACK]
@@ -1188,7 +1199,7 @@ def test_two_fallback_people_in_one_run_are_refused(bug_new, comments_new, monke
 def test_a_fallback_person_already_on_the_bug_does_not_count(
     bug_new, comments_new, monkeypatch
 ):
-    monkeypatch.setattr(hooks, "NEEDINFO_FALLBACK", frozenset(TWO_FALLBACK))
+    _set_fallback(monkeypatch, TWO_FALLBACK)
     rec = _recorder(_people_state(bug_new, comments_new, TWO_FALLBACK[0]))
     _comment(rec)
     action = _update(rec, {"flags": [_ni(e)["flags"][0] for e in TWO_FALLBACK]})

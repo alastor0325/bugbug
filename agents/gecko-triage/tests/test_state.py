@@ -63,6 +63,12 @@ def test_people_are_the_reporter_the_cc_list_and_the_commenters(new_state):
     }
 
 
+def test_askable_is_the_people_the_experts_and_the_fallback(new_state, monkeypatch):
+    monkeypatch.setattr(state_module, "NEEDINFO_EXPERTS", frozenset({"e@example.org"}))
+    monkeypatch.setattr(state_module, "NEEDINFO_FALLBACK", frozenset({"f@example.org"}))
+    assert new_state.askable == new_state.people | {"e@example.org", "f@example.org"}
+
+
 def test_open_needinfos_include_ones_set_by_others(new_state):
     # The developer's needinfo on the reporter is open, and it counts like any other.
     assert [n.requestee for n in new_state.open_needinfos] == ["reporter@example.com"]

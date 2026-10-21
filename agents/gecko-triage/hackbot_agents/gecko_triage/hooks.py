@@ -547,8 +547,7 @@ def _check_flags(
             f"ask at most {MAX_NEEDINFOS} people per run; pick the ones who can answer"
         )
     already = {n.requestee for n in state.open_needinfos}
-    askable = state.people | NEEDINFO_EXPERTS | NEEDINFO_FALLBACK
-    askable |= commit_authors
+    askable = state.askable | commit_authors
     asked: set[str] = set()
     for flag in flags:
         if not isinstance(flag, dict) or set(flag) != _FLAG_KEYS:
@@ -599,13 +598,12 @@ def author_needinfos(
     actions: list[dict], state: TriageState, commit_authors: Set[str]
 ) -> list[str]:
     """The needinfo requestees that only ``commit_authors`` made askable."""
-    others = state.people | NEEDINFO_EXPERTS | NEEDINFO_FALLBACK
     return sorted(
         {
             email
             for update in updates(actions)
             for email in needinfo_requestees(update.changes)
-            if email in commit_authors and email not in others
+            if email in commit_authors and email not in state.askable
         }
     )
 

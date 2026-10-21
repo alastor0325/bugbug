@@ -114,6 +114,11 @@ class TriageState:
         emails.discard("")
         return frozenset(emails)
 
+    @property
+    def askable(self) -> frozenset[str]:
+        """Who a needinfo may go to without a move: `people`, the experts, the fallback."""
+        return self.people | NEEDINFO_EXPERTS | NEEDINFO_FALLBACK
+
     @cached_property
     def open_needinfos(self) -> tuple[Needinfo, ...]:
         """Every open needinfo on the bug, whoever set it."""
