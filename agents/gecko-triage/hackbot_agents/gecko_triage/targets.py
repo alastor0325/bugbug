@@ -24,9 +24,9 @@ from dataclasses import dataclass
 
 from hackbot_runtime import ActionsRecorder, AgentError
 
+from .actions_view import comment_texts, is_bug_id, updates
 from .broker_client import broker_session
 from .config import SCOPE_KEYS
-from .hooks import _is_bug_id, _params
 from .preflight import CLOSED_STATUSES, is_meta, is_security
 
 LINK_FIELDS = ("regressed_by", "see_also")
@@ -55,35 +55,18 @@ class Dropped:
     field: str | None = None
 
 
-def _updates(actions: list[dict]) -> list[tuple[str, object, dict]]:
-    found = []
-    for action in actions:
-        if action.get("type") != "bugzilla.update_bug":
-            continue
-        params = _params(action)
-        changes = params.get("changes")
-        found.append(
-            (
-                action.get("action_id", ""),
-                params.get("bug_id"),
-                changes if isinstance(changes, dict) else {},
-            )
-        )
-    return found
-
-
 def dupe_of(actions: list[dict], bug: int) -> int | None:
     """The bug the triaged bug is recorded as a duplicate of, if any."""
-    for _, bug_id, changes in _updates(actions):
-        if bug_id == bug and changes.get("resolution") == "DUPLICATE":
-            return changes.get("dupe_of")
+    for update in updates(actions, bug):
+        if update.changes.get("resolution") == "DUPLICATE":
+            return update.changes.get("dupe_of")
     return None
 
 
 def _linked(changes: dict, field: str) -> list[int]:
     value = changes.get(field)
     items = value.get("add") if isinstance(value, dict) else None
-    return [i for i in items or () if _is_bug_id(i)]
+    return [i for i in items or () if is_bug_id(i)]
 
 
 # The explicit bug references: "bug N", "bugs A and B", "bugs A, B & C", "bug-N",
@@ -97,15 +80,6 @@ _BUG_REF = re.compile(
 )
 
 
-def _comment_texts(actions: list[dict]) -> list[str]:
-    texts = (
-        _params(a).get("text")
-        for a in actions
-        if a.get("type") == "bugzilla.add_comment"
-    )
-    return [t for t in texts if isinstance(t, str)]
-
-
 def explicit_bug_ids(text: str) -> set[int]:
     """The bugs that ``text`` names with an explicit reference, never a bare number."""
     return {
@@ -117,7 +91,7 @@ def explicit_bug_ids(text: str) -> set[int]:
 
 def comment_bug_ids(actions: list[dict], bug: int) -> set[int]:
     """The other bugs that the recorded comments name with an explicit reference."""
-    ids = set().union(*(explicit_bug_ids(t) for t in _comment_texts(actions)))
+    ids = set().union(*(explicit_bug_ids(t) for t in comment_texts(actions)))
     ids.discard(bug)
     return ids
 
@@ -154,7 +128,7 @@ def screen_comment(
             "could not be read; a public comment must not point at it"
         )
     forbidden = sorted(i for i in commit_bugs - {bug} if not _readable(readable, i))
-    for text in _comment_texts(actions):
+    for text in comment_texts(actions):
         if spelled := [i for i in forbidden if spelled_number(i).search(text)]:
             raise CommentNamesRestricted(
                 f"bug {bug}: the comment contains the number of {_bug_list(spelled)}, "
@@ -171,12 +145,11 @@ def bugs_to_read(
     ``commit_bugs``, the bugs the run's commit messages named.
     """
     ids = comment_bug_ids(actions, bug) | (commit_bugs - {bug})
-    for _, bug_id, changes in _updates(actions):
-        if bug_id == bug:
-            for field in LINK_FIELDS:
-                ids.update(_linked(changes, field))
+    for update in updates(actions, bug):
+        for field in LINK_FIELDS:
+            ids.update(_linked(update.changes, field))
     duplicate = dupe_of(actions, bug)
-    if _is_bug_id(duplicate):
+    if is_bug_id(duplicate):
         ids.add(duplicate)
     return sorted(ids)
 
@@ -226,7 +199,7 @@ def screen_writes(
             "blocks a meta bug, it does not duplicate one"
         )
     dropped = []
-    for action_id, bug_id, changes in _updates(actions):
+    for action_id, bug_id, changes in updates(actions):
         if bug_id == bug:
             for field in LINK_FIELDS if read else ():
                 linked = _linked(changes, field)

@@ -62,9 +62,9 @@ from hackbot_runtime.actions.bugzilla import COMMENT_FOOTER_SEPARATOR
 from hackbot_runtime.searchfox import PLACEHOLDER as SEARCHFOX_PLACEHOLDER
 from hackbot_runtime.searchfox import permalink_hook, permalink_prefix
 
+from .actions_view import action_params, is_bug_id, needinfo_requestees, updates
 from .closing import (
     CloseVerdicts,
-    _is_bug_id,
     close_verdict_refusal,
     comment_marker_hook,
 )
@@ -92,13 +92,8 @@ from .config import (
     TRIAGE_SEVERITIES,
     UNSET_FIELD_VALUE,
 )
-from .state import TriageState, _lower
+from .state import TriageState
 from .teamconfig import EMAIL
-
-
-def _params(action: dict) -> dict:
-    params = action.get("params")
-    return params if isinstance(params, dict) else {}
 
 
 def _check_target_bug(params: dict, bug_id: int) -> None:
@@ -120,7 +115,7 @@ def add_comment_hook(recorder: ActionsRecorder, bug_id: int) -> ActionHook:
     """One public comment, on the bug being triaged."""
 
     def hook(action: dict) -> None:
-        params = _params(action)
+        params = action_params(action)
         if _recorded(recorder, "bugzilla.add_comment"):
             raise ToolError(
                 "you have already recorded a comment; record one per run, "
@@ -137,7 +132,7 @@ def add_comment_hook(recorder: ActionsRecorder, bug_id: int) -> ActionHook:
 
 def block_placeholder_hook(action: dict) -> None:
     """Expand the capture and mozregression placeholders into their verbatim blocks."""
-    params = _params(action)
+    params = action_params(action)
     text = params.get("text")
     if not isinstance(text, str):
         return
@@ -265,7 +260,7 @@ def link_targets(text: str) -> list[str]:
 
 def link_hook(action: dict) -> None:
     """Refuse a link to a host outside ``ALLOWED_LINK_HOSTS``; code and our blocks are quotes."""
-    params = _params(action)
+    params = action_params(action)
     text = params.get("text")
     if not isinstance(text, str):
         return
@@ -373,7 +368,7 @@ def capture_block_hook(action: dict) -> None:
     the reporter's words, not the agent's, so they are left out. With no team there is
     no capture block, so nothing is checked.
     """
-    params = _params(action)
+    params = action_params(action)
     text = params.get("text")
     if CAPTURE is None or not isinstance(text, str):
         return
@@ -411,7 +406,7 @@ def capture_block_hook(action: dict) -> None:
 
 def comment_style_hook(action: dict) -> None:
     """The ASD-STE100 limits the comment rules set, applied to the comment as recorded."""
-    params = _params(action)
+    params = action_params(action)
     text = params.get("text")
     if not isinstance(text, str):
         return
@@ -464,7 +459,7 @@ def refuted_close_hook(close_verdicts: CloseVerdicts) -> ActionHook:
     """After a refute, refuse a comment that still proposes a close."""
 
     def hook(action: dict) -> None:
-        text = _params(action).get("text")
+        text = action_params(action).get("text")
         if not close_verdicts.refuted() or not isinstance(text, str):
             return
         if match := _CLOSE_REQUEST.search(prose(split_runtime_footer(text)[0])):
@@ -568,7 +563,7 @@ def _check_flags(
         requestee = flag["requestee"]
         if not isinstance(requestee, str) or not requestee.strip():
             raise ToolError("a needinfo needs a requestee email")
-        email = _lower(requestee)
+        email = requestee.strip().lower()
         if not EMAIL.fullmatch(email):
             raise ToolError(
                 f"{requestee!r} is not one email address; use one full email per flag"
@@ -605,15 +600,14 @@ def author_needinfos(
 ) -> list[str]:
     """The needinfo requestees that only ``commit_authors`` made askable."""
     others = state.people | NEEDINFO_EXPERTS | NEEDINFO_FALLBACK
-    found = set()
-    for action in actions:
-        if action.get("type") != "bugzilla.update_bug":
-            continue
-        for flag in (_params(action).get("changes") or {}).get("flags") or ():
-            email = flag.get("requestee") if isinstance(flag, dict) else None
-            if email in commit_authors and email not in others:
-                found.add(email)
-    return sorted(found)
+    return sorted(
+        {
+            email
+            for update in updates(actions)
+            for email in needinfo_requestees(update.changes)
+            if email in commit_authors and email not in others
+        }
+    )
 
 
 def _check_closing(
@@ -635,7 +629,7 @@ def _check_closing(
     dupe_of = changes.get("dupe_of")
     if (resolution == "DUPLICATE") != ("dupe_of" in changes):
         raise ToolError("DUPLICATE and dupe_of travel together; set both or neither")
-    if resolution == "DUPLICATE" and (not _is_bug_id(dupe_of) or dupe_of == bug_id):
+    if resolution == "DUPLICATE" and (not is_bug_id(dupe_of) or dupe_of == bug_id):
         raise ToolError("dupe_of must be the id of another bug")
     if resolution == "DUPLICATE" and dupe_of in TEAM_META_BUGS | meta_candidates:
         raise ToolError(
@@ -682,7 +676,7 @@ def _check_add_only(
 def _check_regressed_by(value: object, state: TriageState, bug_id: int) -> None:
     current = set(state.bug.get("regressed_by") or ())
     for item in _additions("regressed_by", value):
-        if not _is_bug_id(item) or item == bug_id:
+        if not is_bug_id(item) or item == bug_id:
             raise ToolError(f"regressed_by may only add another bug's id, not {item!r}")
         if item in current:
             raise ToolError(f"the bug is already regressed by {item}")
@@ -707,7 +701,7 @@ def see_also_bug_ids(urls: object) -> set[int]:
 def _check_see_also(value: object, state: TriageState, bug_id: int) -> None:
     current = see_also_bug_ids(state.bug.get("see_also"))
     for item in _additions("see_also", value):
-        if not _is_bug_id(item) or item == bug_id:
+        if not is_bug_id(item) or item == bug_id:
             raise ToolError(f"see_also may only add another bug's id, not {item!r}")
         if item in current:
             raise ToolError(f"the bug already has bug {item} in see_also")
@@ -780,14 +774,6 @@ def _check_move(changes: dict, state: TriageState) -> None:
         changes.update(CROSS_PRODUCT_DEFAULTS)
 
 
-def _updates_on(recorder: ActionsRecorder, bug_id: int) -> list[dict]:
-    return [
-        _params(a).get("changes") or {}
-        for a in _recorded(recorder, "bugzilla.update_bug")
-        if _params(a).get("bug_id") == bug_id
-    ]
-
-
 _NO_TEAM_META = (
     "this run has no team, so no meta bug applies; leave blocks out and change "
     "nothing on another bug"
@@ -805,15 +791,16 @@ def _check_duplicate_target(
         raise ToolError(_NO_TEAM_META)
     target = params.get("bug_id")
     if not any(
-        c.get("resolution") == "DUPLICATE" and c.get("dupe_of") == target
-        for c in _updates_on(recorder, bug_id)
+        u.changes.get("resolution") == "DUPLICATE"
+        and u.changes.get("dupe_of") == target
+        for u in updates(recorder.actions, bug_id)
     ):
         raise ToolError(
             f"you are triaging bug {bug_id}; on another bug you may only add the team "
             "meta bug to the bug this one duplicates, after the DUPLICATE change is "
             "recorded"
         )
-    if _updates_on(recorder, target):
+    if updates(recorder.actions, target):
         raise ToolError(f"a change on bug {target} is already recorded")
     changes = params.get("changes")
     if not isinstance(changes, dict) or set(changes) != {"blocks"}:
@@ -849,9 +836,9 @@ def update_bug_hook(
     """
 
     def hook(action: dict) -> None:
-        params = _params(action)
+        params = action_params(action)
         changes = params.get("changes")
-        other_bug = _is_bug_id(params.get("bug_id")) and params.get("bug_id") != bug_id
+        other_bug = is_bug_id(params.get("bug_id")) and params.get("bug_id") != bug_id
         closes = (
             not other_bug
             and isinstance(changes, dict)
@@ -868,8 +855,8 @@ def update_bug_hook(
             raise
 
     def check(action: dict) -> None:
-        params = _params(action)
-        if params.get("bug_id") != bug_id and _is_bug_id(params.get("bug_id")):
+        params = action_params(action)
+        if params.get("bug_id") != bug_id and is_bug_id(params.get("bug_id")):
             _check_duplicate_target(recorder, params, bug_id)
             return
         _check_target_bug(params, bug_id)
@@ -878,7 +865,7 @@ def update_bug_hook(
                 "record the comment first; a field change travels with the comment and "
                 "Bugzilla rejects a severity change without one"
             )
-        if _updates_on(recorder, bug_id):
+        if updates(recorder.actions, bug_id):
             raise ToolError(
                 "a field change is already recorded; record every field change in one "
                 "bugzilla_update_bug call, since a second one would replace the first's "

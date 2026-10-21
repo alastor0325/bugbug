@@ -14,6 +14,7 @@ from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.registry import ToolDefinition, ToolError
 from pydantic import Field
 
+from .actions_view import is_bug_id, updates
 from .config import TRIAGE_RESOLUTIONS
 
 SERVER_NAME = "verdicts"
@@ -159,20 +160,10 @@ def close_verdict_refusal(
 
 def recorded_close(actions: list[dict]) -> Close | None:
     """The close among ``actions``, the recorded actions of a run, or None."""
-    for action in actions:
-        params = action.get("params") if isinstance(action, dict) else None
-        changes = params.get("changes") if isinstance(params, dict) else None
-        if (
-            action.get("type") == "bugzilla.update_bug"
-            and isinstance(changes, dict)
-            and changes.get("status") == "RESOLVED"
-        ):
-            return changes.get("resolution"), changes.get("dupe_of")
+    for update in updates(actions):
+        if update.changes.get("status") == "RESOLVED":
+            return update.changes.get("resolution"), update.changes.get("dupe_of")
     return None
-
-
-def _is_bug_id(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
 def parse_verdict(
@@ -188,7 +179,7 @@ def parse_verdict(
         raise ValueError(
             f"resolution must be one of {', '.join(sorted(TRIAGE_RESOLUTIONS))}"
         )
-    if name == "DUPLICATE" and not _is_bug_id(dupe_of):
+    if name == "DUPLICATE" and not is_bug_id(dupe_of):
         raise ValueError("a DUPLICATE verdict needs dupe_of, the target's bug id")
     if name != "DUPLICATE" and dupe_of is not None:
         raise ValueError("dupe_of goes only with DUPLICATE")

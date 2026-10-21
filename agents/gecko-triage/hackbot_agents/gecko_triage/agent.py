@@ -52,6 +52,7 @@ from pydantic import BaseModel, BeforeValidator, Field, model_validator
 from searchfox import AsyncSearchfoxClient
 
 from . import attachments, authors, closing, dupes
+from .actions_view import needinfo_requestees, updates
 from .config import (
     ALLOWED_LINK_HOSTS,
     BUGZILLA_READ_TOOLS,
@@ -69,12 +70,11 @@ from .config import (
     TRIAGE_RESOLUTIONS,
 )
 from .docs import DocRef, docs_for, registrations
-from .hooks import _params, author_needinfos, install_hooks
+from .hooks import author_needinfos, install_hooks
 from .preflight import reporter_audience
 from .state import TriageState
 from .targets import (
     Dropped,
-    _updates,
     bugs_to_read,
     drop_writes,
     dupe_target_warning,
@@ -360,9 +360,12 @@ def analyzed_refusal(
     if plan.decision != "analyzed":
         return None
     asked = list(plan.asked or [])
-    for action in actions:
-        if state is not None and _needinfos_lay_reporter(action, state):
-            asked.append(f"a needinfo on the reporter {state.reporter}")
+    if state is not None and not state.reporter_is_developer_or_expert:
+        for update in updates(actions):
+            if state.reporter in (
+                str(r).lower() for r in needinfo_requestees(update.changes)
+            ):
+                asked.append(f"a needinfo on the reporter {state.reporter}")
     if not asked:
         return None
     return (
@@ -376,9 +379,9 @@ def _whiteboard(actions: list[dict], bug: int) -> tuple[str, str] | None:
 
     The hook allows one field-change call on the triaged bug, so there is one at most.
     """
-    for action_id, bug_id, changes in _updates(actions):
-        if bug_id == bug and isinstance(changes.get("whiteboard"), str):
-            return action_id, changes["whiteboard"]
+    for update in updates(actions, bug):
+        if isinstance(update.changes.get("whiteboard"), str):
+            return update.action_id, update.changes["whiteboard"]
     return None
 
 
@@ -451,18 +454,6 @@ def checked_issue_type(plan: Plan) -> tuple[Plan, str | None]:
             update={"issue_type_note": note[:MAX_ISSUE_TYPE_NOTE].rstrip()}
         )
     return plan, None
-
-
-def _needinfos_lay_reporter(action: dict, state: TriageState) -> bool:
-    if action["type"] != "bugzilla.update_bug":
-        return False
-    if state.reporter_is_developer_or_expert:
-        return False
-    flags = (_params(action).get("changes") or {}).get("flags") or ()
-    return any(
-        isinstance(f, dict) and str(f.get("requestee", "")).lower() == state.reporter
-        for f in flags
-    )
 
 
 # An hg author email may not be a Bugzilla login, and Bugzilla then refuses the update.
