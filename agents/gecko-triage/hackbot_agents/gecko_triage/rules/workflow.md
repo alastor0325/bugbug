@@ -121,11 +121,10 @@ or CI failure that has no known regressor. The release bot sets status flags fro
 keyword.
 
 **A known regressor.** A known regressor is a change that a bisection, a mozregression
-result, a bot's regression note or a developer's statement names. Crash bots such as
-Clouseau and BugBot write regression notes. Set `regressed_by` only to a known
-regressor. Never set it from code reading or timing alone. When only your evidence
-points at a change, write "the probable cause" in the comment. Never guess a regressor
-id.
+result, a bot's regression note or a developer's statement names. Bots such as Clouseau
+and BugBot write regression notes. Set `regressed_by` only to a known regressor. Never
+set it from code reading or timing alone. When only your evidence points at a change,
+write "the probable cause" in the comment. Never guess a regressor id.
 
 When two changes could be the regressor, pick the one that first shipped the behavior:
 its landing version must not be later than the first version that shows the bug.
@@ -135,9 +134,10 @@ When the regressor is a restricted bug that the agent cannot read, do not set
 change, because the author decides. The broker returns nothing for such a bug. Find the
 author of the regressing change from its commit: the `mozilla_vcs` tools, such as
 `file_history` and `get_commit_info`, give the commit author's email. Needinfo that
-author, and in the comment ask them to set the Regressed by field. The bug must have the
-`regression` keyword, so add it in the same change when it is missing, and the bug must
-have no `regressed_by` yet.
+author, and in the comment ask them to set the Regressed by field. The bug must have no
+`regressed_by` yet. Add the `regression` keyword in the same change when it is missing.
+For a test or CI failure with no known regressor, do not add the keyword: send the
+needinfo only.
 
 In the comment, help the author find the change. Name the function and the source file
 that the change touched, and never a test file of the change. Give the date when the
@@ -461,5 +461,6 @@ and ask for mozregression; for a site-specific issue, consider a server-side cha
 When a bug leaves the team's scope (reassigned, or a developer from another team is now
 driving it), say so in the comment. On a move, needinfo the developer of the target team
 as "Needs info" says. Without a move, needinfo only an expert from the team's list, when
-"Needs info" allows it. Otherwise the hand-off needs no needinfo, and there is nothing for
-the agent to wait for. The comment follows "A hand-off comment" in `comment.md`.
+"Needs info" allows it. Otherwise the hand-off itself needs no needinfo. A log request in
+the same comment is a needinfo on the reporter, as "A hand-off comment" in `comment.md`
+says.

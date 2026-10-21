@@ -108,6 +108,9 @@ REMOVED_RULE_TEXT = (
     ("rules/severity-priority.md", "Crash with a crash-stats id, multiple reporters"),
     ("teams/media/rules/meta-bugs.md", "when it fits"),
     ("rules/comment.md", '"possible"'),
+    ("rules/workflow.md", "Crash bots such as"),
+    ("rules/workflow.md", "there is nothing for the agent to wait for"),
+    ("rules/diagnostics.md", "say in the comment that the newest runs pass"),
     ("rules/comment.md", "a known regression, not known"),
     ("rules/comment.md", "When no log is attached, ask"),
 )

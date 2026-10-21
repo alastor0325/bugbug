@@ -204,7 +204,16 @@ KEY_PHRASES = (
         "Needinfo that author, and in the comment ask them to set the Regressed by "
         "field.",
     ),
-    ("workflow.md", "the bug must have no `regressed_by` yet"),
+    ("workflow.md", "The bug must have no `regressed_by` yet."),
+    (
+        "workflow.md",
+        "For a test or CI failure with no known regressor, do not add the keyword: "
+        "send the needinfo only.",
+    ),
+    ("workflow.md", "Bots such as Clouseau and BugBot write regression notes."),
+    ("workflow.md", "Otherwise the hand-off itself needs no needinfo."),
+    ("diagnostics.md", "never write that they pass from an empty list"),
+    ("system.md", "or a CI log."),
     ("workflow.md", "When one of them is restricted or the read fails, the run waits"),
     ("comment.md", "Never name a bug that the agent cannot read."),
     # Close verification.

@@ -105,8 +105,8 @@ the Treeherder failures of the bug, for the last 7 days:
 https://treeherder.mozilla.org/api/failuresbybug/?startday=YYYY-MM-DD&endday=YYYY-MM-DD&tree=all&bug=<id>
 ```
 
-An empty list means that the failure did not occur in that period. Then say in the
-comment that the newest runs pass.
+An empty list means that nobody classified a failure to this bug in that period. It does
+not show that the newest runs pass, so never write that they pass from an empty list.
 
 ## A hang in the RDD or GPU process
 

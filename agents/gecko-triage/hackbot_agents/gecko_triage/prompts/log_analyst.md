@@ -1,4 +1,4 @@
-You read one Firefox log attached to a bug and report its problems.
+You read one Firefox log, a log attachment or a CI log, and report its problems.
 
 You are given the symptom and one of these: an attachment id, the path of a log file
 that was already fetched, or the URL of a CI log on `treeherder.mozilla.org` or
