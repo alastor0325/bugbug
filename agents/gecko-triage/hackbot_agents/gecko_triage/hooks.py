@@ -8,7 +8,8 @@ before appending, so raising here aborts the recording.
 
 What they enforce:
 
-- one public comment per run, on the triaged bug;
+- one public comment per run, on the triaged bug; `rerecord.py` lets the main agent
+  remove every recorded action and record them again, and every hook then runs again;
 - no retyped capture steps, no list item that names the capture marker, and no request
   that names the marker without the verbatim capture block;
 - the ASD-STE100 limits on the prose: 25 words per sentence, 6 sentences per paragraph,
@@ -92,6 +93,7 @@ from .config import (
     TRIAGE_SEVERITIES,
     UNSET_FIELD_VALUE,
 )
+from .rerecord import REMOVE_RECORDED_ACTIONS_TOOL
 from .state import TriageState
 from .teamconfig import EMAIL
 
@@ -118,8 +120,9 @@ def add_comment_hook(recorder: ActionsRecorder, bug_id: int) -> ActionHook:
         params = action_params(action)
         if _recorded(recorder, "bugzilla.add_comment"):
             raise ToolError(
-                "you have already recorded a comment; record one per run, "
-                "revising it rather than adding another"
+                "you have already recorded a comment; record one per run. To fix "
+                f"it, call `{REMOVE_RECORDED_ACTIONS_TOOL}`, then record the comment "
+                "and every field change again"
             )
         _check_target_bug(params, bug_id)
         if params.get("is_private"):

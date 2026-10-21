@@ -51,7 +51,7 @@ from hackbot_runtime.searchfox import (
 from pydantic import BaseModel, BeforeValidator, Field, model_validator
 from searchfox import AsyncSearchfoxClient
 
-from . import attachments, authors, closing, dupes
+from . import attachments, authors, closing, dupes, rerecord
 from .actions_view import needinfo_requestees, updates
 from .config import (
     ALLOWED_LINK_HOSTS,
@@ -897,6 +897,10 @@ def session_options(
                     matcher=closing.SPAWN_TOOLS,
                     hooks=[closing.spawn_guard(close_verdicts)],
                 ),
+                HookMatcher(
+                    matcher=rerecord.REMOVE_RECORDED_ACTIONS_TOOL,
+                    hooks=[rerecord.removal_caller_guard],
+                ),
             ],
             # A verifier result saved to a file blocks a confirm.
             "PostToolUse": [
@@ -1000,6 +1004,9 @@ async def run_gecko_triage(
             attachments.SERVER_NAME: attachments.attachments_server(bug),
             dupes.SERVER_NAME: dupes.concepts_server(concepts),
             closing.SERVER_NAME: closing.verdicts_server(close_verdicts),
+            rerecord.SERVER_NAME: rerecord.removals_server(
+                rerecord.Removals(actions_recorder)
+            ),
             ACTIONS_SERVER_NAME: actions_server,
         },
         agents={
@@ -1024,6 +1031,7 @@ async def run_gecko_triage(
             attachments.FETCH_ATTACHMENT_TOOL,
             dupes.SEARCH_CONCEPTS_TOOL,
             closing.RECORD_CLOSE_VERDICT_TOOL,
+            rerecord.REMOVE_RECORDED_ACTIONS_TOOL,
             *enabled_action_tools,
         ],
         model=model,

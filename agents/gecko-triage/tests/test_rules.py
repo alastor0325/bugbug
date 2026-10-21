@@ -857,3 +857,20 @@ def test_the_rules_say_when_to_add_each_fix_tag(new_state):
     assert "The assignee, the whiteboard, CC" not in docs
     readme = " ".join((AGENT_ROOT / "README.md").read_text().split())
     assert "`fix_tags` lists the whiteboard tags the run added" in readme
+
+
+def test_the_rules_say_how_to_fix_an_error_in_the_recorded_comment(new_state):
+    comment = _flat("comment.md")
+    assert "## An error in a recorded comment" in (RULES_DIR / "comment.md").read_text()
+    for text in (
+        "If you find an error, call `remove_recorded_actions`.",
+        "It removes the comment and every recorded field change.",
+        "Never leave an error that you know of.",
+        "You can do this two times per run.",
+    ):
+        assert text in comment, text
+    prompt = " ".join(load_system_prompt(new_state, ()).split())
+    assert (
+        "If you find an error in the recorded comment, call `remove_recorded_actions`"
+        in prompt
+    )

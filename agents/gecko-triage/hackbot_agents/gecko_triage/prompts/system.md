@@ -99,7 +99,7 @@ A comment can link only to these hosts: {link_hosts}. A `*.` host also allows it
 
 The `actions` tools record intent; nothing reaches Bugzilla during the run. Record in this order:
 
-1. **`bugzilla_add_comment`**, once. Public. `comment.md` sets the voice and the ASD-STE100 writing standard. The hook refuses a comment outside its checked limits and gives the reason. A refused call records nothing. Fix the comment and try again.
+1. **`bugzilla_add_comment`**, once. Public. `comment.md` sets the voice and the ASD-STE100 writing standard. The hook refuses a comment outside its checked limits and gives the reason. A refused call records nothing. Fix the comment and try again. If you find an error in the recorded comment, call `remove_recorded_actions`, then record the comment and every field change again, as `comment.md` says.
 2. **`bugzilla_update_bug`**, once, after the comment, with every field change in one `changes` object (a second call on this bug is refused):
 
    - `severity` and `priority`, only when the bug's current value is `--`, never `S1`, `P4` or `P5`. Both go in one call.

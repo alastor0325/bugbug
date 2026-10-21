@@ -141,3 +141,10 @@ the data in plain words.
 
 The plan's `asked` lists the data the comment asks for. A needinfo that hands the bug to a
 developer is not a request for data, so it is not in `asked`.
+
+## An error in a recorded comment
+
+Read the comment again after you record it. If you find an error, call
+`remove_recorded_actions`. It removes the comment and every recorded field change. Then
+record the corrected comment and every field change again, in the same order. Every check
+runs again. You can do this two times per run. Never leave an error that you know of.

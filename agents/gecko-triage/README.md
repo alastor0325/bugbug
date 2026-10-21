@@ -107,6 +107,12 @@ read private comments.
    each action as it is recorded; their docstring lists the limits. A refusal reaches
    the model as a tool error it can correct in the same run, and nothing lands in
    `summary.json`.
+   The main agent can fix an error in its recorded comment with
+   `remove_recorded_actions`, an in-process MCP server (`rerecord.py`) bound to the
+   recorder. It removes every recorded action, the `dupe_of` change too, and the agent
+   records them again. Every hook runs again. The close verdicts stay, so a verdict
+   after the first comment stays late. A run can use it 2 times. A `PreToolUse` hook
+   refuses it to every subagent, and no subagent has it in its tools.
 6. `may_apply_unattended` in `agent.py` sets `findings.auto_apply` when the run has a
    team, the run recorded a comment and the final message carries a decision. A close
    also needs its confirm, as "Close verification" says. The

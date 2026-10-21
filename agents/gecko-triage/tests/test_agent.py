@@ -1,12 +1,13 @@
 """Tests for one run of the agent, with the Claude session replaced by a fake."""
 
 import contextlib
+import inspect
 
 import pytest
 from agent_tools.registry import ToolError
 from claude_agent_sdk import ResultMessage, SystemMessage
 from conftest import NOW
-from hackbot_agents.gecko_triage import agent, attachments, closing, dupes
+from hackbot_agents.gecko_triage import agent, attachments, closing, dupes, rerecord
 from hackbot_agents.gecko_triage.__main__ import AgentInputs
 from hackbot_agents.gecko_triage.authors import CommitFacts
 from hackbot_agents.gecko_triage.closing import CloseVerdict, CloseVerdicts
@@ -50,8 +51,8 @@ class FakeClient:
 
     async def query(self, prompt):
         FakeClient.prompt = prompt
-        if FakeClient.script:
-            FakeClient.script()
+        if FakeClient.script and inspect.isawaitable(done := FakeClient.script()):
+            await done
 
     async def receive_response(self):
         for msg in FakeClient.before:
@@ -801,6 +802,28 @@ async def test_the_run_registers_the_close_verifier_and_binds_its_store(
         ), name
 
 
+async def test_the_run_offers_remove_recorded_actions_to_the_main_agent_only(
+    fake_client, tmp_path, new_state, monkeypatch
+):
+    bound = []
+    real = rerecord.removals_server
+    monkeypatch.setattr(
+        rerecord, "removals_server", lambda r: bound.append(r) or real(r)
+    )
+    recorder = ActionsRecorder()
+    await _run(tmp_path, new_state, recorder)
+    options = fake_client.options
+    (removals,) = bound
+    assert removals.recorder is recorder and removals.used == 0
+    assert options.mcp_servers[rerecord.SERVER_NAME]["type"] == "sdk"
+    assert rerecord.REMOVE_RECORDED_ACTIONS_TOOL in options.allowed_tools
+    for name, sub in options.agents.items():
+        assert rerecord.REMOVE_RECORDED_ACTIONS_TOOL not in sub.tools, name
+    hooks = options.hooks["PreToolUse"]
+    (guard,) = [m for m in hooks if m.matcher == rerecord.REMOVE_RECORDED_ACTIONS_TOOL]
+    assert guard.hooks == [rerecord.removal_caller_guard]
+
+
 def _close_script(recorder, stores, verdict):
     def script():
         _record_verdict(stores, "INVALID", verdict=verdict)
@@ -848,6 +871,46 @@ async def test_the_findings_say_what_the_close_verifier_said(
     assert len(recorder.actions) == recorded
     assert result.auto_apply is auto_apply
     assert (result.close_warning is None) == (verdict == "confirm")
+
+
+async def test_a_run_that_records_its_close_again_keeps_the_confirm(
+    fake_client, tmp_path, new_state, monkeypatch, verdict_stores
+):
+    _fake_fetch(monkeypatch, {})
+    bound = []
+    real = rerecord.removals_server
+    monkeypatch.setattr(
+        rerecord, "removals_server", lambda r: bound.append(r) or real(r)
+    )
+    recorder = ActionsRecorder()
+
+    def record_both(text):
+        recorder.record(
+            "bugzilla.add_comment",
+            {"bug_id": BUG, "text": text, "is_private": False},
+            reasoning="r",
+        )
+        recorder.record(
+            "bugzilla.update_bug",
+            {"bug_id": BUG, "changes": {"status": "RESOLVED", "resolution": "INVALID"}},
+            reasoning="r",
+        )
+
+    async def script():
+        _record_verdict(verdict_stores, "INVALID")
+        record_both("The the note.")
+        await rerecord.remove_recorded_actions_tool(bound[-1])
+        record_both("The note.")
+
+    fake_client.script = script
+    fake_client.result = _result(
+        '```json\n{"decision": "invalid", "issue_type": "drm"}\n```'
+    )
+    result = await _run(tmp_path, new_state, recorder)
+    assert [a["params"].get("text") for a in recorder.actions] == ["The note.", None]
+    assert result.close_verification == "confirmed"
+    assert result.close_warning is None
+    assert result.auto_apply is True
 
 
 async def test_a_run_that_does_not_close_has_no_close_verification(
