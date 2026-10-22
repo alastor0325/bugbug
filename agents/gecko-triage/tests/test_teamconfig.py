@@ -315,13 +315,15 @@ def test_the_media_team_lists_its_linux_hardware_decode_expert():
     assert "blocklisted, or when Codec Support lists only SWDEC" in expert.when
     # NVIDIA and Vulkan bugs go to the NVIDIA expert instead.
     assert not any("Vulkan" in a for a in expert.areas)
-    assert "NVIDIA or the bug involves Vulkan: ask tboiko@nvidia.com" in expert.when
+    assert "any GPU in about:support is NVIDIA" in expert.when
+    assert "ask tboiko@nvidia.com" in expert.when
 
 
 def test_the_media_team_lists_its_nvidia_and_vulkan_expert():
     expert = {e.email: e for e in TEAM.needinfo_experts}["tboiko@nvidia.com"]
     assert list(expert.areas) == ["NVIDIA GPUs on Linux", "Vulkan video decoding"]
-    assert "Linux with an NVIDIA GPU" in expert.when and "Vulkan" in expert.when
+    assert "any GPU in about:support is NVIDIA" in expert.when
+    assert "Vulkan" in expert.when
 
 
 def test_the_media_team_has_its_fallback_list():
