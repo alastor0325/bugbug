@@ -34,8 +34,11 @@ SPAWN_TOOLS = "Agent|Task"
 TDD_STEPS = ("test_fails", "test_passes")
 # Every patch needs these after the last review, on the current diff.
 CHECK_STEPS = ("verify", "associated_tests")
+# What could not be checked here. Recorded for the test comment; never required.
+NOT_CHECKED = "not_checked"
 
 _BLOCKING = re.compile(r"^BLOCKING:\s*(\d+)\s*$", re.MULTILINE)
+_NIT = re.compile(r"^\s*-\s*`?NIT`?[,:]?\s*(.+?)\s*$", re.MULTILINE)
 
 
 @dataclass
@@ -43,6 +46,8 @@ class Review:
     # None when the reviewer's result had no `BLOCKING: <n>` line.
     blocking: int | None
     fp: str
+    # The small findings of this round, which the agent may leave.
+    nits: tuple[str, ...] = ()
 
 
 @dataclass
@@ -53,12 +58,17 @@ class Gates:
     tdd: dict[str, bool] = field(default_factory=dict)
     # For each check step, the fingerprint of the patch its last pass ran on.
     checked: dict[str, str] = field(default_factory=dict)
+    # The evidence of each step's last pass, for the test comment.
+    evidence: dict[str, str] = field(default_factory=dict)
+    # The evidence and reviews as they were when the submit guard last let a patch
+    # through, so the test comment matches the patch that was sent.
+    sent: "Gates | None" = None
     reviews: list[Review] = field(default_factory=list)
 
     def fingerprint(self) -> str:
         return fingerprint(self.repo)
 
-    def record(self, step: str, ok: bool, *, fp: str) -> None:
+    def record(self, step: str, ok: bool, *, fp: str, evidence: str = "") -> None:
         if step in TDD_STEPS:
             self.tdd[step] = ok
         elif step in CHECK_STEPS:
@@ -66,8 +76,10 @@ class Gates:
                 self.checked[step] = fp
             else:
                 self.checked.pop(step, None)
-        else:
+        elif step != NOT_CHECKED:
             raise ValueError(f"unknown step {step!r}")
+        if ok:
+            self.evidence[step] = evidence
 
     def refusal(self, tool_name: str, fp: str) -> str | None:
         """Why the patch action ``tool_name`` is refused on diff ``fp``, or None."""
@@ -109,6 +121,11 @@ def parse_blocking(text: str) -> int | None:
     return int(found[-1]) if found else None
 
 
+def parse_nits(text: str) -> tuple[str, ...]:
+    """The small findings in a reviewer's result: its `- NIT, ...` lines."""
+    return tuple(_NIT.findall(text or ""))
+
+
 def fingerprint(repo: Path) -> str:
     """The tree id of the checkout as it is now: commits, edits and new files.
 
@@ -141,7 +158,7 @@ def fingerprint(repo: Path) -> str:
 @tool
 async def record_gate(
     ctx: Gates,
-    step: Literal[TDD_STEPS + CHECK_STEPS],
+    step: Literal[TDD_STEPS + CHECK_STEPS + (NOT_CHECKED,)],
     ok: bool,
     evidence: str,
 ) -> str:
@@ -152,10 +169,14 @@ async def record_gate(
     ``verify``: format, lint and build pass on the current patch.
     ``associated_tests``: every associated test that can run here passes, or fails the
     same way without the patch. List each test and its result, and each test that could
-    not run here.
+    not run here. ``not_checked``: what you could not check here, and why.
+
+    The evidence goes into a comment on the revision, so write it in short, simple
+    sentences with test names in backticks and counts as numbers.
     """
+    fp = await asyncio.to_thread(ctx.fingerprint) if step in CHECK_STEPS else ""
     try:
-        ctx.record(step, ok, fp=await asyncio.to_thread(ctx.fingerprint))
+        ctx.record(step, ok, fp=fp, evidence=evidence)
     except ValueError as e:
         raise ToolError(str(e)) from e
     return f"recorded {step}"
@@ -192,7 +213,12 @@ def submit_guard(gates: Gates):
     async def guard(input_data: dict, tool_use_id: str | None, context) -> dict:
         fp = await asyncio.to_thread(gates.fingerprint)
         reason = gates.refusal(input_data.get("tool_name", ""), fp)
-        return {} if reason is None else _deny(reason)
+        if reason is not None:
+            return _deny(reason)
+        gates.sent = Gates(
+            gates.repo, evidence=dict(gates.evidence), reviews=list(gates.reviews)
+        )
+        return {}
 
     return guard
 
@@ -202,10 +228,12 @@ def review_hook(gates: Gates):
 
     async def hook(input_data: dict, tool_use_id: str | None, context) -> dict:
         if (input_data.get("tool_input") or {}).get("subagent_type") == REVIEWER:
+            text = _texts(input_data.get("tool_response"))
             gates.reviews.append(
                 Review(
-                    parse_blocking(_texts(input_data.get("tool_response"))),
+                    parse_blocking(text),
                     fp=await asyncio.to_thread(gates.fingerprint),
+                    nits=parse_nits(text),
                 )
             )
         return {}

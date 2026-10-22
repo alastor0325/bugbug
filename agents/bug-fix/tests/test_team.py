@@ -204,3 +204,72 @@ def test_team_prompt_names_the_runner_platform(tmp_path, monkeypatch):
     monkeypatch.setattr(agent.sys, "platform", "win32")
     prompt = build_system_prompt(RULES_DIR, _write_team(tmp_path))
     assert "This run is on Windows." in prompt
+
+
+async def test_team_run_records_the_test_comment_after_its_patch(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from hackbot_agents.bug_fix import agent
+    from hackbot_runtime.actions import ActionsRecorder
+
+    recorder = ActionsRecorder(artifacts_dir=tmp_path / "artifacts")
+
+    class _Result:
+        is_error = False
+        result = "done"
+        num_turns = 3
+        total_cost_usd = 0.1
+
+    class _Session:
+        def __init__(self, options):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def query(self, prompt):
+            pass
+
+        async def receive_response(self):
+            from hackbot_agents.bug_fix.gates import Gates
+
+            state.sent = Gates(repo=None)
+            recorder.record("phabricator.submit_patch", {"bug_id": 1}, reasoning="r")
+            yield _Result()
+
+    monkeypatch.setattr(agent, "ClaudeSDKClient", _Session)
+    monkeypatch.setattr(agent, "ResultMessage", _Result)
+    monkeypatch.setattr(agent, "build_sdk_server", lambda *a, **k: {})
+    monkeypatch.setattr(agent, "base_commit", lambda repo: "base")
+    real_session = agent.team_session
+    state = None
+
+    def team_session(*args):
+        nonlocal state
+        session = real_session(*args)
+        state = session["gates"]
+        return session
+
+    monkeypatch.setattr(agent, "team_session", team_session)
+
+    await agent.run_bug_fix(
+        bugzilla_mcp_server={"type": "http", "url": "http://b"},
+        phabricator_mcp_server={"type": "http", "url": "http://p"},
+        source_repo=tmp_path,
+        fx_ctx=SimpleNamespace(
+            mozconfig=tmp_path / "mozconfig", objdir=tmp_path / "obj"
+        ),
+        bug=1,
+        team_dir=_write_team(tmp_path / "teams"),
+        actions_recorder=recorder,
+    )
+
+    types = [a["type"] for a in recorder.actions]
+    assert types == ["phabricator.submit_patch", "phabricator.add_comment"]
+    assert (
+        recorder.actions[-1]["params"]["revision_id"]
+        == "D{{actions.patch.revision_id}}"
+    )
