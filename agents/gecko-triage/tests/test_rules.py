@@ -391,6 +391,13 @@ KEY_PHRASES = (
     ),
     ("workflow.md", "Use `other` only when no listed value fits the main symptom."),
     ("workflow.md", "There is no crash value."),
+    # Investigate the diagnostics before an ask.
+    (
+        "workflow.md",
+        "spawn `bug_investigator` to look for the cause in the code before you "
+        "decide `needs_info`.",
+    ),
+    ("workflow.md", "Never ask the reporter to repeat a test."),
 )
 
 

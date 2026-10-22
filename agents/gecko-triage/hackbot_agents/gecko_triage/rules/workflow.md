@@ -76,7 +76,7 @@ read a `moz.build` file to find the component that owns a file. The flow is: art
 analysis identifies the symptom pattern; the team's `diagnostics.md` and `meta-bugs.md`
 say whether the pattern is known. If it is known, the bug is analyzed. If the pattern is
 clear but the cause is not, the bug is analyzed only with reliable steps to reproduce.
-Otherwise it needs info.
+Otherwise step 5 decides whether it needs info.
 
 ## Step 3: classify the bug
 
@@ -189,6 +189,14 @@ specific meta bug to the `dupe_of` bug.
 
 Cross-reference the inventory against what the bug type needs ("Required information" in
 `diagnostics.md` and in the team's `diagnostics.md`). Flag only what is genuinely absent.
+
+**Investigate before you ask.** When the bug already has diagnostics, spawn
+`bug_investigator` to look for the cause in the code before you decide `needs_info`.
+Diagnostics are memory maps, logs, profiles, crash data, a regression range and
+measurements. Ask the reporter for data only when the investigation names a question that
+the data can answer. Say in the comment which question the data answers. Never ask the
+reporter to repeat a test. Never ask them to show again a fact that the bug already shows.
+A bug with no data at all, with no steps and no logs, can go straight to "Needs info".
 
 ## Step 6: branch
 

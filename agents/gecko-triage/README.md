@@ -223,15 +223,15 @@ comment in review.
 
 ## Subagents and skills
 
-| Subagent           | Does                                                     | Skill (fx-bug-toolkit)    |
-| ------------------ | -------------------------------------------------------- | ------------------------- |
-| `bug_investigator` | Investigates the root cause before an "Analyzed" comment | `bug-start` (triage mode) |
-| `profile_analyst`  | Reads one Firefox Profiler capture                       | `analyze-profile`         |
-| `log_analyst`      | Reads one log, attached, extracted or from CI            | `check-log`               |
-| `spec_checker`     | Checks a behavior against a spec, gives a verdict        | `spec-check`              |
-| `duplicate_hunter` | Searches for an existing report, with `search_concepts`  | none                      |
-| `close_verifier`   | Tries to prove a proposed close wrong, before it is kept | none                      |
-| `investigator`     | Answers one read-only question                           | none                      |
+| Subagent           | Does                                                               | Skill (fx-bug-toolkit)    |
+| ------------------ | ------------------------------------------------------------------ | ------------------------- |
+| `bug_investigator` | Investigates the root cause before an "Analyzed" comment or an ask | `bug-start` (triage mode) |
+| `profile_analyst`  | Reads one Firefox Profiler capture                                 | `analyze-profile`         |
+| `log_analyst`      | Reads one log, attached, extracted or from CI                      | `check-log`               |
+| `spec_checker`     | Checks a behavior against a spec, gives a verdict                  | `spec-check`              |
+| `duplicate_hunter` | Searches for an existing report, with `search_concepts`            | none                      |
+| `close_verifier`   | Tries to prove a proposed close wrong, before it is kept           | none                      |
+| `investigator`     | Answers one read-only question                                     | none                      |
 
 The main agent, `investigator`, `bug_investigator` and `log_analyst` read attachments
 with the `fetch_attachment` tool (`attachments.py`), an in-process MCP server bound to the

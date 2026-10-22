@@ -15,7 +15,7 @@ decides what may be written.
 
 Profiles, logs and specs are read by subagents that follow the fx-bug-toolkit plugin's
 `analyze-profile`, `check-log` and `spec-check` skills. `bug_investigator` runs the
-`bug-start` skill in triage mode before an "Analyzed" comment. `close_verifier` checks
-every close before it is recorded.
+`bug-start` skill in triage mode before an "Analyzed" comment, and before an ask on a
+bug that has diagnostics. `close_verifier` checks every close before it is recorded.
 
 Rules are prose. A new file extends the set; say at its top when it applies.
