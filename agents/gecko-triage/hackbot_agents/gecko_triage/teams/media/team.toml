@@ -130,8 +130,13 @@ areas = ["autoplay", "WebVTT", "PlayReady"]
 
 [[needinfo_experts]]
 email = "stransky@anakreon.cz"
-areas = ["Linux hardware video decoding (VA-API, V4L2, Vulkan video, ffvpx-hw)"]
-when = "The bug is on Linux and involves hardware video decoding. about:support must show that hardware decoding is available. Do not ask when HARDWARE_VIDEO_DECODING is unavailable or blocklisted, or when Codec Support lists only SWDEC."
+areas = ["Linux hardware video decoding (VA-API, V4L2, ffvpx-hw)"]
+when = "The bug is on Linux and involves hardware video decoding. about:support must show that hardware decoding is available. Do not ask when HARDWARE_VIDEO_DECODING is unavailable or blocklisted, or when Codec Support lists only SWDEC. Do not ask when the GPU is NVIDIA or the bug involves Vulkan: ask tboiko@nvidia.com."
+
+[[needinfo_experts]]
+email = "tboiko@nvidia.com"
+areas = ["NVIDIA GPUs on Linux", "Vulkan video decoding"]
+when = "The bug is on Linux with an NVIDIA GPU (about:support shows an NVIDIA GPU or driver), or the bug involves Vulkan, for example Vulkan video decoding."
 
 # The values for the run's `issue_type`, the bug's main symptom, in this order. `other` is
 # always allowed and is not listed.

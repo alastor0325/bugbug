@@ -298,7 +298,11 @@ def test_the_media_team_lists_its_experts_by_person():
     experts = {e.email: e for e in TEAM.needinfo_experts}
     for email, areas in MEDIA_EXPERTS.items():
         assert list(experts[email].areas) == areas, email
-    assert set(experts) == {*MEDIA_EXPERTS, "stransky@anakreon.cz"}
+    assert set(experts) == {
+        *MEDIA_EXPERTS,
+        "stransky@anakreon.cz",
+        "tboiko@nvidia.com",
+    }
 
 
 def test_the_media_team_lists_its_linux_hardware_decode_expert():
@@ -309,6 +313,15 @@ def test_the_media_team_lists_its_linux_hardware_decode_expert():
     assert "HARDWARE_VIDEO_DECODING" in expert.when
     assert "SWDEC" in expert.when
     assert "blocklisted, or when Codec Support lists only SWDEC" in expert.when
+    # NVIDIA and Vulkan bugs go to the NVIDIA expert instead.
+    assert not any("Vulkan" in a for a in expert.areas)
+    assert "NVIDIA or the bug involves Vulkan: ask tboiko@nvidia.com" in expert.when
+
+
+def test_the_media_team_lists_its_nvidia_and_vulkan_expert():
+    expert = {e.email: e for e in TEAM.needinfo_experts}["tboiko@nvidia.com"]
+    assert list(expert.areas) == ["NVIDIA GPUs on Linux", "Vulkan video decoding"]
+    assert "Linux with an NVIDIA GPU" in expert.when and "Vulkan" in expert.when
 
 
 def test_the_media_team_has_its_fallback_list():
