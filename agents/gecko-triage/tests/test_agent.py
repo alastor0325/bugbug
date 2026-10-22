@@ -912,6 +912,8 @@ async def test_a_run_that_records_nothing_is_watching(
         ("duplicate", False, True, None),
         ("duplicate", True, False, "watching"),
         ("invalid", True, False, "watching"),
+        ("wrong_component", True, True, None),
+        ("stalled", True, True, None),
         ("watching", False, False, "watching"),
     ],
 )
@@ -938,6 +940,7 @@ async def test_an_empty_run_after_a_refuted_close_is_watching(
     result = await _run(tmp_path, new_state, ActionsRecorder())
     assert result.decision == "watching"
     assert result.close_verification == "refuted"
+    assert result.close_warning is None
 
 
 @pytest.mark.parametrize(

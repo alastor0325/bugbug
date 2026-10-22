@@ -281,15 +281,18 @@ def relabeled_empty_run(
 ) -> tuple[Plan, str | None]:
     """``plan`` as `watching` when an analyzed or needs-info run recorded nothing.
 
-    The same holds for any decision after `close_verifier` refuted a close: the run then
-    has nothing to record, and a retry would only meet the same refute. Such a run
+    The same holds for a planned close after `close_verifier` refuted a close: no close
+    can be recorded in the run, and a retry would only meet the same refute. Such a run
     changes nothing on the bug, so `watching` is the only true label, and its plan's
     action fields are cleared. Returns the plan and the reason, or the plan as is.
     """
     if (
         actions
         or plan.decision in rerecord.NO_COMMENT_DECISIONS
-        or (plan.decision not in RELABELED_WHEN_EMPTY and not refuted)
+        or (
+            plan.decision not in RELABELED_WHEN_EMPTY
+            and not (refuted and plan.decision in CLOSING_DECISIONS)
+        )
     ):
         return plan, None
     note = f"the run recorded nothing, so its decision {plan.decision} is now watching"
@@ -302,11 +305,12 @@ def empty_run_refusal(
 ) -> str | None:
     """Why a run fails: it planned a close, a move or `stalled` and recorded nothing.
 
-    Not after a refuted close: that run is `watching` (see `relabeled_empty_run`).
+    Not a planned close after a refuted close: that run is `watching` (see
+    `relabeled_empty_run`). A refute blocks only closes, so a move or `stalled` fails.
     """
     if (
         actions
-        or refuted
+        or (refuted and plan.decision in CLOSING_DECISIONS)
         or plan.decision in RELABELED_WHEN_EMPTY | rerecord.NO_COMMENT_DECISIONS
     ):
         return None
@@ -1322,9 +1326,13 @@ async def run_gecko_triage(
     if relabel_note:
         print(f"[gecko_triage] bug {bug}: {relabel_note}", file=sys.stderr)
     close_verification = close_verdicts.outcome(closing.recorded_close(actions))
-    close_warning = close_mismatch(
-        plan, actions, close_verdicts
-    ) or dupe_target_warning(actions, bug, found or {})
+    # A run with no action has no comment or close for a person to check.
+    close_warning = (
+        close_mismatch(plan, actions, close_verdicts)
+        or dupe_target_warning(actions, bug, found or {})
+        if actions
+        else None
+    )
 
     return GeckoTriageResult(
         bug_id=bug,
