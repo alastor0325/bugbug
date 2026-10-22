@@ -1,7 +1,9 @@
 import email.message
 import gzip
+import http.server
 import io
 import json
+import threading
 import time
 import urllib.error
 
@@ -9,12 +11,18 @@ import pytest
 from agent_tools.registry import ToolError
 from hackbot_agents.gecko_triage import agent, ci_logs
 from hackbot_agents.gecko_triage.attachments import MANIFEST_NAME, Refused
+from hackbot_agents.gecko_triage.authors import CommitFacts
 from hackbot_agents.gecko_triage.ci_logs import (
+    FETCH_CI_LOG_TOOL,
+    caller_guard,
+    caller_refusal,
     decoded,
     fetch_ci_log,
     parse_log_ref,
+    pick_run,
     redirect_refusal,
 )
+from hackbot_agents.gecko_triage.closing import CloseVerdicts
 
 BUG = 9000001
 TASK = "XRrZ2iAeQ4OuEcG8CY8b0w"
@@ -55,7 +63,8 @@ class FakeWeb:
         self.routes, self.seen = routes, []
 
     def __call__(self, url, headers, timeout):
-        self.seen.append((url, headers, timeout))
+        if not url.endswith("/status"):
+            self.seen.append((url, headers, timeout))
         answer = self.routes.get(url, 404)
         if isinstance(answer, int):
             raise _http_error(url, answer)
@@ -146,7 +155,12 @@ def test_parse_log_ref_finds_the_task(ref, expected):
         (LOG.replace("live_backing.log", "other.log"), "is not the path"),
         (LOG.replace(TASK, TASK[:-1]), "is not the path"),
         (LOG + "/../x", "is not the path"),
-        (LOG.replace("/0/", "/1000/"), "from 0 to 99"),
+        (LOG.replace("/0/", "/100/"), "is not the path"),
+        (LOG.replace("/0/", "/" + "9" * 5000 + "/"), "is not the path"),
+        (
+            f"https://treeherder.mozilla.org/jobs?selectedTaskRun={TASK}.{'9' * 5000}",
+            "is not <task>.<run>",
+        ),
         (f"https://evil.example/{TASK}/0/public/logs/live_backing.log", "is not"),
         ("file:///etc/passwd", "only https"),
         ("", "only https"),
@@ -182,6 +196,7 @@ def test_parse_log_ref_refuses(ref, reason):
     [
         (LOG, None),
         (LOG.replace("firefoxci.", "x."), "redirects away"),
+        (LOG.replace("live_backing", "other"), "redirects to another path"),
         ("https://storage.googleapis.com/bucket/live_backing.log", "redirects away"),
         (LOG.replace("https://", "http://"), "refused URL"),
         (LOG.replace("https://", "https://u@"), "refused URL"),
@@ -237,6 +252,7 @@ def test_a_log_is_fetched_from_the_url_the_tool_builds(tmp_path):
         "path": str(path),
         "source_url": LOG,
         "size": len(BODY),
+        "finished": False,
     }
     assert path.read_bytes() == BODY
     ((url, headers, timeout),) = web.seen
@@ -263,7 +279,7 @@ def test_a_task_id_reads_the_newest_run(tmp_path):
         {status: {"status": {"runs": [{"runId": 0}, {"runId": 2}]}}, newest: BODY}
     )
     assert fetch(tmp_path, web, TASK)["run"] == 2
-    assert [u for u, _, _ in web.seen] == [status, newest]
+    assert [u for u, _, _ in web.seen] == [newest]
 
 
 def test_a_task_id_reads_run_0_when_the_queue_does_not_say(tmp_path):
@@ -459,3 +475,263 @@ def test_the_log_analyst_prompt_names_the_tool_and_not_curl():
     assert "`fetch_ci_log`" in prompt
     assert "Never use curl or WebFetch to fetch a log." in prompt
     assert prompt.count("curl") == 1
+
+
+# Treeherder parameters that disagree
+
+
+@pytest.mark.parametrize(
+    ("query", "reason"),
+    [
+        (f"selectedTaskRun={TASK}.0&selectedJob=5&repo=try", "both a selectedTaskRun"),
+        (f"selectedTaskRun={TASK}.0&job_id=5&repo=try", "both a selectedTaskRun"),
+        ("job_id=5&selectedJob=6&repo=try", "two jobs"),
+    ],
+)
+def test_a_treeherder_link_that_names_two_targets_is_refused(query, reason):
+    with pytest.raises(Refused, match=reason):
+        parse_log_ref(f"https://treeherder.mozilla.org/jobs?{query}")
+
+
+def test_a_treeherder_link_may_name_one_job_twice():
+    link = "https://treeherder.mozilla.org/logviewer?job_id=5&selectedJob=5&repo=try"
+    assert parse_log_ref(link) == ("job", "try", 5)
+
+
+# Redirects without a target
+
+
+def test_a_redirect_with_no_location_is_refused_at_once(tmp_path):
+    web = FakeWeb({LOG: 302})
+    result = fetch(tmp_path, web)
+    assert "with no Location" in result["refused"]
+    assert len(web.seen) == 1
+
+
+# Choosing the run
+
+
+STATUS = f"{ci_logs.QUEUE_API}/task/{TASK}/status"
+
+
+def _status(*states: str) -> dict:
+    runs = [{"runId": i, "state": state} for i, state in enumerate(states)]
+    return {"status": {"runs": runs}}
+
+
+@pytest.mark.parametrize(
+    ("states", "run", "noted"),
+    [
+        ({0: "completed", 1: "running"}, 0, False),
+        ({0: "failed", 1: "exception", 2: "pending"}, 1, False),
+        ({0: "running"}, 0, True),
+        ({}, 0, True),
+    ],
+)
+def test_pick_run_takes_the_newest_finished_run(states, run, noted):
+    picked, note = pick_run(states)
+    assert picked == run
+    assert (note is not None) == noted
+
+
+def test_a_task_id_skips_a_run_that_is_still_running(tmp_path):
+    web = FakeWeb({STATUS: _status("completed", "running"), LOG: BODY})
+    result = fetch(tmp_path, web, TASK)
+    assert result["run"] == 0
+    assert "finished" not in result and "note" not in result
+
+
+def test_a_status_failure_is_named_in_the_result(tmp_path):
+    result = fetch(tmp_path, FakeWeb({LOG: BODY}), TASK)
+    assert result["run"] == 0
+    assert result["note"] == (
+        "the queue status could not be read (HTTP 404), so run 0 was read"
+    )
+    assert result["finished"] is False
+
+
+def test_a_task_with_no_finished_run_is_read_with_a_note(tmp_path):
+    web = FakeWeb({STATUS: _status("running"), LOG: BODY})
+    result = fetch(tmp_path, web, TASK)
+    assert "run 0 is running" in result["note"]
+    assert result["finished"] is False
+
+
+# Reuse
+
+
+def test_the_log_of_a_finished_run_is_reused(tmp_path):
+    web = FakeWeb({STATUS: _status("completed"), LOG: BODY})
+    first = fetch(tmp_path, web)
+    second = fetch(tmp_path, web)
+    assert "cached" not in first and second["cached"] is True
+    assert second["size"] == len(BODY)
+    assert len(web.seen) == 1
+    assert [row["reason"] for row in manifest(tmp_path)] == [
+        "fetched for triage",
+        "cached copy",
+    ]
+
+
+def test_the_log_of_a_running_run_is_fetched_again(tmp_path):
+    web = FakeWeb({STATUS: _status("running"), LOG: BODY})
+    fetch(tmp_path, web)
+    second = fetch(tmp_path, web)
+    assert "cached" not in second and second["finished"] is False
+    assert len(web.seen) == 2
+
+
+def test_a_log_without_the_finished_mark_is_fetched_again(tmp_path):
+    (tmp_path / "logs").mkdir(mode=0o700)
+    (tmp_path / "logs" / f"task-{TASK}-run-0.log").write_bytes(b"cut")
+    web = FakeWeb({STATUS: _status("completed"), LOG: BODY})
+    assert fetch(tmp_path, web)["size"] == len(BODY)
+    assert len(web.seen) == 1
+
+
+# The budget of the run
+
+
+def _other_log(tmp_path, n: int, size: int) -> None:
+    folder = tmp_path / "logs"
+    folder.mkdir(mode=0o700, exist_ok=True)
+    (folder / f"task-{OTHER[:-2]}{n:02d}-run-0.log").write_bytes(b"x" * size)
+
+
+def test_the_run_reads_at_most_max_logs(tmp_path, monkeypatch):
+    monkeypatch.setattr(ci_logs, "MAX_LOGS", 2)
+    _other_log(tmp_path, 1, 10)
+    _other_log(tmp_path, 2, 10)
+    web = FakeWeb({LOG: BODY})
+    result = fetch(tmp_path, web)
+    assert "already read 2 CI logs" in result["refused"]
+    assert web.seen == []
+
+
+def test_a_used_up_budget_is_refused_before_the_download(tmp_path, monkeypatch):
+    monkeypatch.setattr(ci_logs, "MAX_TOTAL_BYTES", 100)
+    _other_log(tmp_path, 1, 100)
+    web = FakeWeb({LOG: BODY})
+    result = fetch(tmp_path, web)
+    assert "budget for the CI logs of this run is used up" in result["refused"]
+    assert web.seen == []
+
+
+def test_a_log_over_the_budget_left_is_not_read(tmp_path, monkeypatch):
+    monkeypatch.setattr(ci_logs, "MAX_TOTAL_BYTES", 100 + len(BODY) - 1)
+    _other_log(tmp_path, 1, 100)
+    result = fetch(tmp_path, FakeWeb({LOG: BODY}))
+    assert "left of the" in result["refused"]
+    assert "too large, not read" in result["refused"]
+    assert not (tmp_path / "logs" / f"task-{TASK}-run-0.log").exists()
+
+
+def test_a_log_fetched_again_does_not_count_against_itself(tmp_path, monkeypatch):
+    monkeypatch.setattr(ci_logs, "MAX_LOGS", 1)
+    monkeypatch.setattr(ci_logs, "MAX_TOTAL_BYTES", len(BODY))
+    web = FakeWeb({LOG: BODY})
+    fetch(tmp_path, web)
+    assert fetch(tmp_path, web)["size"] == len(BODY)
+
+
+def test_a_download_in_progress_holds_its_share(tmp_path, monkeypatch):
+    monkeypatch.setattr(ci_logs, "MAX_LOGS", 1)
+    root = tmp_path / "logs"
+    root.mkdir()
+    with ci_logs.reserve(root, root / "a.log", 10) as cap:
+        assert cap == 10
+        with (
+            pytest.raises(Refused, match="already read 1"),
+            ci_logs.reserve(root, root / "b.log", 10),
+        ):
+            pass
+    with ci_logs.reserve(root, root / "b.log", 10):
+        pass
+
+
+def test_the_budget_values():
+    assert ci_logs.MAX_TOTAL_BYTES == 256 * ci_logs.MIB
+    assert ci_logs.MAX_LOGS == 12
+
+
+# Only log_analyst may fetch
+
+
+def test_only_the_log_analyst_may_call_fetch_ci_log():
+    assert caller_refusal({"agent_type": "log_analyst", "agent_id": "a1"}) is None
+    for data in ({}, {"agent_type": "general-purpose"}, {"agent_type": "investigator"}):
+        assert "only the log_analyst subagent" in caller_refusal(data)
+
+
+async def test_the_caller_guard_denies_the_main_agent():
+    denied = await caller_guard({}, None, None)
+    output = denied["hookSpecificOutput"]
+    assert output["permissionDecision"] == "deny"
+    assert "log_analyst" in output["permissionDecisionReason"]
+    assert await caller_guard({"agent_type": "log_analyst"}, None, None) == {}
+
+
+def test_the_session_installs_the_caller_guard():
+    hooks = agent.session_options(CloseVerdicts(), CommitFacts())["hooks"]["PreToolUse"]
+    (guard,) = [m for m in hooks if m.matcher == FETCH_CI_LOG_TOOL]
+    assert guard.hooks == [caller_guard]
+
+
+# The end-to-end deadline
+
+
+class _Trickle(http.server.BaseHTTPRequestHandler):
+    """Answers the status at once, and the log one byte of its headers at a time."""
+
+    def do_GET(self):
+        if self.path.endswith("/status"):
+            body = json.dumps(_status("completed")).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        for byte in b"HTTP/1.1 200 OK\r\nX-Slow: " + b"a" * 10_000:
+            try:
+                self.wfile.write(bytes([byte]))
+                self.wfile.flush()
+            except OSError:
+                return
+            time.sleep(0.05)
+
+    def log_message(self, *args):
+        pass
+
+
+@pytest.fixture
+def trickle(monkeypatch):
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Trickle)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    monkeypatch.setattr(ci_logs, "QUEUE_API", f"{base}/q")
+    monkeypatch.setattr(ci_logs, "log_url", lambda task, run: f"{base}/{task}/{run}")
+    monkeypatch.setattr(ci_logs, "HTTP_TIMEOUT", 1)
+    yield
+    server.shutdown()
+    server.server_close()
+
+
+def test_a_reply_that_trickles_its_headers_stops_at_the_deadline(tmp_path, trickle):
+    start = time.monotonic()
+    result = fetch_ci_log(BUG, TASK, root=tmp_path / "logs")
+    assert time.monotonic() - start < 3
+    assert "took longer than" in result["refused"]
+    assert not list((tmp_path / "logs").glob("task-*"))
+
+
+def test_the_watchdog_shuts_a_socket_added_after_it_expired():
+    class Sock:
+        shut = False
+
+        def shutdown(self, how):
+            self.shut = True
+
+    watch = ci_logs.Watchdog(time.monotonic() + 60)
+    watch.expire()
+    watch.cancel()
+    assert watch.add(Sock()).shut

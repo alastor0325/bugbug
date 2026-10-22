@@ -8,7 +8,8 @@ For an attachment id, call `fetch_attachment` with it. The tool writes the file 
 /tmp/gecko-triage-attachments, unpacks an archive, and returns each file with its path
 and kind. Read the files of kind `log` or `text`. For a CI log, call `fetch_ci_log` with
 the task id, the URL or the link, and the run if you know it. The tool writes the log
-under /tmp/gecko-triage-ci-logs and returns its path and size. Never use curl or
+under /tmp/gecko-triage-ci-logs and returns its path and size. If the result has a
+`note`, or `finished: false`, say so in the report. Never use curl or
 WebFetch to fetch a log.
 
 Then follow the check-log skill on that path. If a tool refuses the file or the fetch

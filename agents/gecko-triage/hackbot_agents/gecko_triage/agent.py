@@ -1059,6 +1059,11 @@ def session_options(
                     matcher=rerecord.REMOVE_RECORDED_ACTIONS_TOOL,
                     hooks=[rerecord.removal_caller_guard],
                 ),
+                # The server serves the whole session; only `log_analyst` fetches.
+                HookMatcher(
+                    matcher=ci_logs.FETCH_CI_LOG_TOOL,
+                    hooks=[ci_logs.caller_guard],
+                ),
             ],
             # A verifier result saved to a file blocks a confirm.
             "PostToolUse": [
@@ -1171,7 +1176,7 @@ async def run_gecko_triage(
             "investigator": make_investigator(),
             "profile_analyst": make_profile_analyst(),
             "bug_investigator": make_bug_investigator(searchfox_rev),
-            "log_analyst": make_log_analyst(),
+            ci_logs.LOG_ANALYST: make_log_analyst(),
             "spec_checker": make_spec_checker(),
             "duplicate_hunter": make_duplicate_hunter(scope_for(TEAM, state.bug)),
             closing.VERIFIER: make_close_verifier(),
