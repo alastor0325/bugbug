@@ -33,7 +33,7 @@ from .config import (
     STALE_NEEDINFO_DAYS,
     TERMS,
 )
-from .preflight import AUTOMATION_SUFFIXES, is_developer_reporter
+from .preflight import is_developer_reporter
 
 # `id` is required: `get_bugs` diffs requested against returned ids and raises KeyError
 # without it. `last_change_time_non_bot` is BMO-specific and not in `_default`.
@@ -45,6 +45,9 @@ BUG_FIELDS = (
 )
 # Bugzilla's assignee for a bug that nobody owns.
 UNASSIGNED = "nobody@mozilla.org"
+# BMO automation logins: `*.tld` (release-mgmt-account-bot@mozilla.tld) and `*.bugs`
+# (Treeherder's intermittent-bug-filer@mozilla.bugs).
+AUTOMATION_SUFFIXES = (".tld", ".bugs")
 # A hung broker must not hold the job until the job timeout. The bug read fails the
 # lookup at STATE_TIMEOUT; the history read only gives up at HISTORY_TIMEOUT.
 STATE_TIMEOUT = 180
@@ -184,13 +187,6 @@ class TriageState:
         """The person the bug is assigned to, lowercased; None for the default nobody."""
         who = _lower(self.bug.get("assigned_to"))
         return None if who in ("", UNASSIGNED) else who
-
-    @cached_property
-    def agent_commented(self) -> bool:
-        """Whether the agent wrote any comment on the bug."""
-        return any(
-            isinstance(c, dict) and self._from_the_agent(c) for c in self.comments
-        )
 
     @cached_property
     def newest_comment(self) -> dict | None:

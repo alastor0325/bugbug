@@ -20,10 +20,6 @@ any model turn, when any of these is true:
 - the whiteboard contains `[gecko-triage:skip]`;
 - Mozilla staff who are not QA filed it and the severity is already set;
 - the bug is assigned to a person, who owns it;
-- the severity and the priority are set and the agent never commented on the bug, unless
-  the bug can close as INCOMPLETE. A BMO automation login (`*.tld` or `*.bugs`) sets
-  its own severity and priority, such as S4 and P5 from Treeherder's
-  `intermittent-bug-filer@mozilla.bugs`, so a bug that one filed is still triaged;
 - the agent wrote the newest comment, and nothing that changes the analysis happened on
   the bug after it. A change to a field in the `[history]` table of `shared/bugzilla.toml`
   (CC, votes, ranks, release status and tracking flags) does not count, and nor does a

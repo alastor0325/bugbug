@@ -209,60 +209,18 @@ def test_an_unassigned_bug_is_triaged(bug_new, comments_new, assignee):
     )
 
 
-def test_a_bug_a_person_triaged_is_skipped(bug_new, comments_new):
-    bug = dict(bug_new, severity="S3", priority="P3")
-    assert skip_reason(_state(bug, comments_new)) == (
-        "severity and priority are set, and gecko-triage never asked anything"
-    )
-    # Only one of the two set: the bug still needs triage.
-    for half in ({"severity": "S3"}, {"priority": "P3"}):
-        assert skip_reason(_state(dict(bug_new, **half), comments_new)) is None
-
-
 @pytest.mark.parametrize(
-    "creator", ["intermittent-bug-filer@mozilla.bugs", "Release-Bot@Mozilla.TLD"]
+    "creator", ["reporter@example.com", "intermittent-bug-filer@mozilla.bugs"]
 )
-def test_severity_and_priority_from_an_automation_filer_are_no_triage(
+def test_a_bug_with_severity_and_priority_set_is_still_triaged(
     bug_new, comments_new, creator
 ):
-    # Treeherder's intermittent-bug-filer sets S4 and P5 on every bug it files.
+    # The skip for a bug with both set is gone: Treeherder's filer sets S4 and P5, and
+    # a person's levels do not mean that the bug needs no analysis.
     bug = dict(
         bug_new, creator=creator, creator_detail={}, severity="S4", priority="P5"
     )
     assert skip_reason(_state(bug, comments_new)) is None
-
-
-def test_a_person_filed_bug_with_severity_and_priority_is_still_skipped(
-    bug_new, comments_new
-):
-    bug = dict(
-        bug_new,
-        creator="filer@mozilla.bugs.example.com",
-        creator_detail={},
-        severity="S4",
-        priority="P5",
-    )
-    assert skip_reason(_state(bug, comments_new)) == (
-        "severity and priority are set, and gecko-triage never asked anything"
-    )
-
-
-def test_a_triaged_bug_runs_when_the_agent_asked_on_it(bug_new, comments_returning):
-    # The reporter answered the agent's ask, so the run follows it up.
-    bug = dict(bug_new, severity="S3", priority="P3", last_change_time_non_bot=LATER)
-    assert skip_reason(_state(bug, comments_returning)) is None
-
-
-def test_a_triaged_bug_runs_when_the_reporter_is_stale(bug_new, comments_new):
-    # A stale needinfo on the reporter may still close the bug as INCOMPLETE.
-    bug = with_needinfo(
-        dict(bug_new, severity="S3", priority="P3"),
-        bug_new["creator"],
-        setter="dev@example.com",
-    )
-    state = TriageState(bug=bug, comments=comments_new, now=LATER)
-    assert state.incomplete_allowed
-    assert skip_reason(state) is None
 
 
 def test_the_skips_are_checked_in_the_plan_order(bug_new, comments_new):
