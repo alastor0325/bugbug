@@ -31,3 +31,9 @@ async def test_run_turns_off_commit_and_pr_attribution(monkeypatch, tmp_path):
             bug=1,
         )
     assert json.loads(captured["settings"]) == {"attribution": {"commit": "", "pr": ""}}
+
+
+def test_system_prompt_asks_for_format_and_lint():
+    system = (agent.PROMPTS / "system.md").read_text()
+    assert "./mach format" in system
+    assert "./mach lint" in system
