@@ -904,6 +904,43 @@ async def test_a_run_that_records_nothing_is_watching(
 
 
 @pytest.mark.parametrize(
+    ("decision", "refuted", "fails", "label"),
+    [
+        ("needs_info", False, False, "watching"),
+        ("analyzed", False, False, "watching"),
+        ("stalled", False, True, None),
+        ("duplicate", False, True, None),
+        ("duplicate", True, False, "watching"),
+        ("invalid", True, False, "watching"),
+        ("watching", False, False, "watching"),
+    ],
+)
+def test_the_final_actions_decide_an_empty_run(decision, refuted, fails, label):
+    # The actions after the post-run drops: a drop can leave a run with none.
+    plan = agent.Plan(decision=decision, severity="S3")
+    assert bool(agent.empty_run_refusal(plan, [], refuted)) is fails
+    if not fails:
+        assert agent.relabeled_empty_run(plan, [], refuted)[0].decision == label
+    action = [{"type": "bugzilla.add_comment", "params": {"text": "x"}}]
+    assert agent.empty_run_refusal(plan, action, refuted) is None
+    assert agent.relabeled_empty_run(plan, action, refuted) == (plan, None)
+
+
+async def test_an_empty_run_after_a_refuted_close_is_watching(
+    fake_client, tmp_path, new_state, verdict_stores
+):
+    fake_client.script = lambda: _record_verdict(
+        verdict_stores, "INVALID", verdict="refute"
+    )
+    fake_client.result = _result(
+        '```json\n{"decision": "invalid", "issue_type": "drm"}\n```'
+    )
+    result = await _run(tmp_path, new_state, ActionsRecorder())
+    assert result.decision == "watching"
+    assert result.close_verification == "refuted"
+
+
+@pytest.mark.parametrize(
     "decision", ["stalled", "duplicate", "invalid", "incomplete", "wrong_component"]
 )
 async def test_a_close_move_or_stall_that_records_nothing_fails(

@@ -276,22 +276,39 @@ ACTION_FIELDS = (
 )
 
 
-def relabeled_empty_run(plan: Plan, actions: list[dict]) -> tuple[Plan, str | None]:
+def relabeled_empty_run(
+    plan: Plan, actions: list[dict], refuted: bool = False
+) -> tuple[Plan, str | None]:
     """``plan`` as `watching` when an analyzed or needs-info run recorded nothing.
 
-    Such a run changes nothing on the bug, so `watching` is the only true label, and its
-    plan's action fields are cleared. Returns the plan and the reason, or the plan as is.
+    The same holds for any decision after `close_verifier` refuted a close: the run then
+    has nothing to record, and a retry would only meet the same refute. Such a run
+    changes nothing on the bug, so `watching` is the only true label, and its plan's
+    action fields are cleared. Returns the plan and the reason, or the plan as is.
     """
-    if actions or plan.decision not in RELABELED_WHEN_EMPTY:
+    if (
+        actions
+        or plan.decision in rerecord.NO_COMMENT_DECISIONS
+        or (plan.decision not in RELABELED_WHEN_EMPTY and not refuted)
+    ):
         return plan, None
     note = f"the run recorded nothing, so its decision {plan.decision} is now watching"
     update = {"decision": "watching", **dict.fromkeys(ACTION_FIELDS)}
     return plan.model_copy(update=update), note
 
 
-def empty_run_refusal(plan: Plan, actions: list[dict]) -> str | None:
-    """Why a run fails: it planned a close, a move or `stalled` and recorded nothing."""
-    if actions or plan.decision in RELABELED_WHEN_EMPTY | rerecord.NO_COMMENT_DECISIONS:
+def empty_run_refusal(
+    plan: Plan, actions: list[dict], refuted: bool = False
+) -> str | None:
+    """Why a run fails: it planned a close, a move or `stalled` and recorded nothing.
+
+    Not after a refuted close: that run is `watching` (see `relabeled_empty_run`).
+    """
+    if (
+        actions
+        or refuted
+        or plan.decision in RELABELED_WHEN_EMPTY | rerecord.NO_COMMENT_DECISIONS
+    ):
         return None
     return f"the decision is {plan.decision}, but the run recorded no action"
 
@@ -1297,10 +1314,11 @@ async def run_gecko_triage(
     hidden_warning = restricted_warning(to_read, found)
     drop_writes(actions_recorder, dropped + tag_drops)
     actions = actions_recorder.actions
-    if reason := empty_run_refusal(plan, actions):
+    refuted = close_verdicts.refuted()
+    if reason := empty_run_refusal(plan, actions, refuted):
         # Failing gets the run retried; an ok run would use up the bug's dedupe key.
         raise AgentError(f"bug {bug}: {reason}")
-    plan, relabel_note = relabeled_empty_run(plan, actions)
+    plan, relabel_note = relabeled_empty_run(plan, actions, refuted)
     if relabel_note:
         print(f"[gecko_triage] bug {bug}: {relabel_note}", file=sys.stderr)
     close_verification = close_verdicts.outcome(closing.recorded_close(actions))
