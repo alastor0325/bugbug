@@ -122,6 +122,16 @@ def skip_reason(state: TriageState) -> str | None:
         and bug.get("severity", UNSET_FIELD_VALUE) != UNSET_FIELD_VALUE
     ):
         return f"filed by a Mozilla employee who is not QA ({bug.get('creator')})"
+    # A developer or a person's triage owns the bug; triage has nothing to add.
+    if state.assignee:
+        return f"assigned to {state.assignee}, who owns the bug"
+    if (
+        bug.get("severity", UNSET_FIELD_VALUE) != UNSET_FIELD_VALUE
+        and bug.get("priority", UNSET_FIELD_VALUE) != UNSET_FIELD_VALUE
+        and not state.agent_commented
+        and not state.incomplete_allowed
+    ):
+        return "severity and priority are set, and gecko-triage never asked anything"
     if state.bot_has_last_word and not state.closable_since_newest_comment:
         return (
             "gecko-triage or a bot alias wrote the newest comment and nothing that "

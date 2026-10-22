@@ -1,4 +1,4 @@
-"""Tests for the eight skips that stop a run before it costs anything."""
+"""Tests for the skips that stop a run before it costs anything."""
 
 import pytest
 from conftest import LATER, NOW, quiet, with_needinfo
@@ -192,6 +192,49 @@ def test_a_bot_comment_after_the_bug_became_closable_is_skipped(
     state = TriageState(bug=bug, comments=[*comments_returning[:3], again], now=LATER)
     assert state.incomplete_allowed
     assert skip_reason(state) == SKIP_BOT_LAST
+
+
+@pytest.mark.parametrize("assignee", ["dev@example.com", "Dev@Example.com"])
+def test_an_assigned_bug_is_skipped(bug_new, comments_new, assignee):
+    bug = dict(bug_new, assigned_to=assignee)
+    assert skip_reason(_state(bug, comments_new)) == (
+        "assigned to dev@example.com, who owns the bug"
+    )
+
+
+@pytest.mark.parametrize("assignee", ["nobody@mozilla.org", "", None])
+def test_an_unassigned_bug_is_triaged(bug_new, comments_new, assignee):
+    assert (
+        skip_reason(_state(dict(bug_new, assigned_to=assignee), comments_new)) is None
+    )
+
+
+def test_a_bug_a_person_triaged_is_skipped(bug_new, comments_new):
+    bug = dict(bug_new, severity="S3", priority="P3")
+    assert skip_reason(_state(bug, comments_new)) == (
+        "severity and priority are set, and gecko-triage never asked anything"
+    )
+    # Only one of the two set: the bug still needs triage.
+    for half in ({"severity": "S3"}, {"priority": "P3"}):
+        assert skip_reason(_state(dict(bug_new, **half), comments_new)) is None
+
+
+def test_a_triaged_bug_runs_when_the_agent_asked_on_it(bug_new, comments_returning):
+    # The reporter answered the agent's ask, so the run follows it up.
+    bug = dict(bug_new, severity="S3", priority="P3", last_change_time_non_bot=LATER)
+    assert skip_reason(_state(bug, comments_returning)) is None
+
+
+def test_a_triaged_bug_runs_when_the_reporter_is_stale(bug_new, comments_new):
+    # A stale needinfo on the reporter may still close the bug as INCOMPLETE.
+    bug = with_needinfo(
+        dict(bug_new, severity="S3", priority="P3"),
+        bug_new["creator"],
+        setter="dev@example.com",
+    )
+    state = TriageState(bug=bug, comments=comments_new, now=LATER)
+    assert state.incomplete_allowed
+    assert skip_reason(state) is None
 
 
 def test_the_skips_are_checked_in_the_plan_order(bug_new, comments_new):

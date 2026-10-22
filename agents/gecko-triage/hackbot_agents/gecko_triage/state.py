@@ -38,11 +38,13 @@ from .preflight import is_developer_reporter
 # `id` is required: `get_bugs` diffs requested against returned ids and raises KeyError
 # without it. `last_change_time_non_bot` is BMO-specific and not in `_default`.
 BUG_FIELDS = (
-    "id,product,component,summary,status,resolution,keywords,whiteboard,groups,"
+    "id,product,component,summary,status,resolution,keywords,whiteboard,groups,assigned_to,"
     f"creator,creator_detail,{TERMS.fields.qa_whiteboard},cc,flags,severity,priority,"
     "blocks,regressed_by,regressions,see_also,creation_time,last_change_time,last_change_time_non_bot,"
     "cf_crash_signature,type"
 )
+# Bugzilla's assignee for a bug that nobody owns.
+UNASSIGNED = "nobody@mozilla.org"
 # BMO automation logins: `*.tld` (release-mgmt-account-bot@mozilla.tld) and `*.bugs`
 # (Treeherder's intermittent-bug-filer@mozilla.bugs).
 AUTOMATION_SUFFIXES = (".tld", ".bugs")
@@ -178,6 +180,19 @@ class TriageState:
         return (
             self.reporter in NEEDINFO_EXPERTS | NEEDINFO_FALLBACK
             or is_developer_reporter(self.bug)
+        )
+
+    @property
+    def assignee(self) -> str | None:
+        """The person the bug is assigned to, lowercased; None for the default nobody."""
+        who = _lower(self.bug.get("assigned_to"))
+        return None if who in ("", UNASSIGNED) else who
+
+    @cached_property
+    def agent_commented(self) -> bool:
+        """Whether the agent wrote any comment on the bug."""
+        return any(
+            isinstance(c, dict) and self._from_the_agent(c) for c in self.comments
         )
 
     @cached_property
