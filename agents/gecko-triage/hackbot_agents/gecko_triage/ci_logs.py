@@ -254,27 +254,30 @@ class Watchdog:
 
     def add(self, sock: socket.socket) -> socket.socket:
         """Watch the connection of ``sock``; returns ``sock``."""
-        dup = sock.dup()
+        try:
+            dup = sock.dup()
+        except OSError:
+            sock.close()
+            raise
+        # Under the lock, so no fd that cancel() closed and the process reused is shut.
         with self._lock:
             self._socks.append(dup)
-            expired = self.expired
-        if expired:
-            _shut(dup)
+            if self.expired:
+                _shut(dup)
         return sock
 
     def expire(self) -> None:
         with self._lock:
             self.expired = True
-            socks = list(self._socks)
-        for sock in socks:
-            _shut(sock)
+            for sock in self._socks:
+                _shut(sock)
 
     def cancel(self) -> None:
         self._timer.cancel()
         with self._lock:
-            socks, self._socks = self._socks, []
-        for sock in socks:
-            sock.close()
+            for sock in self._socks:
+                sock.close()
+            self._socks = []
 
     def _connection(self, base, *args, **kwargs):
         conn = base(*args, **kwargs)
@@ -477,7 +480,10 @@ def download(
             # A watchdog that shut the socket can make a cut reply look complete.
             time_left(deadline)
             # http.client ends a reply cut before its Content-Length with no error.
-            if length.isdigit() and received != int(length):
+            chunked = (
+                "chunked" in (reply.headers.get("Transfer-Encoding") or "").lower()
+            )
+            if length.isdigit() and not chunked and received != int(length):
                 raise Refused(
                     f"the log ends after {received} of its {length} bytes; "
                     "the connection was cut"

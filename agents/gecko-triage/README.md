@@ -361,7 +361,8 @@ stays out of the repo, because the alias account is temporary.
 
 `findings` carries `decision` (`needs_info`, `analyzed`, `duplicate`, `invalid`,
 `wrong_component`, `incomplete`, `stalled`, `watching`, or `skipped` from the
-preflight; a run that records no action is always `watching`), `asked`, `unread`, `severity`, `priority`, `needinfo`, `meta_bug`,
+preflight; an analyzed or needs-info run that records no action is `watching`, and
+a close, a move or `stalled` with no action fails the run), `asked`, `unread`, `severity`, `priority`, `needinfo`, `meta_bug`,
 `duplicate_of`, `issue_type`, `issue_type_note`, `issue_type_warning`,
 `close_verification`, `close_warning`, `needinfo_warning`, `restricted_warning`,
 `fix_tags`, `auto_apply` and `agent_version`. `actions` carries the recorded comment and field

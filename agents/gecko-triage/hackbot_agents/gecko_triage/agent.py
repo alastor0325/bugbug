@@ -262,16 +262,38 @@ SEARCHFOX_LINKS_PROMPT = _prompt("searchfox_links").format(
 )
 
 
-def relabeled_empty_run(plan: Plan, recorded: list[dict]) -> tuple[Plan, str | None]:
-    """``plan`` as `watching` when the run recorded nothing, with the reason; else as is.
+# The decisions whose run may find nothing to add: it is then `watching`. Any other
+# decision with no recorded action is a run that did not do its work.
+RELABELED_WHEN_EMPTY = frozenset({"analyzed", "needs_info"})
+# The plan fields that describe actions; an empty run took none of them.
+ACTION_FIELDS = (
+    "asked",
+    "needinfo",
+    "severity",
+    "priority",
+    "meta_bug",
+    "duplicate_of",
+)
 
-    A run that records no action changes nothing on the bug, so `watching` is the only
-    true label. Another label would count the bug as triaged that way.
+
+def relabeled_empty_run(plan: Plan, actions: list[dict]) -> tuple[Plan, str | None]:
+    """``plan`` as `watching` when an analyzed or needs-info run recorded nothing.
+
+    Such a run changes nothing on the bug, so `watching` is the only true label, and its
+    plan's action fields are cleared. Returns the plan and the reason, or the plan as is.
     """
-    if recorded or plan.decision in rerecord.NO_COMMENT_DECISIONS:
+    if actions or plan.decision not in RELABELED_WHEN_EMPTY:
         return plan, None
     note = f"the run recorded nothing, so its decision {plan.decision} is now watching"
-    return plan.model_copy(update={"decision": "watching"}), note
+    update = {"decision": "watching", **dict.fromkeys(ACTION_FIELDS)}
+    return plan.model_copy(update=update), note
+
+
+def empty_run_refusal(plan: Plan, actions: list[dict]) -> str | None:
+    """Why a run fails: it planned a close, a move or `stalled` and recorded nothing."""
+    if actions or plan.decision in RELABELED_WHEN_EMPTY | rerecord.NO_COMMENT_DECISIONS:
+        return None
+    return f"the decision is {plan.decision}, but the run recorded no action"
 
 
 def parse_plan(text: str | None) -> Plan:
@@ -1260,9 +1282,6 @@ async def run_gecko_triage(
     if reason := analyzed_refusal(plan, recorded, state):
         # Failing gets the run retried; nothing reaches the bug under the wrong label.
         raise AgentError(f"bug {bug}: {reason}")
-    plan, relabel_note = relabeled_empty_run(plan, recorded)
-    if relabel_note:
-        print(f"[gecko_triage] bug {bug}: {relabel_note}", file=sys.stderr)
     to_read = bugs_to_read(recorded, bug, commits.bugs)
     found = await fetch_bugs(bugzilla_mcp_server, to_read)
     screen_comment(
@@ -1278,6 +1297,12 @@ async def run_gecko_triage(
     hidden_warning = restricted_warning(to_read, found)
     drop_writes(actions_recorder, dropped + tag_drops)
     actions = actions_recorder.actions
+    if reason := empty_run_refusal(plan, actions):
+        # Failing gets the run retried; an ok run would use up the bug's dedupe key.
+        raise AgentError(f"bug {bug}: {reason}")
+    plan, relabel_note = relabeled_empty_run(plan, actions)
+    if relabel_note:
+        print(f"[gecko_triage] bug {bug}: {relabel_note}", file=sys.stderr)
     close_verification = close_verdicts.outcome(closing.recorded_close(actions))
     close_warning = close_mismatch(
         plan, actions, close_verdicts

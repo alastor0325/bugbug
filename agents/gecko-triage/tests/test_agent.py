@@ -888,16 +888,32 @@ async def test_a_run_that_removed_its_comment_and_did_not_record_it_again_fails(
         assert (await _run(tmp_path, new_state, recorder)).decision == "watching"
 
 
-@pytest.mark.parametrize("decision", ["analyzed", "needs_info", "stalled"])
+@pytest.mark.parametrize("decision", ["analyzed", "needs_info"])
 async def test_a_run_that_records_nothing_is_watching(
+    fake_client, tmp_path, new_state, decision
+):
+    fake_client.result = _result(
+        f'```json\n{{"decision": "{decision}", "issue_type": "drm", '
+        '"severity": "S3", "priority": "P3", "needinfo": ["reporter"]}\n```'
+    )
+    result = await _run(tmp_path, new_state, ActionsRecorder())
+    assert result.decision == "watching"
+    assert f"its decision {decision} is now watching" in result.result
+    # The plan's actions did not happen, so the findings do not report them.
+    assert (result.severity, result.priority, result.needinfo) == (None, None, None)
+
+
+@pytest.mark.parametrize(
+    "decision", ["stalled", "duplicate", "invalid", "incomplete", "wrong_component"]
+)
+async def test_a_close_move_or_stall_that_records_nothing_fails(
     fake_client, tmp_path, new_state, decision
 ):
     fake_client.result = _result(
         f'```json\n{{"decision": "{decision}", "issue_type": "drm"}}\n```'
     )
-    result = await _run(tmp_path, new_state, ActionsRecorder())
-    assert result.decision == "watching"
-    assert f"its decision {decision} is now watching" in result.result
+    with pytest.raises(AgentError, match="recorded no action"):
+        await _run(tmp_path, new_state, ActionsRecorder())
 
 
 def test_a_run_that_records_an_action_keeps_its_decision():

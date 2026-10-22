@@ -796,6 +796,29 @@ def test_a_gzip_reply_cut_before_its_length_is_refused(tmp_path):
     assert f"ends after {len(raw)} of its {len(raw) + 50} bytes" in result["refused"]
 
 
+def test_a_chunked_reply_skips_the_length_check(tmp_path):
+    # http.client ignores Content-Length on a chunked reply, so the count differs.
+    headers = {"Content-Length": "100000", "Transfer-Encoding": "chunked"}
+    assert fetch(tmp_path, FakeWeb({LOG: (BODY, headers)}))["size"] == len(BODY)
+
+
+def test_a_failed_dup_closes_the_socket():
+    class NoDup:
+        closed = False
+
+        def dup(self):
+            raise OSError("too many open files")
+
+        def close(self):
+            self.closed = True
+
+    sock, watch = NoDup(), ci_logs.Watchdog(time.monotonic() + 60)
+    with pytest.raises(OSError):
+        watch.add(sock)
+    assert sock.closed
+    watch.cancel()
+
+
 def test_a_reply_of_its_full_length_is_kept(tmp_path):
     reply = (BODY, {"Content-Length": str(len(BODY))})
     assert fetch(tmp_path, FakeWeb({LOG: reply}))["size"] == len(BODY)
