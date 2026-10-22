@@ -1,8 +1,13 @@
+import datetime
 import email.message
+import functools
 import gzip
 import http.server
 import io
+import ipaddress
 import json
+import socket
+import ssl
 import threading
 import time
 import urllib.error
@@ -522,8 +527,12 @@ def _status(*states: str) -> dict:
 @pytest.mark.parametrize(
     ("states", "run", "noted"),
     [
-        ({0: "completed", 1: "running"}, 0, False),
-        ({0: "failed", 1: "exception", 2: "pending"}, 1, False),
+        ({0: "completed", 1: "running"}, 0, True),
+        ({0: "failed", 1: "exception", 2: "pending"}, 0, True),
+        ({0: "completed", 1: "exception"}, 0, True),
+        ({0: "exception", 1: "completed"}, 1, False),
+        ({0: "exception"}, 0, False),
+        ({0: "exception", 1: "running"}, 0, True),
         ({0: "running"}, 0, True),
         ({}, 0, True),
     ],
@@ -538,7 +547,15 @@ def test_a_task_id_skips_a_run_that_is_still_running(tmp_path):
     web = FakeWeb({STATUS: _status("completed", "running"), LOG: BODY})
     result = fetch(tmp_path, web, TASK)
     assert result["run"] == 0
-    assert "finished" not in result and "note" not in result
+    assert "finished" not in result
+    assert result["note"] == "run 1 is running, so run 0 (completed) was read"
+
+
+def test_a_task_id_prefers_a_failed_run_to_an_exception(tmp_path):
+    web = FakeWeb({STATUS: _status("failed", "exception"), LOG: BODY})
+    result = fetch(tmp_path, web, TASK)
+    assert result["run"] == 0
+    assert "run 1 is exception" in result["note"]
 
 
 def test_a_status_failure_is_named_in_the_result(tmp_path):
@@ -626,26 +643,39 @@ def test_a_log_over_the_budget_left_is_not_read(tmp_path, monkeypatch):
     assert not (tmp_path / "logs" / f"task-{TASK}-run-0.log").exists()
 
 
-def test_a_log_fetched_again_does_not_count_against_itself(tmp_path, monkeypatch):
-    monkeypatch.setattr(ci_logs, "MAX_LOGS", 1)
-    monkeypatch.setattr(ci_logs, "MAX_TOTAL_BYTES", len(BODY))
-    web = FakeWeb({LOG: BODY})
-    fetch(tmp_path, web)
-    assert fetch(tmp_path, web)["size"] == len(BODY)
+def test_a_second_download_of_a_running_run_counts_as_a_log(tmp_path, monkeypatch):
+    monkeypatch.setattr(ci_logs, "MAX_LOGS", 2)
+    web = FakeWeb({STATUS: _status("running"), LOG: BODY})
+    assert "refused" not in fetch(tmp_path, web)
+    assert "refused" not in fetch(tmp_path, web)
+    assert "already read 2 CI logs" in fetch(tmp_path, web)["refused"]
+    assert len(web.seen) == 2
+
+
+def test_a_download_again_counts_the_old_copy_until_it_replaces_it(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(ci_logs, "MAX_TOTAL_BYTES", 2 * len(BODY) - 1)
+    web = FakeWeb({STATUS: _status("running"), LOG: BODY})
+    assert "refused" not in fetch(tmp_path, web)
+    result = fetch(tmp_path, web)
+    assert "left of the" in result["refused"]
+    assert (tmp_path / "logs" / f"task-{TASK}-run-0.log").read_bytes() == BODY
 
 
 def test_a_download_in_progress_holds_its_share(tmp_path, monkeypatch):
-    monkeypatch.setattr(ci_logs, "MAX_LOGS", 1)
+    monkeypatch.setattr(ci_logs, "MAX_LOGS", 2)
+    monkeypatch.setattr(ci_logs, "MAX_TOTAL_BYTES", 15)
     root = tmp_path / "logs"
     root.mkdir()
     with ci_logs.reserve(root, root / "a.log", 10) as cap:
         assert cap == 10
-        with (
-            pytest.raises(Refused, match="already read 1"),
-            ci_logs.reserve(root, root / "b.log", 10),
-        ):
-            pass
-    with ci_logs.reserve(root, root / "b.log", 10):
+        with ci_logs.reserve(root, root / "b.log", 10) as second:
+            assert second == 5
+    with (
+        pytest.raises(Refused, match="already read 2"),
+        ci_logs.reserve(root, root / "c.log", 10),
+    ):
         pass
 
 
@@ -668,7 +698,15 @@ async def test_the_caller_guard_denies_the_main_agent():
     output = denied["hookSpecificOutput"]
     assert output["permissionDecision"] == "deny"
     assert "log_analyst" in output["permissionDecisionReason"]
-    assert await caller_guard({"agent_type": "log_analyst"}, None, None) == {}
+    allowed = {"agent_type": "log_analyst", "agent_id": "a1"}
+    assert await caller_guard(allowed, None, None) == {}
+
+
+def test_the_caller_guard_needs_a_subagent_id():
+    assert "only the log_analyst" in caller_refusal({"agent_type": "log_analyst"})
+    assert "only the log_analyst" in caller_refusal(
+        {"agent_type": "log_analyst", "agent_id": ""}
+    )
 
 
 def test_the_session_installs_the_caller_guard():
@@ -691,7 +729,7 @@ class _Trickle(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
-        for byte in b"HTTP/1.1 200 OK\r\nX-Slow: " + b"a" * 10_000:
+        for byte in b"HTTP/1.1 200 OK\r\nX-Slow: " + b"a" * 200:
             try:
                 self.wfile.write(bytes([byte]))
                 self.wfile.flush()
@@ -725,13 +763,110 @@ def test_a_reply_that_trickles_its_headers_stops_at_the_deadline(tmp_path, trick
 
 
 def test_the_watchdog_shuts_a_socket_added_after_it_expired():
-    class Sock:
-        shut = False
-
-        def shutdown(self, how):
-            self.shut = True
-
+    ours, theirs = socket.socketpair()
     watch = ci_logs.Watchdog(time.monotonic() + 60)
     watch.expire()
+    watch.add(ours)
+    ours.settimeout(2)
+    assert ours.recv(1) == b""
     watch.cancel()
-    assert watch.add(Sock()).shut
+    ours.close()
+    theirs.close()
+
+
+# A cut reply
+
+
+def test_a_reply_cut_before_its_length_is_refused_and_not_cached(tmp_path):
+    cut = (BODY[:12], {"Content-Length": "100000"})
+    web = FakeWeb({STATUS: _status("completed"), LOG: cut})
+    result = fetch(tmp_path, web)
+    assert "ends after 12 of its 100000 bytes" in result["refused"]
+    folder = tmp_path / "logs"
+    assert not list(folder.glob("task-*")) and not list(folder.glob(".*"))
+    web.routes[LOG] = (BODY, {"Content-Length": str(len(BODY))})
+    again = fetch(tmp_path, web)
+    assert again["size"] == len(BODY) and "cached" not in again
+
+
+def test_a_gzip_reply_cut_before_its_length_is_refused(tmp_path):
+    raw = gzip.compress(BODY)
+    headers = {"Content-Encoding": "gzip", "Content-Length": str(len(raw) + 50)}
+    result = fetch(tmp_path, FakeWeb({LOG: (raw, headers)}))
+    assert f"ends after {len(raw)} of its {len(raw) + 50} bytes" in result["refused"]
+
+
+def test_a_reply_of_its_full_length_is_kept(tmp_path):
+    reply = (BODY, {"Content-Length": str(len(BODY))})
+    assert fetch(tmp_path, FakeWeb({LOG: reply}))["size"] == len(BODY)
+
+
+# The deadline over TLS
+
+
+def _self_signed(tmp_path):
+    x509 = pytest.importorskip("cryptography.x509")
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - datetime.timedelta(days=1))
+        .not_valid_after(now + datetime.timedelta(days=1))
+        .add_extension(
+            x509.SubjectAlternativeName(
+                [x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]
+            ),
+            critical=False,
+        )
+        .sign(key, hashes.SHA256())
+    )
+    cert_file, key_file = tmp_path / "cert.pem", tmp_path / "key.pem"
+    cert_file.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    key_file.write_bytes(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
+    return cert_file, key_file
+
+
+@pytest.fixture
+def tls_trickle(tmp_path, monkeypatch):
+    cert_file, key_file = _self_signed(tmp_path)
+    server_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    server_context.load_cert_chain(cert_file, key_file)
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Trickle)
+    server.socket = server_context.wrap_socket(server.socket, server_side=True)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"https://127.0.0.1:{server.server_address[1]}"
+    client_context = ssl.create_default_context(cafile=str(cert_file))
+    monkeypatch.setattr(
+        ci_logs, "Watchdog", functools.partial(ci_logs.Watchdog, context=client_context)
+    )
+    monkeypatch.setattr(ci_logs, "QUEUE_API", f"{base}/q")
+    monkeypatch.setattr(ci_logs, "log_url", lambda task, run: f"{base}/{task}/{run}")
+    monkeypatch.setattr(ci_logs, "HTTP_TIMEOUT", 1.5)
+    yield
+    server.shutdown()
+    server.server_close()
+
+
+def test_a_tls_reply_that_trickles_its_headers_stops_at_the_deadline(
+    tmp_path, tls_trickle
+):
+    start = time.monotonic()
+    result = fetch_ci_log(BUG, TASK, root=tmp_path / "logs")
+    assert time.monotonic() - start < 3.5
+    assert "took longer than" in result["refused"]
+    assert not list((tmp_path / "logs").glob("task-*"))

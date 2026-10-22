@@ -248,7 +248,8 @@ and time limits. The rules tell the model to fetch attachments only with this to
 
 `log_analyst` alone reads CI logs, with the `fetch_ci_log` tool (`ci_logs.py`), an
 in-process MCP server of its own. The server serves the whole session, so a PreToolUse
-hook (`ci_logs.caller_guard`) refuses a call from the main agent or any other subagent.
+hook (`ci_logs.caller_guard`) refuses a call from the main agent or any other subagent:
+it needs a subagent `agent_id` and the `log_analyst` agent type.
 The tool takes a Taskcluster task id with an optional run, a `live_backing.log` URL on
 `firefoxci.taskcluster-artifacts.net` or `firefox-ci-tc.services.mozilla.com`, or a
 `treeherder.mozilla.org` link with `selectedTaskRun`, or with `job_id` or `selectedJob`
@@ -257,17 +258,23 @@ text, so the tool only parses it with `urllib.parse`: https only, the exact host
 name, no port, the exact log path and a run of one or two digits. A Treeherder job id is
 mapped to its task with the Treeherder API (`/api/project/<repo>/jobs/<job_id>/`, fields
 `task_id` and `retry_id`). The tool reads the task's run states from the Taskcluster
-queue status. Without a run, it reads the newest finished run; when no run has finished,
-or the status cannot be read, the result's `note` says which run it read and why. The
+queue status. Without a run, it reads the newest completed or failed run, and a run that
+ended in an exception only when no other run has finished, as such a run often has no
+log. When the run it reads is not the newest, when no run has finished, or when the
+status cannot be read, the result's `note` says which run it read and why. The
 tool then downloads
 `https://firefoxci.taskcluster-artifacts.net/<task>/<run>/public/logs/live_backing.log`
 itself and never opens the given URL. That host serves the log directly, with gzip
 content encoding, so no redirect is expected; a redirect is followed only to the same log
 of the same task and run on that host, and any other redirect, or one with no
-`Location`, is refused. A watchdog shuts the sockets of a fetch 120 seconds after it
-starts, so a server that sends one byte at a time cannot hold it. One log stops past
+`Location`, is refused. A watchdog keeps a duplicate of the file descriptor of each
+connection, redirects included, and shuts the connections of a fetch 120 seconds after
+it starts, also over TLS, so a server that sends one byte at a time cannot hold it. A
+reply that ends before its `Content-Length` is refused and not kept. One log stops past
 64 MiB of decoded log ("too large, not read"). All the logs of a run share a budget of
-256 MiB and 12 logs, because `/tmp` on Cloud Run is memory. The log goes to
+256 MiB and 12 downloads, because `/tmp` on Cloud Run is memory. A second download of
+a run that has not finished counts as one more, and the old copy counts until the new
+one replaces it. The log goes to
 `/tmp/gecko-triage-ci-logs/task-<task>-run-<run>.log`, with a row in
 `/tmp/gecko-triage-ci-logs/manifest.jsonl`. The log of a finished run is read once and
 then reused; a run that has not finished is fetched again, and `finished: false` marks

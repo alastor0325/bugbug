@@ -16,6 +16,7 @@ import http.client
 import os
 import re
 import socket
+import ssl
 import threading
 import time
 import urllib.error
@@ -226,18 +227,22 @@ HEADERS = {"User-Agent": "gecko-triage"}
 
 def _shut(sock: socket.socket) -> None:
     with contextlib.suppress(OSError):
-        sock.shutdown(socket.SHUT_RDWR)
+        socket.socket.shutdown(sock, socket.SHUT_RDWR)
 
 
 class Watchdog:
-    """Shuts every socket of one fetch when its deadline passes.
+    """Shuts every connection of one fetch when its deadline passes.
 
     A socket timeout bounds one read, so a server that sends one byte at a time could
     hold a fetch for ever; this bounds the whole fetch, from the connect to the last
-    byte. ``open`` is the opener for the fetch.
+    byte, redirects included. ``open`` is the opener for the fetch. It keeps a
+    duplicate of each connection's file descriptor: TLS wrapping detaches the socket
+    it is given, but a shutdown through the duplicate still ends the connection, also
+    in the middle of the TLS handshake.
     """
 
-    def __init__(self, deadline: float) -> None:
+    def __init__(self, deadline: float, context: ssl.SSLContext | None = None) -> None:
+        self.context = context
         self.expired = False
         self._socks: list[socket.socket] = []
         self._lock = threading.Lock()
@@ -248,11 +253,13 @@ class Watchdog:
         self._timer.start()
 
     def add(self, sock: socket.socket) -> socket.socket:
+        """Watch the connection of ``sock``; returns ``sock``."""
+        dup = sock.dup()
         with self._lock:
-            self._socks.append(sock)
+            self._socks.append(dup)
             expired = self.expired
         if expired:
-            _shut(sock)
+            _shut(dup)
         return sock
 
     def expire(self) -> None:
@@ -264,6 +271,10 @@ class Watchdog:
 
     def cancel(self) -> None:
         self._timer.cancel()
+        with self._lock:
+            socks, self._socks = self._socks, []
+        for sock in socks:
+            sock.close()
 
     def _connection(self, base, *args, **kwargs):
         conn = base(*args, **kwargs)
@@ -280,7 +291,9 @@ class Watchdog:
                 connection = functools.partial(
                     watch._connection, http.client.HTTPSConnection
                 )
-                return self.do_open(connection, req, context=self._context)
+                return self.do_open(
+                    connection, req, context=watch.context or self._context
+                )
 
         class Http(urllib.request.HTTPHandler):
             def http_open(self, req):
@@ -342,14 +355,24 @@ def run_states(task_id: str, deadline: float, opener) -> dict[int, str]:
 
 
 def pick_run(states: dict[int, str]) -> tuple[int, str | None]:
-    """The newest finished run, or the newest run with a note when none has finished."""
-    finished = [r for r, state in states.items() if state in FINISHED_STATES]
-    if finished:
-        return max(finished), None
-    if states:
-        newest = max(states)
-        return newest, f"run {newest} is {states[newest]}, so its log may be partial"
-    return 0, "the queue lists no run, so run 0 was read"
+    """The run to read, and a note when it is not the newest run.
+
+    A completed or failed run comes first. A run that ended in an exception often has
+    no log, so it is read only when no other run has finished.
+    """
+    if not states:
+        return 0, "the queue lists no run, so run 0 was read"
+    newest = max(states)
+    ended = [r for r, state in states.items() if state in ("completed", "failed")]
+    broken = [r for r, state in states.items() if state == "exception"]
+    run = max(ended or broken or [newest])
+    if run != newest:
+        return run, (
+            f"run {newest} is {states[newest]}, so run {run} ({states[run]}) was read"
+        )
+    if states[run] not in FINISHED_STATES:
+        return run, f"run {run} is {states[run]}, so its log may be partial"
+    return run, None
 
 
 def decoded(chunks, encoding: str):
@@ -431,7 +454,14 @@ def download(
     """
     overflow = overflow or too_large(max_bytes)
     part = dest.with_name(f".{dest.name}.part")
-    written = 0
+    written = received = 0
+
+    def counted(chunks):
+        nonlocal received
+        for chunk in chunks:
+            received += len(chunk)
+            yield chunk
+
     with _open_log(task_id, run, deadline, opener) as reply:
         length = reply.headers.get("Content-Length") or ""
         if length.isdigit() and int(length) > max_bytes:
@@ -439,13 +469,19 @@ def download(
         encoding = reply.headers.get("Content-Encoding") or ""
         try:
             with part.open("wb") as out:
-                for piece in decoded(read_chunks(reply, deadline), encoding):
+                for piece in decoded(counted(read_chunks(reply, deadline)), encoding):
                     written += len(piece)
                     if written > max_bytes:
                         raise overflow
                     out.write(piece)
             # A watchdog that shut the socket can make a cut reply look complete.
             time_left(deadline)
+            # http.client ends a reply cut before its Content-Length with no error.
+            if length.isdigit() and received != int(length):
+                raise Refused(
+                    f"the log ends after {received} of its {length} bytes; "
+                    "the connection was cut"
+                )
         except BaseException:
             part.unlink(missing_ok=True)
             raise
@@ -486,7 +522,7 @@ def _resolve(
 
 
 _BUDGET_LOCK = threading.Lock()
-_RESERVED: dict[str, list[int]] = {}
+_RESERVED: dict[str, list[int]] = {}  # per root: downloads, bytes held, downloads made
 
 
 def _logs(root: Path) -> list[Path]:
@@ -497,14 +533,16 @@ def _logs(root: Path) -> list[Path]:
 def reserve(root: Path, dest: Path, max_bytes: int):
     """Hold a share of the run's log budget for one download; yields its byte cap.
 
-    The logs under ``root`` and the downloads in progress count, except ``dest``,
-    which the download replaces.
+    Every download counts toward ``MAX_LOGS``, a second one of a run that has not
+    finished too. The logs under ``root``, ``dest`` included until the download
+    replaces it, and the downloads in progress count toward ``MAX_TOTAL_BYTES``.
     """
     key = str(root)
     with _BUDGET_LOCK:
-        held = _RESERVED.setdefault(key, [0, 0])
-        logs = [p for p in _logs(root) if p != dest]
-        if len(logs) + held[0] >= MAX_LOGS:
+        held = _RESERVED.setdefault(key, [0, 0, 0])
+        logs = _logs(root)
+        others = len([p for p in logs if p != dest])
+        if max(others + held[0], held[2]) >= MAX_LOGS:
             raise Refused(
                 f"this run already read {MAX_LOGS} CI logs, the most it may read"
             )
@@ -517,6 +555,7 @@ def reserve(root: Path, dest: Path, max_bytes: int):
         cap = min(max_bytes, left)
         held[0] += 1
         held[1] += cap
+        held[2] += 1
     try:
         yield cap
     finally:
@@ -606,7 +645,7 @@ def caller_refusal(input_data: dict) -> str | None:
     The MCP server serves the whole session, so this hook keeps the main agent and
     the other subagents from fetching a CI log themselves.
     """
-    if input_data.get("agent_type") == LOG_ANALYST:
+    if input_data.get("agent_id") and input_data.get("agent_type") == LOG_ANALYST:
         return None
     return f"only the {LOG_ANALYST} subagent fetches a CI log; spawn it"
 
