@@ -72,11 +72,11 @@ attachment is unread.
 
 **Triage scope limit.** Do not read source files, trace call stacks or reason about fix
 approaches yourself; `bug_investigator` does that, before "Analyzed" and before an ask.
-One exception: you may read a `moz.build` file to find the component that owns a file. The flow is: artifact
-analysis identifies the symptom pattern; the team's `diagnostics.md` and `meta-bugs.md`
-say whether the pattern is known. If it is known, the bug is analyzed. If the pattern is
-clear but the cause is not, the bug is analyzed only with reliable steps to reproduce.
-Otherwise step 5 decides whether it needs info.
+One exception: you may read a `moz.build` file to find the component that owns a file.
+The flow is: artifact analysis identifies the symptom pattern; the team's
+`diagnostics.md` and `meta-bugs.md` say whether the pattern is known. If it is known,
+the bug is analyzed. If the pattern is clear but the cause is not, the bug is analyzed
+only with reliable steps to reproduce. Otherwise step 5 decides whether it needs info.
 
 ## Step 3: classify the bug
 
@@ -242,19 +242,21 @@ patch. Say in the comment who works on it, for
 example "Rémi is working on a fix (comment 7)". This also applies to a move.
 
 Needinfo a developer only in these cases. On a move, needinfo the target team's
-developer, unless a developer already works on the bug. With or without a move, you may needinfo a listed expert when the bug is in
-the expert's area and the condition holds. You may needinfo the commit author that the
-code history names, for a restricted regressor (step 3) or under "No matching expert".
+developer, unless a developer already works on the bug. With or without a move, you may
+needinfo a listed expert when the bug is in the expert's area and the condition holds.
+You may needinfo the commit author that the code history names, for a restricted
+regressor (step 3) or under "No matching expert".
 
 On a move to another component, needinfo a developer of that component, so the team that
-owns the code sees the bug. Skip it when a developer already works on the bug. Find them from the recent changes to the code
-at fault or the component's triage owner. Use only an email you read in Bugzilla data (the
-bug, its history, a component's triage owner, the bug that changed the code): an hg or git
-author address is often not a Bugzilla login, and an unknown requestee makes Bugzilla
-refuse the whole update. Ask them politely in the comment. Two exceptions use a commit
-author's email from the `mozilla_vcs` tools: the author of a restricted regressor (step
-3), and the developer that the history names when no expert's area matches. Such a run
-never applies by itself: a person checks that the email is a Bugzilla login.
+owns the code sees the bug. Skip it when a developer already works on the bug. Find them
+from the recent changes to the code at fault or the component's triage owner. Use only
+an email you read in Bugzilla data (the bug, its history, a component's triage owner,
+the bug that changed the code): an hg or git author address is often not a Bugzilla
+login, and an unknown requestee makes Bugzilla refuse the whole update. Ask them
+politely in the comment. Two exceptions use a commit author's email from the
+`mozilla_vcs` tools: the author of a restricted regressor (step 3), and the developer
+that the history names when no expert's area matches. Such a run never applies by
+itself: a person checks that the email is a Bugzilla login.
 
 Without a move, needinfo an expert only from the expert list in the system prompt. The bug
 must be in the expert's area, and the expert's condition must hold. Use the email from the
