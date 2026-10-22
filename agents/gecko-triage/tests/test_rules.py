@@ -264,6 +264,10 @@ KEY_PHRASES = (
         "workflow.md",
         "Needinfo at most three people, and nobody who already has an open",
     ),
+    (
+        "workflow.md",
+        "When a developer already works on the bug, needinfo nobody to confirm or to",
+    ),
     ("workflow.md", "Never choose an expert by yourself."),
     ("workflow.md", "Only when the history finds nobody, needinfo exactly one person"),
     ("workflow.md", "an unknown requestee makes Bugzilla refuse the whole update"),

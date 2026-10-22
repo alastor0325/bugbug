@@ -228,6 +228,11 @@ Needinfo the reporter and the other people who confirmed the problem in the comm
 Needinfo at most three people, and nobody who already has an open needinfo. The
 `needinfo` flag needs the full email address.
 
+When a developer already works on the bug, needinfo nobody to confirm or to take it. A
+developer works on it when the bug is assigned to them, or when they wrote that a fix is
+in progress, or when they attached a patch. Say in the comment who works on it, for
+example "Rémi is working on a fix (comment 7)". This also applies to a move.
+
 Needinfo a developer only in these cases. On a move, needinfo the target team's
 developer. With or without a move, you may needinfo a listed expert when the bug is in
 the expert's area and the condition holds. You may needinfo the commit author that the
