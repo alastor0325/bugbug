@@ -262,6 +262,18 @@ SEARCHFOX_LINKS_PROMPT = _prompt("searchfox_links").format(
 )
 
 
+def relabeled_empty_run(plan: Plan, recorded: list[dict]) -> tuple[Plan, str | None]:
+    """``plan`` as `watching` when the run recorded nothing, with the reason; else as is.
+
+    A run that records no action changes nothing on the bug, so `watching` is the only
+    true label. Another label would count the bug as triaged that way.
+    """
+    if recorded or plan.decision in rerecord.NO_COMMENT_DECISIONS:
+        return plan, None
+    note = f"the run recorded nothing, so its decision {plan.decision} is now watching"
+    return plan.model_copy(update={"decision": "watching"}), note
+
+
 def parse_plan(text: str | None) -> Plan:
     """The plan in the last ```json block of ``text``; an empty plan when there is none."""
     if not text:
@@ -1248,6 +1260,9 @@ async def run_gecko_triage(
     if reason := analyzed_refusal(plan, recorded, state):
         # Failing gets the run retried; nothing reaches the bug under the wrong label.
         raise AgentError(f"bug {bug}: {reason}")
+    plan, relabel_note = relabeled_empty_run(plan, recorded)
+    if relabel_note:
+        print(f"[gecko_triage] bug {bug}: {relabel_note}", file=sys.stderr)
     to_read = bugs_to_read(recorded, bug, commits.bugs)
     found = await fetch_bugs(bugzilla_mcp_server, to_read)
     screen_comment(
@@ -1270,7 +1285,12 @@ async def run_gecko_triage(
 
     return GeckoTriageResult(
         bug_id=bug,
-        result=with_dropped(result_msg.result, dropped + tag_drops),
+        result="\n\n".join(
+            filter(
+                None,
+                [with_dropped(result_msg.result, dropped + tag_drops), relabel_note],
+            )
+        ),
         num_turns=result_msg.num_turns,
         total_cost_usd=result_msg.total_cost_usd,
         auto_apply=not dropped

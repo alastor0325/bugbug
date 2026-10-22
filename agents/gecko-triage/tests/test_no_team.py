@@ -374,7 +374,13 @@ async def test_a_no_team_run_drops_an_issue_type(
     fake_client.result = _result(
         '```json\n{"decision": "analyzed", "issue_type": "drm"}\n```'
     )
-    result = await _run(tmp_path, other_state)
+    recorder = ActionsRecorder()
+    fake_client.script = lambda: recorder.record(
+        "bugzilla.add_comment",
+        {"bug_id": BUG, "text": "Short note.", "is_private": False},
+        reasoning="r",
+    )
+    result = await _run(tmp_path, other_state, recorder)
     assert result.decision == "analyzed" and result.issue_type is None
     assert "no team list" in result.issue_type_warning
 

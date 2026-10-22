@@ -174,8 +174,19 @@ async def test_a_run_without_a_readable_decision_fails(
     assert "decision" in str(e.value)
 
 
+def _commenting(fake_client) -> ActionsRecorder:
+    """A recorder that the fake session gives one comment, so the run records an action."""
+    recorder = ActionsRecorder()
+    fake_client.script = lambda: recorder.record(
+        "bugzilla.add_comment",
+        {"bug_id": BUG, "text": "Short note.", "is_private": False},
+        reasoning="r",
+    )
+    return recorder
+
+
 async def test_a_run_with_a_decision_returns_it(fake_client, tmp_path, new_state):
-    result = await _run(tmp_path, new_state)
+    result = await _run(tmp_path, new_state, _commenting(fake_client))
     assert result.decision == "analyzed"
     assert result.num_turns == 3 and result.total_cost_usd == 0.5
 
@@ -200,7 +211,7 @@ async def test_a_needs_info_run_that_asked_for_data_returns_it(
         '```json\n{"decision": "needs_info", "asked": ["profile"], '
         '"severity": "S3", "priority": "P3", "issue_type": "drm"}\n```'
     )
-    result = await _run(tmp_path, new_state)
+    result = await _run(tmp_path, new_state, _commenting(fake_client))
     assert (result.decision, result.asked) == ("needs_info", ["profile"])
     assert (result.severity, result.priority) == ("S3", "P3")
 
@@ -490,7 +501,7 @@ async def test_a_run_on_the_triaged_bug_alone_reads_no_other_bug(
     fake_client, tmp_path, new_state, monkeypatch
 ):
     calls = _fake_fetch(monkeypatch, {})
-    result = await _run(tmp_path, new_state)
+    result = await _run(tmp_path, new_state, _commenting(fake_client))
     assert calls in ([], [[]]) and result.decision == "analyzed"
 
 
@@ -875,6 +886,26 @@ async def test_a_run_that_removed_its_comment_and_did_not_record_it_again_fails(
             await _run(tmp_path, new_state, recorder)
     else:
         assert (await _run(tmp_path, new_state, recorder)).decision == "watching"
+
+
+@pytest.mark.parametrize("decision", ["analyzed", "needs_info", "stalled"])
+async def test_a_run_that_records_nothing_is_watching(
+    fake_client, tmp_path, new_state, decision
+):
+    fake_client.result = _result(
+        f'```json\n{{"decision": "{decision}", "issue_type": "drm"}}\n```'
+    )
+    result = await _run(tmp_path, new_state, ActionsRecorder())
+    assert result.decision == "watching"
+    assert f"its decision {decision} is now watching" in result.result
+
+
+def test_a_run_that_records_an_action_keeps_its_decision():
+    plan = agent.Plan(decision="analyzed")
+    action = {"type": "bugzilla.add_comment", "params": {"text": "x"}}
+    assert agent.relabeled_empty_run(plan, [action]) == (plan, None)
+    watching = agent.Plan(decision="watching")
+    assert agent.relabeled_empty_run(watching, []) == (watching, None)
 
 
 async def test_a_run_that_does_not_close_has_no_close_verification(
