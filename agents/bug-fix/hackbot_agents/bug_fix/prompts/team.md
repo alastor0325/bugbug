@@ -16,7 +16,9 @@ You may record a patch only after this loop. A hook refuses `phabricator_submit_
 
 5. **Repeat:** a code change after steps 2 to 4 needs all of them again. A change to comments or format only needs step 3 again. After {max_rounds} review rounds with blocking findings, record a Bugzilla comment with what you found instead of a patch.
 
-An update to an existing revision skips step 1. Put the evidence of each gate in the revision's test plan.
+An update to an existing revision skips step 1. Keep the revision's test plan short: name the new tests and the try push. Record `not_checked` with what you could not check on {platform}, and why.
+
+After the run, Hackbot adds a comment to the revision with a table of these checks, written from what you recorded with `record_gate`. Do not record a comment of your own about the tests.
 
 Before you record the patch, commit it locally with the revision's title as the subject and its summary as the body, so the commit message is the one that will land.
 
