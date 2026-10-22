@@ -721,7 +721,7 @@ async def test_the_session_allows_one_close_verifier_spawn():
         "PreToolUse"
     ]
     (spawn,) = [m for m in hooks if m.matcher == closing.SPAWN_TOOLS]
-    guard, _ = spawn.hooks
+    (guard,) = spawn.hooks
     spawn_input = {
         "tool_name": "Agent",
         "tool_input": {"subagent_type": "close_verifier"},
@@ -737,8 +737,11 @@ async def test_the_session_allows_one_close_verifier_spawn():
 async def test_the_session_counts_the_bug_investigator_spawns_and_refuses_none():
     found = Investigations()
     hooks = agent.session_options(CloseVerdicts(), CommitFacts(), found)["hooks"]
-    (spawn,) = [m for m in hooks["PreToolUse"] if m.matcher == closing.SPAWN_TOOLS]
-    _, counter = spawn.hooks
+    (spawn,) = [m for m in hooks["PostToolUse"] if m.matcher == closing.SPAWN_TOOLS]
+    (counter,) = spawn.hooks
+    # The pre-spawn guard is the close verifier's alone.
+    (pre,) = [m for m in hooks["PreToolUse"] if m.matcher == closing.SPAWN_TOOLS]
+    assert len(pre.hooks) == 1
     for subagent in ("bug_investigator", "log_analyst", "bug_investigator"):
         spawn_input = {"tool_name": "Agent", "tool_input": {"subagent_type": subagent}}
         assert await counter(spawn_input, None, None) == {}

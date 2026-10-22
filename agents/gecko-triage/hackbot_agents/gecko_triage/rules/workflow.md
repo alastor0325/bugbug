@@ -71,8 +71,8 @@ the `unread` list for that reason. "Unread attachments" in `diagnostics.md` says
 attachment is unread.
 
 **Triage scope limit.** Do not read source files, trace call stacks or reason about fix
-approaches yourself; `bug_investigator` does that in "Analyzed". One exception: you may
-read a `moz.build` file to find the component that owns a file. The flow is: artifact
+approaches yourself; `bug_investigator` does that, before "Analyzed" and before an ask.
+One exception: you may read a `moz.build` file to find the component that owns a file. The flow is: artifact
 analysis identifies the symptom pattern; the team's `diagnostics.md` and `meta-bugs.md`
 say whether the pattern is known. If it is known, the bug is analyzed. If the pattern is
 clear but the cause is not, the bug is analyzed only with reliable steps to reproduce.
@@ -237,17 +237,17 @@ Needinfo at most three people, and nobody who already has an open needinfo. The
 `needinfo` flag needs the full email address.
 
 When a developer already works on the bug, needinfo nobody to confirm or to take it. A
-developer works on it when the bug is assigned to them, or when they wrote that a fix is
-in progress, or when they attached a patch. Say in the comment who works on it, for
+developer works on it when they wrote that a fix is in progress, or when they attached a
+patch. Say in the comment who works on it, for
 example "Rémi is working on a fix (comment 7)". This also applies to a move.
 
 Needinfo a developer only in these cases. On a move, needinfo the target team's
-developer. With or without a move, you may needinfo a listed expert when the bug is in
+developer, unless a developer already works on the bug. With or without a move, you may needinfo a listed expert when the bug is in
 the expert's area and the condition holds. You may needinfo the commit author that the
 code history names, for a restricted regressor (step 3) or under "No matching expert".
 
 On a move to another component, needinfo a developer of that component, so the team that
-owns the code sees the bug. Find them from the recent changes to the code
+owns the code sees the bug. Skip it when a developer already works on the bug. Find them from the recent changes to the code
 at fault or the component's triage owner. Use only an email you read in Bugzilla data (the
 bug, its history, a component's triage owner, the bug that changed the code): an hg or git
 author address is often not a Bugzilla login, and an unknown requestee makes Bugzilla
@@ -357,14 +357,14 @@ the owner in the `BUG_COMPONENT` of the nearest `moz.build` at or above the file
 
 ## Close or move
 
-| Case                                              | What to record                                                                                                                             |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Duplicate of bug N                                | a comment naming bug N and why; RESOLVED DUPLICATE with `dupe_of: N`; `duplicate_of: N`; the step 4b meta bug on bug N                     |
-| Works as intended                                 | a comment with the spec or design reference; RESOLVED INVALID (or WONTFIX)                                                                 |
-| Stale needinfo on the reporter, closing permitted | a comment noting no response; RESOLVED INCOMPLETE                                                                                          |
-| Already fixed                                     | a comment naming the fixing bug or change; RESOLVED FIXED, or DUPLICATE of that bug with no meta bug on the closed fixing bug              |
-| No path forward                                   | a comment; add the `stalled` keyword                                                                                                       |
-| Wrong component                                   | a comment naming the target; `product` and `component` set to the **target**; the target team's developer needinfoed, as "Needs info" says |
+| Case                                              | What to record                                                                                                                                                             |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Duplicate of bug N                                | a comment naming bug N and why; RESOLVED DUPLICATE with `dupe_of: N`; `duplicate_of: N`; the step 4b meta bug on bug N                                                     |
+| Works as intended                                 | a comment with the spec or design reference; RESOLVED INVALID (or WONTFIX)                                                                                                 |
+| Stale needinfo on the reporter, closing permitted | a comment noting no response; RESOLVED INCOMPLETE                                                                                                                          |
+| Already fixed                                     | a comment naming the fixing bug or change; RESOLVED FIXED, or DUPLICATE of that bug with no meta bug on the closed fixing bug                                              |
+| No path forward                                   | a comment; add the `stalled` keyword                                                                                                                                       |
+| Wrong component                                   | a comment naming the target; `product` and `component` set to the **target**; the target team's developer needinfoed, as "Needs info" says, unless one already works on it |
 
 Be sure before you record a move or a resolution: a wrong duplicate or move sends people
 to the wrong place.
@@ -417,7 +417,8 @@ and ask for mozregression; for a site-specific issue, consider a server-side cha
 ## Handing off
 
 When a bug leaves the team's scope (reassigned, or a developer from another team is now
-driving it), say so in the comment. On a move, needinfo the target team's developer.
+driving it), say so in the comment. On a move, needinfo the target team's developer,
+unless a developer already works on the bug.
 Without a move, needinfo only a listed expert, or a commit author in the two cases that
 "Needs info" names. Otherwise the hand-off itself needs no needinfo. A log request in
 the same comment is a needinfo on the reporter, as "A hand-off comment" in `comment.md`

@@ -1,6 +1,6 @@
 """Stop a run before it costs anything, on a bug the rules say to leave alone.
 
-The eight skips run in code rather than in a ruleset, because a ruleset is advisory and
+The skips run in code rather than in a ruleset, because a ruleset is advisory and
 the model can outrank it. They run before the checkout, at zero turns and zero cost.
 
 A bug whose state could not be read fails the run (`require_state`): without it no check

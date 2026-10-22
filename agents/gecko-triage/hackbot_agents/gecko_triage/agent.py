@@ -1109,10 +1109,7 @@ def session_options(
                 ),
                 HookMatcher(
                     matcher=closing.SPAWN_TOOLS,
-                    hooks=[
-                        closing.spawn_guard(close_verdicts),
-                        spawn_counter(investigations),
-                    ],
+                    hooks=[closing.spawn_guard(close_verdicts)],
                 ),
                 HookMatcher(
                     matcher=rerecord.REMOVE_RECORDED_ACTIONS_TOOL,
@@ -1132,6 +1129,11 @@ def session_options(
                 HookMatcher(
                     matcher=authors.COMMIT_TOOLS_MATCHER,
                     hooks=[authors.commit_hook(commits)],
+                ),
+                # A spawn counts once it ran, not when the CLI refused or failed it.
+                HookMatcher(
+                    matcher=closing.SPAWN_TOOLS,
+                    hooks=[spawn_counter(investigations)],
                 ),
             ],
         },

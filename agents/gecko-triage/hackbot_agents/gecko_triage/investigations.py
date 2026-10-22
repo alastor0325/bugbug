@@ -1,7 +1,7 @@
 """The `bug_investigator` spawns of a run, which the needinfo check reads.
 
 A bug with diagnostics needs a look at the code before the run asks the reporter for
-more. The PreToolUse hook on the spawn tool counts each `bug_investigator` spawn, and
+more. The PostToolUse hook on the spawn tool counts each `bug_investigator` that ran, and
 the `bugzilla.update_bug` hook refuses the first needinfo on the reporter when no spawn
 came before it (see `early_ask_refusal`).
 """
@@ -22,14 +22,14 @@ class Investigations:
 
 
 def note_spawn(store: Investigations, input_data: dict) -> None:
-    """Count ``input_data``, a PreToolUse spawn, when it starts `bug_investigator`."""
+    """Count ``input_data``, a finished spawn, when it ran `bug_investigator`."""
     tool_input = input_data.get("tool_input") or {}
     if tool_input.get("subagent_type") == INVESTIGATOR:
         store.spawns += 1
 
 
 def spawn_counter(store: Investigations):
-    """The PreToolUse hook on the spawn tool that counts; it never refuses a spawn."""
+    """The PostToolUse hook on the spawn tool: it counts a spawn after it ran."""
 
     async def hook(input_data: dict, tool_use_id: str | None, context) -> dict:
         note_spawn(store, input_data)
