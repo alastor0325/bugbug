@@ -70,7 +70,7 @@ write the fix, not only when it is reviewed.
 
 ## Scope of the diff
 
-- Change only what the fix needs. Revert formatter churn on lines you did not touch.
+- Change only what the fix needs.
 - Do not move an existing function. Change it where it is.
 - Commit the test after the fix, as its own commit. The revision can hold both commits.
 
