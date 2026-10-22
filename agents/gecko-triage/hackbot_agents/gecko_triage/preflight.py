@@ -38,6 +38,9 @@ def require_state(state: TriageState | None) -> TriageState:
     return state
 
 
+# BMO automation logins: `*.tld` (release-mgmt-account-bot@mozilla.tld) and `*.bugs`
+# (Treeherder's intermittent-bug-filer@mozilla.bugs).
+AUTOMATION_SUFFIXES = (".tld", ".bugs")
 CLOSED_STATUSES = frozenset({"RESOLVED", "VERIFIED", "CLOSED"})
 SECURITY_KEYWORD_PREFIXES = ("sec-", "csectype-", "security")
 
@@ -73,6 +76,11 @@ def is_qa_reporter(bug: dict) -> bool:
     return isinstance(real_name, str) and any(
         m in real_name for m in PEOPLE.qa_name_markers
     )
+
+
+def is_automation_reporter(bug: dict) -> bool:
+    creator = bug.get("creator")
+    return isinstance(creator, str) and creator.lower().endswith(AUTOMATION_SUFFIXES)
 
 
 def is_employee(bug: dict) -> bool:
@@ -125,9 +133,12 @@ def skip_reason(state: TriageState) -> str | None:
     # A developer or a person's triage owns the bug; triage has nothing to add.
     if state.assignee:
         return f"assigned to {state.assignee}, who owns the bug"
+    # An automation login sets its own defaults, such as S4 and P5 from Treeherder's
+    # intermittent-bug-filer, so they do not mean that a person triaged the bug.
     if (
         bug.get("severity", UNSET_FIELD_VALUE) != UNSET_FIELD_VALUE
         and bug.get("priority", UNSET_FIELD_VALUE) != UNSET_FIELD_VALUE
+        and not is_automation_reporter(bug)
         and not state.agent_commented
         and not state.incomplete_allowed
     ):

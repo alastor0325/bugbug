@@ -219,6 +219,34 @@ def test_a_bug_a_person_triaged_is_skipped(bug_new, comments_new):
         assert skip_reason(_state(dict(bug_new, **half), comments_new)) is None
 
 
+@pytest.mark.parametrize(
+    "creator", ["intermittent-bug-filer@mozilla.bugs", "Release-Bot@Mozilla.TLD"]
+)
+def test_severity_and_priority_from_an_automation_filer_are_no_triage(
+    bug_new, comments_new, creator
+):
+    # Treeherder's intermittent-bug-filer sets S4 and P5 on every bug it files.
+    bug = dict(
+        bug_new, creator=creator, creator_detail={}, severity="S4", priority="P5"
+    )
+    assert skip_reason(_state(bug, comments_new)) is None
+
+
+def test_a_person_filed_bug_with_severity_and_priority_is_still_skipped(
+    bug_new, comments_new
+):
+    bug = dict(
+        bug_new,
+        creator="filer@mozilla.bugs.example.com",
+        creator_detail={},
+        severity="S4",
+        priority="P5",
+    )
+    assert skip_reason(_state(bug, comments_new)) == (
+        "severity and priority are set, and gecko-triage never asked anything"
+    )
+
+
 def test_a_triaged_bug_runs_when_the_agent_asked_on_it(bug_new, comments_returning):
     # The reporter answered the agent's ask, so the run follows it up.
     bug = dict(bug_new, severity="S3", priority="P3", last_change_time_non_bot=LATER)
