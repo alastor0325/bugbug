@@ -943,6 +943,32 @@ async def test_an_empty_run_after_a_refuted_close_is_watching(
     assert result.close_warning is None
 
 
+async def test_an_empty_run_after_a_refused_close_has_no_warning(
+    fake_client, tmp_path, new_state
+):
+    # The refused close leaves no comment, so no warning about a comment applies.
+    recorder = ActionsRecorder()
+
+    def script():
+        with pytest.raises(ToolError):
+            recorder.record(
+                "bugzilla.update_bug",
+                {
+                    "bug_id": BUG,
+                    "changes": {"status": "RESOLVED", "resolution": "INVALID"},
+                },
+                reasoning="r",
+            )
+
+    fake_client.script = script
+    fake_client.result = _result(
+        '```json\n{"decision": "analyzed", "issue_type": "drm"}\n```'
+    )
+    result = await _run(tmp_path, new_state, recorder)
+    assert result.decision == "watching"
+    assert result.close_warning is None
+
+
 @pytest.mark.parametrize(
     "decision", ["stalled", "duplicate", "invalid", "incomplete", "wrong_component"]
 )
