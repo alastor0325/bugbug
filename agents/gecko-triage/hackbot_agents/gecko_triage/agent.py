@@ -73,7 +73,7 @@ from .config import (
 from .docs import DocRef, docs_for, registrations
 from .hooks import author_needinfos, install_hooks
 from .preflight import reporter_audience
-from .state import TriageState
+from .state import AUTOMATION_SUFFIXES, TriageState
 from .targets import (
     Dropped,
     bugs_to_read,
@@ -521,9 +521,6 @@ _PROMPT_PARTS = tomllib.loads((PROMPTS_DIR / "parts.toml").read_text())
 # prompt is about 19k tokens, so the first turn stays near 60k of the 200k-token context,
 # and the run keeps room for its tool results and subagent reports over its turns.
 COMMENTS_CAP = 150_000
-# Logins that post automation comments, such as Treeherder's intermittent failure
-# reports; their oldest comments are the first left out of a long thread.
-AUTOMATION_SUFFIXES = (".tld", ".bugs")
 _RULE_FILE_TAG = re.compile(r"<(/?)rule_file", re.IGNORECASE)
 
 
