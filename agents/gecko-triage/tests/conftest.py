@@ -34,6 +34,7 @@ from hackbot_agents.gecko_triage.config import (  # noqa: E402
     TRIAGE_SCOPE,
 )
 from hackbot_agents.gecko_triage.hooks import install_hooks  # noqa: E402
+from hackbot_agents.gecko_triage.investigations import Investigations  # noqa: E402
 from hackbot_agents.gecko_triage.state import TriageState  # noqa: E402
 from hackbot_runtime.actions import ActionsRecorder  # noqa: E402
 from hackbot_runtime.actions import bugzilla as runtime_bugzilla  # noqa: E402
@@ -263,8 +264,13 @@ def _recorder(
     meta_candidates=frozenset(),
     close_verdicts=None,
     commit_authors=frozenset(),
+    investigations=None,
 ):
-    """A recorder with the run's hooks installed."""
+    """A recorder with the run's hooks installed.
+
+    ``investigations`` defaults to one `bug_investigator` spawn, so only the tests of
+    the early-ask check meet it.
+    """
     # A comment-only test needs no real state; `require_state` always gives the agent one.
     state = state or TriageState(bug={}, now=NOW)
     rec = ActionsRecorder()
@@ -277,6 +283,9 @@ def _recorder(
         meta_candidates=meta_candidates,
         close_verdicts=close_verdicts or CloseVerdicts(),
         commit_authors=commit_authors,
+        investigations=(
+            Investigations(spawns=1) if investigations is None else investigations
+        ),
     )
     return rec
 

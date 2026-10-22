@@ -22,6 +22,9 @@ What they enforce:
   not on someone with one open, and only on someone on the bug, a listed expert of the
   team, anyone when the bug moves, or a commit author that a `mozilla_vcs` result of
   the run named (the run then waits for a person);
+- the first needinfo on a reporter who is not a developer or an expert is refused when
+  no `bug_investigator` ran before it, and a second attempt passes (see
+  `investigations.py`);
 - each needinfo carries only name, status and requestee, and the hook adds
   `"new": true` (see docs/bugzilla.md);
 - `blocks` only adds one or two meta bugs from the team's `meta-bugs.md`;
@@ -93,6 +96,7 @@ from .config import (
     TRIAGE_SEVERITIES,
     UNSET_FIELD_VALUE,
 )
+from .investigations import Investigations, early_ask_refusal
 from .rerecord import REMOVE_RECORDED_ACTIONS_TOOL
 from .state import TriageState
 from .teamconfig import EMAIL
@@ -597,6 +601,21 @@ def _check_flags(
         )
 
 
+def _check_reporter_ask(
+    changes: dict, state: TriageState, investigations: Investigations
+) -> None:
+    if state.reporter_is_developer_or_expert:
+        return
+    reason = early_ask_refusal(
+        investigations, state.reporter, needinfo_requestees(changes)
+    )
+    if reason:
+        raise ToolError(
+            f"{reason}. To change the recorded comment first, call "
+            f"`{REMOVE_RECORDED_ACTIONS_TOOL}`"
+        )
+
+
 def author_needinfos(
     actions: list[dict], state: TriageState, commit_authors: Set[str]
 ) -> list[str]:
@@ -824,6 +843,7 @@ def update_bug_hook(
     meta_candidates: Set[int],
     close_verdicts: CloseVerdicts,
     commit_authors: Set[str],
+    investigations: Investigations,
 ) -> ActionHook:
     """Refuse a ``bugzilla.update_bug`` outside what the plan allows.
 
@@ -832,8 +852,9 @@ def update_bug_hook(
     ``close_verdicts`` is what `record_close_verdict` stores, read the same way. It
     keeps every refused update that tries to close the triaged bug, whichever check
     refuses it. ``commit_authors`` is what `authors.author_hook` collects, read the
-    same way. An update with a missing or malformed bug id counts as one on the
-    triaged bug.
+    same way, and so is ``investigations``, which `investigations.spawn_counter`
+    fills. An update with a missing or malformed bug id counts as one on the triaged
+    bug.
     """
 
     def hook(action: dict) -> None:
@@ -930,6 +951,8 @@ def update_bug_hook(
             _check_see_also(changes["see_also"], state, bug_id)
         if "whiteboard" in changes:
             _check_whiteboard(changes, state)
+        if "flags" in changes:
+            _check_reporter_ask(changes, state, investigations)
         for flag in changes.get("flags", ()):
             flag["new"] = True
 
@@ -945,6 +968,7 @@ def install_hooks(
     repo: Path,
     close_verdicts: CloseVerdicts,
     commit_authors: Set[str],
+    investigations: Investigations,
     meta_candidates: Set[int] = frozenset(),
 ) -> None:
     """Register every hook on ``recorder``, in the order they must run.
@@ -968,6 +992,12 @@ def install_hooks(
     recorder.add_hook(
         "bugzilla.update_bug",
         update_bug_hook(
-            recorder, bug_id, state, meta_candidates, close_verdicts, commit_authors
+            recorder,
+            bug_id,
+            state,
+            meta_candidates,
+            close_verdicts,
+            commit_authors,
+            investigations,
         ),
     )

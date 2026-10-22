@@ -72,6 +72,7 @@ from .config import (
 )
 from .docs import DocRef, docs_for, registrations
 from .hooks import author_needinfos, install_hooks
+from .investigations import INVESTIGATOR, Investigations, spawn_counter
 from .preflight import reporter_audience
 from .state import AUTOMATION_SUFFIXES, TriageState
 from .targets import (
@@ -1074,14 +1075,17 @@ def make_undumpable() -> None:
 
 
 def session_options(
-    close_verdicts: closing.CloseVerdicts, commits: authors.CommitFacts
+    close_verdicts: closing.CloseVerdicts,
+    commits: authors.CommitFacts,
+    investigations: Investigations,
 ) -> dict:
     """The tool set and environment every run's Claude Code session gets.
 
     A one-shot job ends when the main agent ends its turn, so a subagent left running
     in the background would never report back; the CLI starts subagents in the
     background on its own unless this switch is set. ``commits`` collects the author
-    emails and the commit message bugs of the `mozilla_vcs` results.
+    emails and the commit message bugs of the `mozilla_vcs` results, and
+    ``investigations`` counts the `bug_investigator` spawns.
     """
     return {
         "tools": list(BASE_TOOLS),
@@ -1105,7 +1109,10 @@ def session_options(
                 ),
                 HookMatcher(
                     matcher=closing.SPAWN_TOOLS,
-                    hooks=[closing.spawn_guard(close_verdicts)],
+                    hooks=[
+                        closing.spawn_guard(close_verdicts),
+                        spawn_counter(investigations),
+                    ],
                 ),
                 HookMatcher(
                     matcher=rerecord.REMOVE_RECORDED_ACTIONS_TOOL,
@@ -1137,10 +1144,11 @@ def combined_options(
     toolkit_dir: Path,
     close_verdicts: closing.CloseVerdicts,
     commits: authors.CommitFacts,
+    investigations: Investigations,
 ) -> dict:
     """The plugin options and the session options, with their environments merged."""
     toolkit = toolkit_options(toolkit_dir)
-    session = session_options(close_verdicts, commits)
+    session = session_options(close_verdicts, commits, investigations)
     return {**toolkit, **session, "env": {**toolkit["env"], **session["env"]}}
 
 
@@ -1197,6 +1205,8 @@ async def run_gecko_triage(
     # The `mozilla_vcs` hook adds the commit authors and bugs; the needinfo check reads
     # the authors, the post-run check the bugs.
     commits = authors.CommitFacts()
+    # The spawn hook counts the `bug_investigator` spawns; the needinfo check reads them.
+    investigations = Investigations()
     removals = rerecord.Removals(actions_recorder)
     install_hooks(
         actions_recorder,
@@ -1207,6 +1217,7 @@ async def run_gecko_triage(
         meta_candidates=meta_ids,
         close_verdicts=close_verdicts,
         commit_authors=commits.authors,
+        investigations=investigations,
     )
 
     system_prompt = load_system_prompt()
@@ -1227,7 +1238,7 @@ async def run_gecko_triage(
         agents={
             "investigator": make_investigator(),
             "profile_analyst": make_profile_analyst(),
-            "bug_investigator": make_bug_investigator(searchfox_rev),
+            INVESTIGATOR: make_bug_investigator(searchfox_rev),
             ci_logs.LOG_ANALYST: make_log_analyst(),
             "spec_checker": make_spec_checker(),
             "duplicate_hunter": make_duplicate_hunter(scope_for(TEAM, state.bug)),
@@ -1254,7 +1265,7 @@ async def run_gecko_triage(
         max_budget_usd=max_budget_usd,
         **({"effort": effort} if effort else {}),
         setting_sources=[],
-        **combined_options(toolkit_dir, close_verdicts, commits),
+        **combined_options(toolkit_dir, close_verdicts, commits, investigations),
     )
 
     user_prompt = render_user_prompt(

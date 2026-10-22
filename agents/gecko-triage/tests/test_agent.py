@@ -26,6 +26,7 @@ from hackbot_agents.gecko_triage import (
 from hackbot_agents.gecko_triage.__main__ import AgentInputs
 from hackbot_agents.gecko_triage.authors import CommitFacts
 from hackbot_agents.gecko_triage.closing import CloseVerdicts
+from hackbot_agents.gecko_triage.investigations import Investigations
 from hackbot_agents.gecko_triage.state import TriageState
 from hackbot_runtime import AgentError
 from hackbot_runtime.actions import ActionsRecorder
@@ -707,16 +708,20 @@ def test_the_close_verifier_refutes_what_only_a_run_can_rule_out():
 
 
 def test_only_the_close_verifier_is_given_the_verdict_tool_and_the_guard_holds():
-    hooks = agent.session_options(CloseVerdicts(), CommitFacts())["hooks"]["PreToolUse"]
+    hooks = agent.session_options(CloseVerdicts(), CommitFacts(), Investigations())[
+        "hooks"
+    ]["PreToolUse"]
     (guard,) = [m for m in hooks if m.matcher == closing.RECORD_CLOSE_VERDICT_TOOL]
     assert guard.hooks == [closing.verdict_caller_guard]
 
 
 async def test_the_session_allows_one_close_verifier_spawn():
     store = CloseVerdicts()
-    hooks = agent.session_options(store, CommitFacts())["hooks"]["PreToolUse"]
+    hooks = agent.session_options(store, CommitFacts(), Investigations())["hooks"][
+        "PreToolUse"
+    ]
     (spawn,) = [m for m in hooks if m.matcher == closing.SPAWN_TOOLS]
-    (guard,) = spawn.hooks
+    guard, _ = spawn.hooks
     spawn_input = {
         "tool_name": "Agent",
         "tool_input": {"subagent_type": "close_verifier"},
@@ -727,6 +732,17 @@ async def test_the_session_allows_one_close_verifier_spawn():
     other = {"tool_name": "Agent", "tool_input": {"subagent_type": "log_analyst"}}
     assert await guard(other, None, None) == {}
     assert store.verifier_spawns == 1
+
+
+async def test_the_session_counts_the_bug_investigator_spawns_and_refuses_none():
+    found = Investigations()
+    hooks = agent.session_options(CloseVerdicts(), CommitFacts(), found)["hooks"]
+    (spawn,) = [m for m in hooks["PreToolUse"] if m.matcher == closing.SPAWN_TOOLS]
+    _, counter = spawn.hooks
+    for subagent in ("bug_investigator", "log_analyst", "bug_investigator"):
+        spawn_input = {"tool_name": "Agent", "tool_input": {"subagent_type": subagent}}
+        assert await counter(spawn_input, None, None) == {}
+    assert found.spawns == 2
 
 
 async def test_the_run_registers_the_close_verifier_and_binds_its_store(
@@ -1052,7 +1068,9 @@ def test_the_close_verifier_refutes_a_bug_too_large_to_verify():
         'refute with the reason "a tool result was too large to read, so the close '
         'cannot be verified"' in prompt
     )
-    hooks = agent.session_options(CloseVerdicts(), CommitFacts())["hooks"]
+    hooks = agent.session_options(CloseVerdicts(), CommitFacts(), Investigations())[
+        "hooks"
+    ]
     spill = hooks["PostToolUse"][0]
     assert spill.matcher == "mcp__.*" and len(spill.hooks) == 1
     assert not [m for m in hooks["PreToolUse"] if m.matcher == "Read"]
@@ -1099,7 +1117,9 @@ async def test_a_vcs_result_lets_the_run_needinfo_its_commit_author():
     from hackbot_agents.gecko_triage.config import MOZILLA_VCS_TOOLS
 
     found = CommitFacts()
-    post = agent.session_options(CloseVerdicts(), found)["hooks"]["PostToolUse"]
+    post = agent.session_options(CloseVerdicts(), found, Investigations())["hooks"][
+        "PostToolUse"
+    ]
     (vcs,) = [m for m in post if m.matcher == authors.COMMIT_TOOLS_MATCHER]
     text = '{"author": "A <a@example.org>", "desc": "Bug 1234567 - Fix"}'
     response = {"content": [{"type": "text", "text": text}]}

@@ -28,6 +28,7 @@ from hackbot_agents.gecko_triage.ci_logs import (
     redirect_refusal,
 )
 from hackbot_agents.gecko_triage.closing import CloseVerdicts
+from hackbot_agents.gecko_triage.investigations import Investigations
 
 BUG = 9000001
 TASK = "XRrZ2iAeQ4OuEcG8CY8b0w"
@@ -710,7 +711,9 @@ def test_the_caller_guard_needs_a_subagent_id():
 
 
 def test_the_session_installs_the_caller_guard():
-    hooks = agent.session_options(CloseVerdicts(), CommitFacts())["hooks"]["PreToolUse"]
+    hooks = agent.session_options(CloseVerdicts(), CommitFacts(), Investigations())[
+        "hooks"
+    ]["PreToolUse"]
     (guard,) = [m for m in hooks if m.matcher == FETCH_CI_LOG_TOOL]
     assert guard.hooks == [caller_guard]
 

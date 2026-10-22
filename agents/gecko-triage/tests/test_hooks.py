@@ -39,6 +39,7 @@ from hackbot_agents.gecko_triage.config import (
     TERMS,
     TRIAGE_PRIORITIES,
 )
+from hackbot_agents.gecko_triage.investigations import Investigations, note_spawn
 from hackbot_agents.gecko_triage.state import TriageState
 from hackbot_runtime.actions.claude_sdk import actions_to_tool_names
 from hackbot_runtime.searchfox import PLACEHOLDER as SEARCHFOX_PLACEHOLDER
@@ -909,6 +910,102 @@ def test_a_needinfo_off_the_bug_needs_a_move(bug_new, comments_new):
     assert "owner@example.org" in str(e.value)
     _update(rec, {"component": "Graphics", "flags": flags})
     assert len(rec.actions) == 2
+
+
+# --- the early ask on the reporter ------------------------------------------ #
+
+REPORTER = "reporter@example.com"
+
+
+def _ask_recorder(bug_new, comments_new, investigations, **bug):
+    """No needinfo is open, so the reporter may be asked."""
+    state = TriageState(
+        bug={**bug_new, "flags": [], **bug}, comments=comments_new, now=NOW
+    )
+    return _recorder(state, investigations=investigations)
+
+
+def _spawn(store, subagent_type):
+    note_spawn(
+        store, {"tool_name": "Agent", "tool_input": {"subagent_type": subagent_type}}
+    )
+
+
+def test_the_first_reporter_needinfo_before_an_investigation_is_refused(
+    bug_new, comments_new
+):
+    store = Investigations()
+    rec = _ask_recorder(bug_new, comments_new, store)
+    _comment(rec)
+    with pytest.raises(ToolError, match="spawn bug_investigator first") as e:
+        _update(rec, _ni(REPORTER))
+    assert "only when the bug has no data to analyze" in str(e.value)
+    assert len(rec.actions) == 1
+    assert store.refusals == 1
+
+
+def test_the_second_reporter_needinfo_passes_and_the_refusal_used_no_allowance(
+    bug_new, comments_new
+):
+    store = Investigations()
+    rec = _ask_recorder(bug_new, comments_new, store)
+    _comment(rec)
+    with pytest.raises(ToolError):
+        _update(
+            rec, {"flags": _ni("watcher@example.com")["flags"] + _ni(REPORTER)["flags"]}
+        )
+    _update(rec, _ni(REPORTER))
+    assert len(rec.actions) == 2
+    assert store == Investigations(spawns=0, refusals=1)
+
+
+def test_a_reporter_needinfo_after_an_investigation_is_not_refused(
+    bug_new, comments_new
+):
+    store = Investigations()
+    _spawn(store, "bug_investigator")
+    rec = _ask_recorder(bug_new, comments_new, store)
+    _comment(rec)
+    _update(rec, _ni(REPORTER))
+    assert len(rec.actions) == 2
+    assert store == Investigations(spawns=1, refusals=0)
+
+
+def test_a_needinfo_on_a_developer_or_an_expert_is_never_refused(bug_new, comments_new):
+    expert = sorted(e.email for e in TEAM.needinfo_experts)[0]
+    for requestee in ("watcher@example.com", "dev@example.org", expert):
+        store = Investigations()
+        rec = _ask_recorder(bug_new, comments_new, store)
+        _comment(rec)
+        _update(rec, _ni(requestee))
+        assert store.refusals == 0
+
+
+@pytest.mark.parametrize("reporter", ["dev@mozilla.com", "expert"])
+def test_a_reporter_who_is_a_developer_or_an_expert_is_never_refused(
+    bug_new, comments_new, reporter
+):
+    if reporter == "expert":
+        reporter = sorted(e.email for e in TEAM.needinfo_experts)[0]
+    store = Investigations()
+    rec = _ask_recorder(
+        bug_new, comments_new, store, creator=reporter, creator_detail={}
+    )
+    _comment(rec)
+    _update(rec, _ni(reporter))
+    assert store.refusals == 0
+
+
+def test_only_a_bug_investigator_spawn_counts(bug_new, comments_new):
+    store = Investigations()
+    for other in ("log_analyst", "duplicate_hunter", "close_verifier", None):
+        _spawn(store, other)
+    note_spawn(store, {"tool_name": "Agent"})
+    assert store.spawns == 0
+    rec = _ask_recorder(bug_new, comments_new, store)
+    _comment(rec)
+    with pytest.raises(ToolError, match="spawn bug_investigator first"):
+        _update(rec, _ni(REPORTER))
 
 
 AUTHOR = "author@example.org"

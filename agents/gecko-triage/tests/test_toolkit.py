@@ -27,6 +27,7 @@ from hackbot_agents.gecko_triage.authors import CommitFacts
 from hackbot_agents.gecko_triage.closing import CloseVerdicts
 from hackbot_agents.gecko_triage.config import BUGZILLA_READ_TOOLS, TRIAGE_SCOPE
 from hackbot_agents.gecko_triage.dupes import SEARCH_CONCEPTS_TOOL
+from hackbot_agents.gecko_triage.investigations import Investigations
 from hackbot_agents.gecko_triage.toolkit import (
     TOOLKIT_SKILLS,
     TOOLKIT_VERSION,
@@ -173,7 +174,7 @@ def test_the_profile_analyst_answers_in_the_agents_own_words():
 
 
 def test_the_session_offers_only_the_tools_triage_needs():
-    options = session_options(CloseVerdicts(), CommitFacts())
+    options = session_options(CloseVerdicts(), CommitFacts(), Investigations())
     assert set(options["tools"]) == set(BASE_TOOLS)
     # Write and Edit are in, for bug-start's file; the write guard keeps them in /tmp.
     for tool in (
@@ -192,7 +193,7 @@ def test_subagents_never_run_in_the_background():
     # A one-shot job ends when the main agent ends its turn, so a background
     # subagent's result never arrives.
     assert (
-        session_options(CloseVerdicts(), CommitFacts())["env"][
+        session_options(CloseVerdicts(), CommitFacts(), Investigations())["env"][
             "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"
         ]
         == "1"
@@ -206,7 +207,9 @@ def test_the_log_analyst_has_no_shell_fetch_left():
 
 
 def test_the_plugin_and_session_environments_are_merged(tmp_path):
-    env = combined_options(tmp_path, CloseVerdicts(), CommitFacts())["env"]
+    env = combined_options(tmp_path, CloseVerdicts(), CommitFacts(), Investigations())[
+        "env"
+    ]
     assert env["CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"] == "1"
     assert "WIKI_PATH" in env
     assert env["FX_BUG_TOOLKIT_MODE"] == "hackbot"
@@ -215,7 +218,9 @@ def test_the_plugin_and_session_environments_are_merged(tmp_path):
 def test_a_large_tool_result_does_not_crash_the_run():
     # A big attachment or file read once exceeded the SDK's 1 MiB message buffer.
     assert (
-        session_options(CloseVerdicts(), CommitFacts())["max_buffer_size"]
+        session_options(CloseVerdicts(), CommitFacts(), Investigations())[
+            "max_buffer_size"
+        ]
         >= 16 * 1024 * 1024
     )
 
@@ -238,7 +243,7 @@ def test_the_bug_investigator_runs_bug_start_in_triage_mode():
 
 
 def test_bug_start_writes_its_investigation_under_tmp():
-    env = session_options(CloseVerdicts(), CommitFacts())["env"]
+    env = session_options(CloseVerdicts(), CommitFacts(), Investigations())["env"]
     assert env["FX_BUG_INVESTIGATION_DIR"] == "/tmp/gecko-triage-investigations"
 
 
@@ -257,9 +262,9 @@ def test_writes_are_allowed_only_under_tmp(path, allowed):
 
 
 async def test_the_write_guard_denies_a_write_outside_tmp():
-    hook = session_options(CloseVerdicts(), CommitFacts())["hooks"]["PreToolUse"][
-        0
-    ].hooks[0]
+    hook = session_options(CloseVerdicts(), CommitFacts(), Investigations())["hooks"][
+        "PreToolUse"
+    ][0].hooks[0]
     denied = await hook({"tool_input": {"file_path": "/etc/hosts"}}, None, None)
     assert denied["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert await hook({"tool_input": {"file_path": "/tmp/a.md"}}, None, None) == {}
@@ -325,7 +330,9 @@ def test_the_cli_does_not_see_the_results_policy_or_other_secrets():
 def test_the_results_policy_is_hidden_even_when_unset(monkeypatch, tmp_path):
     monkeypatch.delenv("RESULTS_POLICY_URL", raising=False)
     monkeypatch.setenv("RESULTS_POLICY_FIELDS", "{}")
-    env = combined_options(tmp_path, CloseVerdicts(), CommitFacts())["env"]
+    env = combined_options(tmp_path, CloseVerdicts(), CommitFacts(), Investigations())[
+        "env"
+    ]
     assert env["RESULTS_POLICY_URL"] == "" and env["RESULTS_POLICY_FIELDS"] == ""
     assert env["CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"] == "1"
 
@@ -402,7 +409,9 @@ def test_the_bug_investigator_gets_the_runs_searchfox_revision():
 
 def test_the_skills_run_in_hackbot_mode():
     assert (
-        session_options(CloseVerdicts(), CommitFacts())["env"]["FX_BUG_TOOLKIT_MODE"]
+        session_options(CloseVerdicts(), CommitFacts(), Investigations())["env"][
+            "FX_BUG_TOOLKIT_MODE"
+        ]
         == "hackbot"
     )
 
