@@ -63,14 +63,14 @@ def test_team_rejects_unknown_keys():
 
 
 def test_no_team_keeps_the_system_prompt_unchanged():
-    assert build_system_prompt(RULES_DIR, None) == render_prompt(
+    assert build_system_prompt(RULES_DIR, None, 100) == render_prompt(
         "system.md", rules_dir=str(RULES_DIR.resolve())
     )
 
 
 def test_team_appends_its_section_to_the_system_prompt(tmp_path):
     path = _write_team(tmp_path, rules="Never use C-style casts. {not a field}\n")
-    prompt = build_system_prompt(RULES_DIR, path)
+    prompt = build_system_prompt(RULES_DIR, path, 100)
 
     assert prompt.startswith(
         render_prompt("system.md", rules_dir=str(RULES_DIR.resolve()))
@@ -162,7 +162,9 @@ async def test_team_run_has_the_reviewer_and_the_gates(monkeypatch, tmp_path):
     assert "gates" in options["mcp_servers"]
     assert RECORD_GATE_TOOL in options["allowed_tools"]
     assert set(options["hooks"]) == {"PreToolUse", "PostToolUse"}
+    assert len(options["hooks"]["PostToolUse"]) == 2
     assert options["env"]["CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"] == "1"
+    assert options["env"]["BASH_MAX_TIMEOUT_MS"] == str(15 * 60 * 1000)
 
 
 def test_reviewer_reads_the_team_rules_and_review_docs(tmp_path):
@@ -201,5 +203,52 @@ def test_team_prompt_names_the_runner_platform(tmp_path, monkeypatch):
     from hackbot_agents.bug_fix import agent
 
     monkeypatch.setattr(agent.sys, "platform", "win32")
-    prompt = build_system_prompt(RULES_DIR, _write_team(tmp_path))
+    prompt = build_system_prompt(RULES_DIR, _write_team(tmp_path), 100)
     assert "This run is on Windows." in prompt
+
+
+def test_team_prompt_names_the_time_budget(tmp_path):
+    prompt = build_system_prompt(RULES_DIR, _write_team(tmp_path), 42)
+    assert "42 minutes" in prompt
+
+
+async def test_team_run_stops_at_the_hard_limit(monkeypatch, tmp_path):
+    import asyncio
+    from types import SimpleNamespace
+
+    from hackbot_agents.bug_fix import agent, budget
+
+    class _Hangs:
+        def __init__(self, options):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def query(self, prompt):
+            pass
+
+        async def receive_response(self):
+            await asyncio.sleep(10)
+            yield None
+
+    monkeypatch.setattr(agent, "ClaudeSDKClient", _Hangs)
+    monkeypatch.setattr(agent, "build_sdk_server", lambda *a, **k: {})
+    monkeypatch.setattr(agent, "base_commit", lambda repo: "base")
+    monkeypatch.setattr(budget, "HARD_STOP_GRACE_MINUTES", 0)
+
+    result = await agent.run_bug_fix(
+        bugzilla_mcp_server={"type": "http", "url": "http://b"},
+        phabricator_mcp_server={"type": "http", "url": "http://p"},
+        source_repo=tmp_path,
+        fx_ctx=SimpleNamespace(
+            mozconfig=tmp_path / "mozconfig", objdir=tmp_path / "obj"
+        ),
+        bug=1,
+        team_dir=_write_team(tmp_path / "teams"),
+        budget_minutes=0,
+    )
+    assert "time limit" in result.result

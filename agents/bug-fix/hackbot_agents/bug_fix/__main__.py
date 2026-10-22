@@ -5,6 +5,7 @@ from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import BugFixResult, run_bug_fix
+from .budget import DEFAULT_MINUTES
 from .preflight import fetch_bug
 from .teamconfig import TEAMS_DIR, team_dir, team_for_bug
 
@@ -21,6 +22,8 @@ class AgentInputs(BaseSettings):
     # The team whose rules the run follows, read from `TEAM` as a name under `teams/`
     # and kept as that directory. When unset, the team owning the bug's component.
     team: Path | None = None
+    # Minutes before a team run is told to finish; keep it below the execution timeout.
+    time_budget_minutes: int = DEFAULT_MINUTES
 
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -95,6 +98,7 @@ async def main(ctx: HackbotContext) -> BugFixResult:
         comment=inputs.comment,
         bugzilla_needinfo_flag_id=inputs.bugzilla_needinfo_flag_id,
         team_dir=team,
+        budget_minutes=inputs.time_budget_minutes,
         model=inputs.model,
         max_turns=inputs.max_turns,
         effort=inputs.effort,

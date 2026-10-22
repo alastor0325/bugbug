@@ -94,6 +94,8 @@ class BugFixInputs(BaseModel):
     effort: str | None = None
     # The team whose rules the run follows: a directory under the agent's `teams/`.
     team: Annotated[str | None, Field(pattern=r"^[a-z][a-z0-9-]*$")] = None
+    # Minutes before a team run is told to finish its work.
+    time_budget_minutes: Annotated[int | None, Field(gt=0)] = None
 
     @model_validator(mode="after")
     def _validate_mode(self) -> BugFixInputs:

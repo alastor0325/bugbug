@@ -49,6 +49,11 @@ def test_bug_fix_team_is_passed_as_env():
     assert model_to_env(BugFixInputs(bug_id=1, team="media"))["TEAM"] == "media"
 
 
+def test_bug_fix_time_budget_is_passed_as_env():
+    env = model_to_env(BugFixInputs(bug_id=1, time_budget_minutes=90))
+    assert env["TIME_BUDGET_MINUTES"] == "90"
+
+
 def test_bug_fix_team_must_be_a_plain_name():
     with pytest.raises(ValidationError, match="team"):
         BugFixInputs(bug_id=1, team="../media")

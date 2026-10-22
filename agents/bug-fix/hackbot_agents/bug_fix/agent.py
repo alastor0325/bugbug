@@ -6,6 +6,7 @@ and reaches Bugzilla via an out-of-process MCP broker (HTTP transport)
 that holds the Bugzilla token — the agent process itself never sees it.
 """
 
+import asyncio
 import sys
 from pathlib import Path
 from shlex import quote
@@ -27,7 +28,7 @@ from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_to
 from hackbot_runtime.changes import base_commit
 from hackbot_runtime.claude import Reporter
 
-from . import gates
+from . import budget, gates
 from .config import (
     BUG_FIX_ACTIONS,
     BUGZILLA_READ_TOOLS,
@@ -68,7 +69,11 @@ def runner_platform(value: str) -> str:
     return _PLATFORM_NAMES.get(value, value)
 
 
-def build_system_prompt(rules_dir: Path, team_dir: Path | None) -> str:
+def build_system_prompt(
+    rules_dir: Path,
+    team_dir: Path | None,
+    budget_minutes: int,
+) -> str:
     """The system prompt, with the team's section appended when a team is set."""
     prompt = render_prompt("system.md", rules_dir=str(rules_dir.resolve()))
     if team_dir is None:
@@ -77,6 +82,7 @@ def build_system_prompt(rules_dir: Path, team_dir: Path | None) -> str:
         "team.md",
         label=load_team(team_dir).label,
         platform=runner_platform(sys.platform),
+        budget_minutes=budget_minutes,
         max_rounds=gates.MAX_REVIEW_ROUNDS,
         rules=(team_dir / RULES_PATH).read_text().strip(),
     )
@@ -187,7 +193,7 @@ def make_reviewer(team_dir: Path, base: str) -> AgentDefinition:
     )
 
 
-def team_session(team_dir: Path, repo: Path) -> dict:
+def team_session(team_dir: Path, repo: Path, budget_minutes: int) -> dict:
     """The options a team run adds: the reviewer, the gates and their hooks."""
     state = gates.Gates(repo)
     return {
@@ -205,11 +211,15 @@ def team_session(team_dir: Path, repo: Path) -> dict:
                 HookMatcher(
                     matcher=gates.SPAWN_TOOLS,
                     hooks=[gates.review_hook(state)],
-                )
+                ),
+                HookMatcher(hooks=[budget.budget_hook(budget_minutes)]),
             ],
         },
         # A one-shot run must wait for the reviewer's result.
-        "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"},
+        "env": {
+            "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1",
+            "BASH_MAX_TIMEOUT_MS": str(budget.BASH_MAX_TIMEOUT_MS),
+        },
     }
 
 
@@ -225,6 +235,7 @@ async def run_bug_fix(
     bugzilla_needinfo_flag_id: int | None = None,
     rules_dir: Path = RULES_DIR,
     team_dir: Path | None = None,
+    budget_minutes: int = budget.DEFAULT_MINUTES,
     model: str | None = None,
     max_turns: int | None = None,
     effort: str | None = None,
@@ -261,8 +272,8 @@ async def run_bug_fix(
     )
     enabled_action_tools = actions_to_tool_names(BUG_FIX_ACTIONS)
 
-    system_prompt = build_system_prompt(rules_dir, team_dir)
-    team = team_session(team_dir, source_repo) if team_dir else {}
+    system_prompt = build_system_prompt(rules_dir, team_dir, budget_minutes)
+    team = team_session(team_dir, source_repo, budget_minutes) if team_dir else {}
 
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
@@ -300,14 +311,26 @@ async def run_bug_fix(
     )
 
     result_msg: ResultMessage | None = None
-    with Reporter(verbose=verbose, log_path=log) as reporter:
-        reporter.header(f"bug {bug}")
-        async with ClaudeSDKClient(options=options) as client:
-            await client.query(user_prompt)
-            async for msg in client.receive_response():
-                reporter.message(msg)
-                if isinstance(msg, ResultMessage):
-                    result_msg = msg
+    hard_stop = budget.hard_stop_seconds(budget_minutes) if team_dir else None
+    try:
+        async with asyncio.timeout(hard_stop):
+            with Reporter(verbose=verbose, log_path=log) as reporter:
+                reporter.header(f"bug {bug}")
+                async with ClaudeSDKClient(options=options) as client:
+                    await client.query(user_prompt)
+                    async for msg in client.receive_response():
+                        reporter.message(msg)
+                        if isinstance(msg, ResultMessage):
+                            result_msg = msg
+    except TimeoutError:
+        return BugFixResult(
+            bug_id=bug,
+            num_turns=0,
+            result=(
+                f"Stopped at the hard time limit of {hard_stop / 60:.0f} minutes. "
+                "Only the actions recorded before it are kept."
+            ),
+        )
 
     if result_msg is None:
         raise AgentError(f"bug {bug}: agent produced no result message")
