@@ -30,6 +30,7 @@ import contextlib
 import json
 import math
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -973,6 +974,37 @@ def test_artifact_build_and_tests(bootstrapped_checkout, tmp_path):
     finally:
         probe.unlink()
     assert formatted == "int probe(int a) { return a + 1; }\n"
+
+    # A team run's loop also lints, runs a crashtest, and asks BugBug which tests
+    # cover its change, the way `mach test --auto` does.
+    step("Linting code")
+    mach("lint", "dom/base/Text.cpp", "toolkit/modules/Log.sys.mjs")
+    step("Running crashtests")
+    mach(
+        "crashtest",
+        "--headless",
+        "testing/crashtest/sanity/crashtests.list",
+        mozconfig=artifact,
+    )
+    step("Asking BugBug for the tests of a change")
+    changed = SRC / "toolkit/modules/Log.sys.mjs"
+    original = changed.read_text()
+    changed.write_text(original + "\n// A change for test selection.\n")
+    selection = tmp_path / "selection.py"
+    selection.write_text(
+        "from gecko_taskgraph.util.bugbug import patch_schedules\n"
+        "from mozversioncontrol.factory import get_specific_repository_object\n"
+        "repo = get_specific_repository_object('.', 'git')\n"
+        "base = repo.base_ref_as_commit()\n"
+        "patch = '\\n'.join([repo.get_patches_after_ref(base),\n"
+        "                     repo.get_patch_for_uncommitted_changes()])\n"
+        "print('groups', len(patch_schedules(base, patch, 'extensive')))\n"
+    )
+    try:
+        selected = mach("python", "--virtualenv", "taskgraph", str(selection))
+    finally:
+        changed.write_text(original)
+    assert re.search(r"groups \d+", selected)
 
 
 def build_firefox_showing_progress(ctx):
