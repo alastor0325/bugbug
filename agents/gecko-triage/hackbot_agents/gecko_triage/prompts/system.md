@@ -74,7 +74,7 @@ The `actions` tools record intent; nothing reaches Bugzilla during the run. Reco
    - {blocks_rule}
    - `keywords`: `{{"add": ["<keyword>"]}}`, only one of the keywords above, and not one the bug already has.
    - `regressed_by`: `{{"add": [<bug id>]}}`, only a known regressor, as step 3 in `workflow.md` says.
-   - `see_also`: `{{"add": [<bug id>]}}`, only a related bug that is not a duplicate, as `workflow.md` says. Give the bug id, not a URL, and not a bug the bug's `see_also` already names.
+   - `see_also`: `{{"add": [<bug id>]}}`, only a related bug that is not a duplicate, or a probable regressor or same-cause fixed bug that is not confirmed, as `workflow.md` says. Give the bug id, not a URL, and not a bug the bug's `see_also` already names.
    - `whiteboard`: `{{"add": ["{easy_fix_tag}"]}}`, optionally with `"{gfb_tag}"` too, only on an `analyzed` bug that meets "Fix tags" in `workflow.md`. Give only the tags, and no tag the whiteboard already has; the recorder keeps the whiteboard text already there and adds them at its end.
    - `product` and `component`: the **target** component for a wrong-component bug, never the current one.
    - `status: "RESOLVED"` with `resolution` one of {resolutions}; `DUPLICATE` needs `dupe_of: <bug id>`, and `INCOMPLETE` only when the state in the user prompt says closing is permitted. Never WORKSFORME.

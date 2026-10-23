@@ -108,9 +108,9 @@ result, a bot's regression note or a developer's statement names. Bots such as C
 and BugBot write regression notes. Set `regressed_by` only to a known regressor. Never
 set it from code reading or timing alone. When only your evidence points at a change,
 write "the probable cause" in the comment, and add the bug of that change to `see_also`.
-The link makes its author and the triage owner see this bug. Do the same when a fixed bug
-probably has the same cause but you cannot confirm it. Never guess a regressor id. Never
-add a restricted bug to `see_also`.
+Also add a fixed bug to `see_also` when it probably has the same cause but you cannot
+confirm it. Read each such bug with `get_bugs` first, and never add a bug that it lists
+as inaccessible. Never guess a regressor id.
 
 When two changes could be the regressor, pick the one that first shipped the behavior:
 its landing version must not be later than the first version that shows the bug.

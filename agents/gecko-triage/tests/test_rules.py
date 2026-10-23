@@ -272,6 +272,14 @@ KEY_PHRASES = (
         "workflow.md",
         'write "the probable cause" in the comment, and add the bug of that change to',
     ),
+    (
+        "workflow.md",
+        "Also add a fixed bug to `see_also` when it probably has the same cause but you",
+    ),
+    (
+        "workflow.md",
+        "Read each such bug with `get_bugs` first, and never add a bug that",
+    ),
     ("workflow.md", "Never choose an expert by yourself."),
     ("workflow.md", "Only when the history finds nobody, needinfo exactly one person"),
     ("workflow.md", "an unknown requestee makes Bugzilla refuse the whole update"),
