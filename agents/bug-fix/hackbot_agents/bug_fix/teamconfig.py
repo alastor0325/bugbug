@@ -6,11 +6,15 @@ written). Both are validated strictly when they are read.
 """
 
 import re
+import sys
 import tomllib
+from functools import cache
 from pathlib import Path
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, StringConstraints
+
+from .gates import MAX_REVIEW_ROUNDS
 
 HERE = Path(__file__).resolve().parent
 TEAMS_DIR = HERE / "teams"
@@ -36,6 +40,9 @@ class Team(_Strict):
     components: tuple[Component, ...] = Field(min_length=1)
     # Review checklists in the source tree, as globs, that the reviewer checks.
     review_docs: tuple[Text, ...] = ()
+    # Review rounds with blocking findings before the patch goes out anyway, with the
+    # open findings listed for a person.
+    max_review_rounds: int = Field(default=MAX_REVIEW_ROUNDS, ge=1)
 
 
 def team_dir(teams_dir: Path, name: str) -> Path:
@@ -58,11 +65,25 @@ def load_team(team_dir: Path) -> Team:
     return Team.model_validate(tomllib.loads((team_dir / "team.toml").read_text()))
 
 
+@cache
+def team_files(team_dir: Path) -> tuple[Team, str]:
+    """The team and the text of its rules, read once per run."""
+    return load_team(team_dir), (team_dir / RULES_PATH).read_text().strip()
+
+
 def team_for_bug(teams_dir: Path, bug: dict) -> Path | None:
-    """The directory of the team that owns the bug's component, if any."""
+    """The directory of the team that owns the bug's component, if any.
+
+    A team folder that is not valid is skipped, so it cannot stop other runs.
+    """
     key = (bug.get("product"), bug.get("component"))
     for toml in sorted(teams_dir.glob("*/team.toml")):
-        team = load_team(toml.parent)
+        try:
+            root = team_dir(teams_dir, toml.parent.name)
+            team, _ = team_files(root)
+        except Exception as e:  # a broken team must not break every run
+            print(f"[bug_fix] skipped team {toml.parent.name}: {e}", file=sys.stderr)
+            continue
         if any((c.product, c.component) == key for c in team.components):
-            return toml.parent
+            return root
     return None

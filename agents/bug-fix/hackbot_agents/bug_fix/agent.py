@@ -37,7 +37,7 @@ from .config import (
     PHABRICATOR_READ_TOOLS,
     SOURCE_WRITE_TOOLS,
 )
-from .teamconfig import RULES_PATH, load_team
+from .teamconfig import team_files
 
 HERE = Path(__file__).resolve().parent
 PROMPTS = HERE / "prompts"
@@ -77,12 +77,13 @@ def build_system_prompt(rules_dir: Path, team_dir: Path | None) -> str:
     prompt = render_prompt("system.md", rules_dir=str(rules_dir.resolve()))
     if team_dir is None:
         return prompt
+    team, rules = team_files(team_dir)
     section = render_prompt(
         "team.md",
-        label=load_team(team_dir).label,
+        label=team.label,
         platform=runner_platform(sys.platform),
-        max_rounds=gates.MAX_REVIEW_ROUNDS,
-        rules=(team_dir / RULES_PATH).read_text().strip(),
+        max_rounds=team.max_review_rounds,
+        rules=rules,
     )
     return f"{prompt}\n\n{section}"
 
@@ -173,7 +174,7 @@ def _write_mozconfig(fx_ctx: FirefoxContext) -> None:
 
 def make_reviewer(team_dir: Path, base: str) -> AgentDefinition:
     """The read-only subagent that reviews a team run's patch with a fresh context."""
-    team = load_team(team_dir)
+    team, rules = team_files(team_dir)
     return AgentDefinition(
         description=(
             "Reviews the current patch against the team's rules and review "
@@ -184,16 +185,23 @@ def make_reviewer(team_dir: Path, base: str) -> AgentDefinition:
             label=team.label,
             base=base,
             review_docs=", ".join(f"`{d}`" for d in team.review_docs) or "none",
-            rules=(team_dir / RULES_PATH).read_text().strip(),
+            rules=rules,
         ),
         tools=["Read", "Grep", "Glob", "Bash"],
         model="inherit",
     )
 
 
-def team_session(team_dir: Path, repo: Path) -> dict:
-    """The options a team run adds: the reviewer, the gates and their hooks."""
-    state = gates.Gates(repo)
+def team_session(team_dir: Path, repo: Path, *, update: bool) -> dict:
+    """The options a team run adds: the reviewer, the gates and their hooks.
+
+    ``update`` is True when the run updates an existing revision, which skips TDD.
+    """
+    state = gates.Gates(
+        repo,
+        require_tdd=not update,
+        max_review_rounds=team_files(team_dir)[0].max_review_rounds,
+    )
     return {
         "gates": state,
         "mcp_servers": {gates.SERVER_NAME: gates.gates_server(state)},
@@ -269,7 +277,11 @@ async def run_bug_fix(
         label_refs(actions_recorder)
 
     system_prompt = build_system_prompt(rules_dir, team_dir)
-    team = team_session(team_dir, source_repo) if team_dir else {}
+    team = (
+        team_session(team_dir, source_repo, update=revision_id is not None)
+        if team_dir
+        else {}
+    )
 
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
@@ -325,6 +337,12 @@ async def run_bug_fix(
         )
 
     if team:
+        sent_fp = team["gates"].sent_fp
+        if sent_fp is not None and gates.fingerprint(source_repo) != sent_fp:
+            raise AgentError(
+                f"bug {bug}: the patch changed after the gates let it through, so "
+                "it was not checked"
+            )
         record_test_comment(
             actions_recorder, team["gates"], runner_platform(sys.platform)
         )

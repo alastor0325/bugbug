@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 from hackbot_runtime import HackbotContext, checkout_revision, run_async
@@ -70,14 +71,19 @@ class AgentInputs(BaseSettings):
 async def main(ctx: HackbotContext) -> BugFixResult:
     inputs = AgentInputs()
 
-    if inputs.revision_id:
-        await checkout_revision(ctx, inputs.revision_id, inputs.broker_url)
-    else:
-        await ctx.prepare_repo()
+    async def checkout() -> None:
+        if inputs.revision_id:
+            await checkout_revision(ctx, inputs.revision_id, inputs.broker_url)
+        else:
+            await ctx.prepare_repo()
 
-    team = inputs.team or team_for_bug(
-        TEAMS_DIR, await fetch_bug(inputs.bugzilla_mcp_url, inputs.bug_id)
-    )
+    async def lookup() -> dict:
+        if inputs.team is not None:
+            return {}
+        return await fetch_bug(inputs.bugzilla_mcp_url, inputs.bug_id)
+
+    _, bug = await asyncio.gather(checkout(), lookup())
+    team = inputs.team or team_for_bug(TEAMS_DIR, bug)
 
     return await run_bug_fix(
         bugzilla_mcp_server={
