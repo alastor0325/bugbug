@@ -60,4 +60,5 @@ guard lets the patch through, the run fails and nothing is sent.
 
 A table of these checks goes into the revision's test plan, under the agent's own text.
 For an update to an existing revision, it goes on the revision as a comment. The code
-is in `gates.py` and `comment.py`, and the loop text is in `prompts/team.md`.
+is in `gates.py` and `comment.py`, and the loop text is in `prompts/team.md`. The whole
+run, with and without a team, is drawn in the [bug-fix README](../../../README.md).
