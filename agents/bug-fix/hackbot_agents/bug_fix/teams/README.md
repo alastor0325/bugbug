@@ -55,4 +55,5 @@ lists the open findings for a person to decide. Its tests and checks must still 
 guard lets the patch through, the run fails and nothing is sent.
 
 After the run, the agent adds a comment to the revision with a table of these checks.
-The code is in `gates.py` and `comment.py`, and the loop text is in `prompts/team.md`.
+The code is in `gates.py` and `comment.py`, and the loop text is in `prompts/team.md`. The whole run, with and without a team, is drawn in the
+[bug-fix README](../../../README.md).
