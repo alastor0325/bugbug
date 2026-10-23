@@ -10,6 +10,7 @@ from hackbot_agents.bug_fix.agent import (
 from hackbot_agents.bug_fix.teamconfig import (
     TEAMS_DIR,
     Team,
+    load_team,
     team_dir,
     team_for_bug,
 )
@@ -237,6 +238,7 @@ async def test_team_run_records_the_test_comment_after_its_patch(monkeypatch, tm
             from hackbot_agents.bug_fix.gates import Gates
 
             state.sent = Gates(repo=None)
+            state.sent_fp = "same"
             recorder.record("phabricator.submit_patch", {"bug_id": 1}, reasoning="r")
             yield _Result()
 
@@ -247,13 +249,16 @@ async def test_team_run_records_the_test_comment_after_its_patch(monkeypatch, tm
     real_session = agent.team_session
     state = None
 
-    def team_session(*args):
+    def team_session(*args, **kwargs):
         nonlocal state
-        session = real_session(*args)
+        session = real_session(*args, **kwargs)
         state = session["gates"]
         return session
 
     monkeypatch.setattr(agent, "team_session", team_session)
+    from hackbot_agents.bug_fix import gates as gates_module
+
+    monkeypatch.setattr(gates_module, "fingerprint", lambda repo: "same")
 
     await agent.run_bug_fix(
         bugzilla_mcp_server={"type": "http", "url": "http://b"},
@@ -270,6 +275,111 @@ async def test_team_run_records_the_test_comment_after_its_patch(monkeypatch, tm
     types = [a["type"] for a in recorder.actions]
     assert types == ["phabricator.submit_patch", "phabricator.add_comment"]
     assert (
-        recorder.actions[-1]["params"]["revision_id"]
-        == "D{{actions.patch.revision_id}}"
+        recorder.actions[-1]["params"]["revision_id"] == "{{actions.patch.revision_id}}"
     )
+
+
+def test_team_for_bug_skips_a_broken_team(tmp_path, capsys):
+    _write_team(tmp_path, "demo")
+    broken = tmp_path / "aaa-broken"
+    broken.mkdir()
+    (broken / "team.toml").write_text('label = "x"\n')
+    assert team_for_bug(tmp_path, {"product": "Core", "component": "Demo"}) == (
+        tmp_path / "demo"
+    )
+    assert "skipped team aaa-broken" in capsys.readouterr().err
+
+
+def test_team_for_bug_skips_a_team_without_rules(tmp_path):
+    (tmp_path / "norules").mkdir()
+    (tmp_path / "norules" / "team.toml").write_text(
+        'label = "x"\n\n[[components]]\nproduct = "Core"\ncomponent = "Demo"\n'
+    )
+    assert team_for_bug(tmp_path, {"product": "Core", "component": "Demo"}) is None
+
+
+async def test_a_change_after_the_guard_fails_the_run(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from hackbot_agents.bug_fix import agent, gates
+    from hackbot_runtime import AgentError
+    from hackbot_runtime.actions import ActionsRecorder
+
+    recorder = ActionsRecorder(artifacts_dir=tmp_path / "artifacts")
+
+    class _Result:
+        is_error = False
+        result = "done"
+        num_turns = 3
+        total_cost_usd = 0.1
+
+    class _Session:
+        def __init__(self, options):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def query(self, prompt):
+            pass
+
+        async def receive_response(self):
+            state.sent = gates.Gates(repo=None)
+            state.sent_fp = "sent"
+            recorder.record("phabricator.submit_patch", {"bug_id": 1}, reasoning="r")
+            yield _Result()
+
+    real_session = agent.team_session
+    state = None
+
+    def team_session(*args, **kwargs):
+        nonlocal state
+        session = real_session(*args, **kwargs)
+        state = session["gates"]
+        return session
+
+    monkeypatch.setattr(agent, "ClaudeSDKClient", _Session)
+    monkeypatch.setattr(agent, "ResultMessage", _Result)
+    monkeypatch.setattr(agent, "build_sdk_server", lambda *a, **k: {})
+    monkeypatch.setattr(agent, "base_commit", lambda repo: "base")
+    monkeypatch.setattr(agent, "team_session", team_session)
+    monkeypatch.setattr(gates, "fingerprint", lambda repo: "changed")
+
+    with pytest.raises(AgentError, match="changed after the gates"):
+        await agent.run_bug_fix(
+            bugzilla_mcp_server={"type": "http", "url": "http://b"},
+            phabricator_mcp_server={"type": "http", "url": "http://p"},
+            source_repo=tmp_path,
+            fx_ctx=SimpleNamespace(
+                mozconfig=tmp_path / "mozconfig", objdir=tmp_path / "obj"
+            ),
+            bug=1,
+            team_dir=_write_team(tmp_path / "teams"),
+            actions_recorder=recorder,
+        )
+
+
+def test_a_team_can_set_its_review_round_limit(tmp_path):
+    path = _write_team(tmp_path, top="max_review_rounds = 5\n")
+    assert load_team(path).max_review_rounds == 5
+    assert "After 5 review rounds" in build_system_prompt(RULES_DIR, path)
+
+
+def test_the_review_round_limit_defaults_to_three(tmp_path):
+    from hackbot_agents.bug_fix.gates import MAX_REVIEW_ROUNDS
+
+    assert load_team(_write_team(tmp_path)).max_review_rounds == MAX_REVIEW_ROUNDS == 3
+
+
+def test_the_review_round_limit_must_be_positive():
+    with pytest.raises(ValidationError):
+        Team.model_validate(
+            {
+                "label": "Demo",
+                "components": [{"product": "Core", "component": "Demo"}],
+                "max_review_rounds": 0,
+            }
+        )

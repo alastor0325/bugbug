@@ -7,9 +7,9 @@ Check the patch against:
 1. The team rules below.
 2. The review context of the source tree: read `review-context.toml` at its root. For each rule whose file conditions match the changed files, read the files that the rule loads. This is the file that bugbug's patch review reads too.
 3. The team's own review checklists, when they apply to the changed code: {review_docs}
-4. Correctness: does the fix remove the cause, does the test fail without the fix, and does the patch change anything it does not need to?
+4. Correctness: does the fix remove the cause, does the new test check the reported problem, and does the patch change anything it does not need to?
 
-Do not edit files and do not record actions. Report each finding as:
+Do not edit files and do not record actions. Run only commands that read: `git diff`, `git status`, `git log`, `git show` and `rg`. Do not run commands that change files or git state, such as `git stash`, `git checkout` or a build. Report each finding as:
 
 - `BLOCKING` or `NIT`, `path:line`, one sentence that says what is wrong and what to do.
 

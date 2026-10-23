@@ -1,11 +1,12 @@
 """The gates a team run must pass before it may record a patch.
 
 A team run follows a loop: a test that fails on the unfixed tree, a fix that makes it
-pass, a review by the `reviewer` subagent, and a verify step, with review and verify
-repeated until clean. The agent records the test and verify gates with the
-`record_gate` tool; a hook records each review from the reviewer's own result, so the
-main agent cannot report a review that did not happen. A `PreToolUse` hook refuses
-the patch actions until the gates pass on the current diff.
+pass, a verify step, a review by the `reviewer` subagent, and the associated tests,
+with verify, review and the tests repeated after any change. The agent records the
+test and verify steps with the `record_gate` tool; a hook records each review from the
+reviewer's own result, so the main agent cannot report a review that did not happen.
+A `PreToolUse` hook refuses the patch actions until the gates pass on the current
+diff, and fails closed when it cannot tell.
 """
 
 import asyncio
@@ -13,6 +14,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,6 +25,8 @@ from agent_tools.registry import ToolError, tool, tools_in
 from hackbot_runtime.actions.claude_sdk import actions_to_tool_names
 
 REVIEWER = "reviewer"
+# The default number of review rounds with blocking findings after which the patch
+# goes out anyway, with the open findings listed for a person. A team can change it.
 MAX_REVIEW_ROUNDS = 3
 SERVER_NAME = "gates"
 RECORD_GATE_TOOL = f"mcp__{SERVER_NAME}__record_gate"
@@ -30,15 +34,19 @@ SUBMIT_TOOL, UPDATE_TOOL = actions_to_tool_names(
     ["phabricator.submit_patch", "phabricator.update_patch"]
 )
 SPAWN_TOOLS = "Agent|Task"
-# A new revision needs these before review; an update to one skips them.
+# Required unless the run updates an existing revision.
 TDD_STEPS = ("test_fails", "test_passes")
-# Every patch needs these after the last review, on the current diff.
+# Every patch needs these after the last change, on the current diff.
 CHECK_STEPS = ("verify", "associated_tests")
 # What could not be checked here. Recorded for the test comment; never required.
 NOT_CHECKED = "not_checked"
+# The longest evidence a step may record; it becomes one cell of the test comment.
+MAX_EVIDENCE = 400
 
-_BLOCKING = re.compile(r"^BLOCKING:\s*(\d+)\s*$", re.MULTILINE)
+# The reviewer may wrap its count in backticks or emphasis.
+_BLOCKING = re.compile(r"^[\s`*_]*BLOCKING:\s*(\d+)[\s`*_.]*$", re.MULTILINE)
 _NIT = re.compile(r"^\s*-\s*`?NIT`?[,:]?\s*(.+?)\s*$", re.MULTILINE)
+_BLOCKER = re.compile(r"^\s*-\s*`?BLOCKING`?[,:]?\s*(.+?)\s*$", re.MULTILINE)
 
 
 @dataclass
@@ -48,69 +56,89 @@ class Review:
     fp: str
     # The small findings of this round, which the agent may leave.
     nits: tuple[str, ...] = ()
+    # The blocking findings of this round.
+    blockers: tuple[str, ...] = ()
 
 
 @dataclass
 class Gates:
-    """The gate state of one run in the checkout ``repo``."""
+    """The gate state of one run in the checkout ``repo``.
+
+    ``require_tdd`` is False for a run that updates an existing revision.
+    """
 
     repo: Path
-    tdd: dict[str, bool] = field(default_factory=dict)
-    # For each check step, the fingerprint of the patch its last pass ran on.
-    checked: dict[str, str] = field(default_factory=dict)
+    require_tdd: bool = True
+    max_review_rounds: int = MAX_REVIEW_ROUNDS
+    # For each passed step, the fingerprint of the tree it passed on.
+    passed: dict[str, str] = field(default_factory=dict)
     # The evidence of each step's last pass, for the test comment.
     evidence: dict[str, str] = field(default_factory=dict)
-    # The evidence and reviews as they were when the submit guard last let a patch
-    # through, so the test comment matches the patch that was sent.
-    sent: "Gates | None" = None
     reviews: list[Review] = field(default_factory=list)
+    # The gates as they were when the submit guard last let a patch through, and the
+    # fingerprint of that patch.
+    sent: "Gates | None" = None
+    sent_fp: str | None = None
 
     def fingerprint(self) -> str:
         return fingerprint(self.repo)
 
     def record(self, step: str, ok: bool, *, fp: str, evidence: str = "") -> None:
-        if step in TDD_STEPS:
-            self.tdd[step] = ok
-        elif step in CHECK_STEPS:
-            if ok:
-                self.checked[step] = fp
-            else:
-                self.checked.pop(step, None)
-        elif step != NOT_CHECKED:
+        if step not in TDD_STEPS + CHECK_STEPS + (NOT_CHECKED,):
             raise ValueError(f"unknown step {step!r}")
+        if step == "test_fails":
+            # A new failing test needs a new pass after it.
+            self.passed.pop("test_passes", None)
         if ok:
+            self.passed[step] = fp
             self.evidence[step] = evidence
+        else:
+            self.passed.pop(step, None)
 
-    def refusal(self, tool_name: str, fp: str) -> str | None:
-        """Why the patch action ``tool_name`` is refused on diff ``fp``, or None."""
-        for step in () if tool_name == UPDATE_TOOL else TDD_STEPS:
-            if not self.tdd.get(step):
-                return f"record a passing `{step}` gate first ({RECORD_GATE_TOOL})"
+    def blocking_rounds(self) -> int:
+        """Rounds with blocking findings; an unreadable round counts too."""
+        return sum(1 for r in self.reviews if r.blocking != 0)
+
+    def review_open(self) -> bool:
+        """True when the round limit is reached and the last review is not clean."""
+        return (
+            self.blocking_rounds() >= self.max_review_rounds
+            and bool(self.reviews)
+            and self.reviews[-1].blocking != 0
+        )
+
+    def refusal(self, fp: str) -> str | None:
+        """Why a patch action is refused on diff ``fp``, or None."""
+        if self.require_tdd:
+            for step in TDD_STEPS:
+                if step not in self.passed:
+                    return f"record a passing `{step}` gate first ({RECORD_GATE_TOOL})"
+            if self.passed["test_fails"] == self.passed["test_passes"]:
+                return (
+                    "`test_passes` was recorded on the same tree as `test_fails`: "
+                    "record `test_passes` again after the fix"
+                )
         if not self.reviews:
             return f"spawn the `{REVIEWER}` subagent to review the patch first"
         last = self.reviews[-1]
         if last.fp != fp:
             return (
-                "the patch changed after the last review: "
-                f"spawn the `{REVIEWER}` again, then verify again"
+                "the patch changed after the last review: verify, spawn the "
+                f"`{REVIEWER}` and run the associated tests again"
             )
-        if last.blocking is None:
-            return (
-                f"the last `{REVIEWER}` result had no `BLOCKING: <n>` line; "
-                "spawn it again"
-            )
-        if last.blocking:
-            if len(self.reviews) >= MAX_REVIEW_ROUNDS:
+        if not self.review_open():
+            if last.blocking is None:
                 return (
-                    f"{MAX_REVIEW_ROUNDS} review rounds still have blocking findings: "
-                    "do not submit. Record a Bugzilla comment with your findings."
+                    f"the last `{REVIEWER}` result had no `BLOCKING: <n>` line; "
+                    "spawn it again"
                 )
-            return (
-                f"fix the {last.blocking} blocking findings, then spawn the "
-                f"`{REVIEWER}` again"
-            )
+            if last.blocking:
+                return (
+                    f"fix the {last.blocking} blocking findings, then verify and "
+                    f"spawn the `{REVIEWER}` again"
+                )
         for step in CHECK_STEPS:
-            if self.checked.get(step) != fp:
+            if self.passed.get(step) != fp:
                 return f"run and record a passing `{step}` gate on the current patch"
         return None
 
@@ -124,6 +152,11 @@ def parse_blocking(text: str) -> int | None:
 def parse_nits(text: str) -> tuple[str, ...]:
     """The small findings in a reviewer's result: its `- NIT, ...` lines."""
     return tuple(_NIT.findall(text or ""))
+
+
+def parse_blockers(text: str) -> tuple[str, ...]:
+    """The blocking findings in a reviewer's result: its `- BLOCKING, ...` lines."""
+    return tuple(_BLOCKER.findall(text or ""))
 
 
 def fingerprint(repo: Path) -> str:
@@ -171,14 +204,20 @@ async def record_gate(
     same way without the patch. List each test and its result, and each test that could
     not run here. ``not_checked``: what you could not check here, and why.
 
-    The evidence goes into a comment on the revision, so write it in short, simple
-    sentences with test names in backticks and counts as numbers.
+    The evidence goes into a table cell of a comment on the revision, so keep it under
+    400 characters: short, simple sentences, test names in backticks, counts as
+    numbers, and paths relative to the source tree.
     """
-    fp = await asyncio.to_thread(ctx.fingerprint) if step in CHECK_STEPS else ""
+    if len(evidence) > MAX_EVIDENCE:
+        raise ToolError(
+            f"evidence is {len(evidence)} characters; record a shorter summary of at "
+            f"most {MAX_EVIDENCE}"
+        )
     try:
+        fp = await asyncio.to_thread(ctx.fingerprint) if step != NOT_CHECKED else ""
         ctx.record(step, ok, fp=fp, evidence=evidence)
-    except ValueError as e:
-        raise ToolError(str(e)) from e
+    except (ValueError, OSError, subprocess.SubprocessError) as e:
+        raise ToolError(f"could not record {step}: {e}") from e
     return f"recorded {step}"
 
 
@@ -208,34 +247,51 @@ def _texts(response: object) -> str:
 
 
 def submit_guard(gates: Gates):
-    """The PreToolUse hook that refuses the patch actions until the gates pass."""
+    """The PreToolUse hook that refuses the patch actions until the gates pass.
+
+    It fails closed: an error while it checks refuses the patch.
+    """
 
     async def guard(input_data: dict, tool_use_id: str | None, context) -> dict:
-        fp = await asyncio.to_thread(gates.fingerprint)
-        reason = gates.refusal(input_data.get("tool_name", ""), fp)
+        try:
+            fp = await asyncio.to_thread(gates.fingerprint)
+            reason = gates.refusal(fp)
+        except Exception as e:  # any error refuses the patch
+            return _deny(f"the gates could not be checked ({type(e).__name__}: {e})")
         if reason is not None:
             return _deny(reason)
         gates.sent = Gates(
-            gates.repo, evidence=dict(gates.evidence), reviews=list(gates.reviews)
+            gates.repo,
+            require_tdd=gates.require_tdd,
+            max_review_rounds=gates.max_review_rounds,
+            evidence=dict(gates.evidence),
+            reviews=list(gates.reviews),
         )
+        gates.sent_fp = fp
         return {}
 
     return guard
 
 
 def review_hook(gates: Gates):
-    """The PostToolUse hook that records each `reviewer` result as a review round."""
+    """The PostToolUse hook that records each `reviewer` result as a review round.
+
+    A result it cannot read, or a tree it cannot fingerprint, becomes an unreadable
+    round, which the guard refuses.
+    """
 
     async def hook(input_data: dict, tool_use_id: str | None, context) -> dict:
-        if (input_data.get("tool_input") or {}).get("subagent_type") == REVIEWER:
+        if (input_data.get("tool_input") or {}).get("subagent_type") != REVIEWER:
+            return {}
+        try:
             text = _texts(input_data.get("tool_response"))
+            fp = await asyncio.to_thread(gates.fingerprint)
             gates.reviews.append(
-                Review(
-                    parse_blocking(text),
-                    fp=await asyncio.to_thread(gates.fingerprint),
-                    nits=parse_nits(text),
-                )
+                Review(parse_blocking(text), fp, parse_nits(text), parse_blockers(text))
             )
+        except Exception as e:  # an unreadable round blocks the patch
+            print(f"[bug_fix] review not recorded ({e})", file=sys.stderr)
+            gates.reviews.append(Review(None, ""))
         return {}
 
     return hook

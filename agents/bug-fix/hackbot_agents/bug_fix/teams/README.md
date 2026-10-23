@@ -20,6 +20,7 @@ Copy `media/` to `<team>/`. The name is lower-case letters, digits and `-`.
 ```toml
 label = "Firefox Audio/Video"               # the team's name in the prompt
 review_docs = ["dom/media/docs/review/*.md"] # extra checklists the reviewer reads (globs)
+max_review_rounds = 3                       # optional; 3 is the default
 
 [[components]]                              # one table per Bugzilla component
 product = "Core"
@@ -44,12 +45,18 @@ and they refuse the patch actions until every step passes on the current diff:
 
 1. Platform check: stop with a short comment if the bug cannot occur on the platform
    the run is on.
-2. A new test fails without the fix, then passes with it.
-3. A read-only `reviewer` subagent reviews the diff against the team rules and
-   `review_docs`, in a fresh context. Review again after a fix, at most 3 rounds.
-4. Verify: format, lint and build.
+2. A new test fails without the fix, then passes with it. A run that updates an
+   existing revision skips this step.
+3. Verify: format, lint and build.
+4. A read-only `reviewer` subagent reviews the diff against the team rules and
+   `review_docs`, in a fresh context.
 5. Associated tests: the tests that cover the changed code pass, or fail the same way
    without the patch.
+
+Any change after step 3 repeats steps 3 to 5. After `max_review_rounds` review rounds
+with blocking findings, the patch goes out as it is, and the comment on the revision
+lists the open findings for a person to decide. Its tests and checks must still pass. If the tree changes after the
+guard lets the patch through, the run fails and nothing is sent.
 
 After the run, the agent adds a comment to the revision with a table of these checks.
 The code is in `gates.py` and `comment.py`, and the loop text is in `prompts/team.md`.
