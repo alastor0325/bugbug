@@ -280,6 +280,17 @@ KEY_PHRASES = (
         "workflow.md",
         "Read each such bug with `get_bugs` first, and never add a bug that",
     ),
+    ("workflow.md", "A cause must explain every observation on the bug: the"),
+    ("workflow.md", "Do not assume the codec or the decoder path."),
+    (
+        "workflow.md",
+        "Do not post a cause again when the bug already has it and an expert disagreed",
+    ),
+    (
+        "workflow.md",
+        "Then the comment supports that reading and does not lead the bug.",
+    ),
+    ("workflow.md", "Give no competing cause and no fix direction."),
     ("workflow.md", "Never choose an expert by yourself."),
     ("workflow.md", "Only when the history finds nobody, needinfo exactly one person"),
     ("workflow.md", "an unknown requestee makes Bugzilla refuse the whole update"),

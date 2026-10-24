@@ -288,6 +288,22 @@ affected code and the fix direction. If it finds that information is still missi
 to "Needs info". If it names a known regressor, add it to `regressed_by`. Otherwise name
 the change in the comment as the probable cause.
 
+**Explain every fact.** A cause must explain every observation on the bug: the
+resolutions, codecs, platforms and decoder paths that fail and that work, and the prefs
+that change the result. If a cause does not explain one, drop the cause, or say which fact
+it does not explain. Do not assume the codec or the decoder path. Read them from the
+sample, the site or the reporter's data, and name them in the comment. Do not post a cause
+again when the bug already has it and an expert disagreed or did not take it up, unless
+new evidence supports it.
+
+**When an expert leads the analysis.** A developer or a listed expert may already have
+posted a reading and said that they will look. Then the comment supports that reading and
+does not lead the bug. Give only facts that you confirmed in the code, a log or the
+reporter's data, and say where each fact comes from. Give no competing cause and no fix
+direction. If a confirmed fact does not fit the expert's reading, state the fact and let
+the expert decide. If you have no confirmed fact to add, record nothing and report
+`watching`.
+
 A comment with the analysis may also ask for a capture to confirm the analysis. Put the
 analysis first, then the request under "Next steps", with a needinfo on the reporter. The
 decision is then `needs_info`, because the comment asks for data.
