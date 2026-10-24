@@ -16,8 +16,9 @@ workaround").
 
 **Keep the findings; make only the next steps reporter-plain.** The analysis, with its
 root cause, citations and direction, stays in the comment for the developers who read it
-later. What must be plain and actionable is the part the reporter acts on: a numbered
-workaround or a concrete "what to capture".
+later. "An expert leads the analysis" in `workflow.md` gives the one exception. What must
+be plain and actionable is the part the reporter acts on: a numbered workaround or a
+concrete "what to capture".
 
 **Never link a local file or an internal document.** Cite bugs, Searchfox permalinks and
 pages on the allowed link hosts that the system prompt lists. The recorder refuses a link
@@ -66,7 +67,7 @@ when the comment is recorded. A comment outside them is refused with the reason.
 - **Do not restate what the reporter already told you.** One clause of acknowledgement.
 - **Do not explain why you need an artifact.** Ask for it.
 - **Do not report what you eliminated.** The root cause, the citations and the direction
-  stay; the search path that found them goes.
+  stay, with the exception above; the search path that found them goes.
 - **Do not narrate the investigation.** Open on the conclusion.
 - **One measurement per claim.**
 - **American English.**

@@ -280,17 +280,62 @@ KEY_PHRASES = (
         "workflow.md",
         "Read each such bug with `get_bugs` first, and never add a bug that",
     ),
-    ("workflow.md", "A cause must explain every observation on the bug: the"),
+    ("workflow.md", "A cause must explain every observation on the bug."),
     ("workflow.md", "Do not assume the codec or the decoder path."),
     (
         "workflow.md",
-        "Do not post a cause again when the bug already has it and an expert disagreed",
+        "If you cannot read the codec or the path, say that it is not known.",
     ),
     (
         "workflow.md",
-        "Then the comment supports that reading and does not lead the bug.",
+        "An expert is a listed expert, or a developer who posted an analysis of the bug.",
     ),
-    ("workflow.md", "Give no competing cause and no fix direction."),
+    (
+        "workflow.md",
+        "Then the comment helps the expert and does not direct the work on the bug.",
+    ),
+    (
+        "workflow.md",
+        "Spawn `bug_investigator` with the bug id, the number of the expert's comment "
+        "and the claim.",
+    ),
+    (
+        "workflow.md",
+        "An expert-led comment gives confirmed facts in place of a root cause and a "
+        "fix direction.",
+    ),
+    ("workflow.md", "Give no other cause and no fix direction."),
+    ("workflow.md", 'Name the expert who leads, as "Needs info" says.'),
+    (
+        "workflow.md",
+        "Do not post a cause again when the bug already has it and an expert did not "
+        "agree.",
+    ),
+    (
+        "workflow.md",
+        "So record a short comment that names the expert who leads, and report "
+        "`analyzed`.",
+    ),
+    (
+        "workflow.md",
+        "leads the analysis and the run has no confirmed fact to add.",
+    ),
+    ("workflow.md", "- No expert leads the analysis."),
+    (
+        "workflow.md",
+        "A developer or a listed expert also works on it when they posted an analysis "
+        "and said that they will examine the bug.",
+    ),
+    (
+        "comment.md",
+        '"An expert leads the analysis" in `workflow.md` gives the one exception.',
+    ),
+    ("bug_investigator", "Explain every observation on the bug."),
+    (
+        "bug_investigator",
+        "Then report the confirmed facts that support or contradict it, each with its "
+        "source.",
+    ),
     ("workflow.md", "Never choose an expert by yourself."),
     ("workflow.md", "Only when the history finds nobody, needinfo exactly one person"),
     ("workflow.md", "an unknown requestee makes Bugzilla refuse the whole update"),

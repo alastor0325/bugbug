@@ -20,7 +20,9 @@ change since that ask is **substantive**:
   answer and has no new artifact is also non-substantive. The bug still waits for the
   person the ask is on. Record a short comment only if there is something new to say.
   Otherwise record no actions, report `decision: watching`, and stop. `watching` means
-  that nothing substantive changed since the last ask, by anyone.
+  that nothing substantive changed since the last ask, by anyone. It also means that a
+  developer or a listed expert leads the analysis and the run has no confirmed fact to
+  add. "An expert leads the analysis" says what the run records then.
 - **Substantive.** The reporter gave the awaited data, a new artifact appeared, or someone
   answered the needinfo. Enter the flow at step 2. Step 2b matters most here: the reply
   usually carries the artifact that decides between a new ask and triage.
@@ -206,7 +208,9 @@ A bug with no data at all, with no steps and no logs, can go straight to "Needs 
 - **Needs info.** The bug still waits for data, such as a profile, a media log,
   about:support, a memory report or a sample.
 - **Analyzed.** You found the problem and a fix direction, and the team can start
-  work now. The cause is located, or the bug has reliable steps to reproduce.
+  work now. The cause is located, or the bug has reliable steps to reproduce. When a
+  developer or a listed expert leads the analysis, the bug is also "Analyzed", as "An
+  expert leads the analysis" says.
 - **Close or move.** Duplicate, invalid, not our bug, or the stale INCOMPLETE case.
 
 ### The decision
@@ -241,7 +245,8 @@ Needinfo at most three people, and nobody who already has an open needinfo. The
 
 When a developer already works on the bug, needinfo nobody to confirm or to take it. A
 developer works on it when they wrote that a fix is in progress, or when they attached a
-patch. Say in the comment who works on it, for
+patch. A developer or a listed expert also works on it when they posted an analysis and
+said that they will examine the bug. Say in the comment who works on it, for
 example "Rémi is working on a fix (comment 7)". This also applies to a move.
 
 Needinfo a developer only in these cases. On a move, needinfo the target team's
@@ -284,25 +289,17 @@ someone who confirmed the bug. Do this only when the comment asks them for somet
 When the bug looks fixable (the root cause is clear, or the data is enough to start an
 investigation), spawn `bug_investigator` with the bug id **before** you write the
 comment. Write the comment from its findings: the root cause with its citations, the
-affected code and the fix direction. If it finds that information is still missing, go
-to "Needs info". If it names a known regressor, add it to `regressed_by`. Otherwise name
-the change in the comment as the probable cause.
+affected code and the fix direction. When a developer or a listed expert leads the
+analysis, go to "An expert leads the analysis" for the comment. If it finds that
+information is still missing, go to "Needs info". If it names a known regressor, add it
+to `regressed_by`. Otherwise name the change in the comment as the probable cause.
 
-**Explain every fact.** A cause must explain every observation on the bug: the
-resolutions, codecs, platforms and decoder paths that fail and that work, and the prefs
-that change the result. If a cause does not explain one, drop the cause, or say which fact
-it does not explain. Do not assume the codec or the decoder path. Read them from the
-sample, the site or the reporter's data, and name them in the comment. Do not post a cause
-again when the bug already has it and an expert disagreed or did not take it up, unless
-new evidence supports it.
-
-**When an expert leads the analysis.** A developer or a listed expert may already have
-posted a reading and said that they will look. Then the comment supports that reading and
-does not lead the bug. Give only facts that you confirmed in the code, a log or the
-reporter's data, and say where each fact comes from. Give no competing cause and no fix
-direction. If a confirmed fact does not fit the expert's reading, state the fact and let
-the expert decide. If you have no confirmed fact to add, record nothing and report
-`watching`.
+**Explain every fact.** A cause must explain every observation on the bug. The
+observations are the resolutions, codecs, platforms and decoder paths that fail and that
+work. They also include the prefs that change the result. If a cause does not explain one,
+drop the cause, or say which fact it does not explain. Do not assume the codec or the
+decoder path. Read them from the sample, the site or the reporter's data, and name them in
+the comment. If you cannot read the codec or the path, say that it is not known.
 
 A comment with the analysis may also ask for a capture to confirm the analysis. Put the
 analysis first, then the request under "Next steps", with a needinfo on the reporter. The
@@ -312,6 +309,30 @@ decision is then `needs_info`, because the comment asks for data.
 analysis: a request for a profile, a log, about:support, a sample, steps or a workaround
 test is a reporter action. Never write "no action needed from you" above a request. If you
 need nothing, ask for nothing.
+
+### An expert leads the analysis
+
+An expert is a listed expert, or a developer who posted an analysis of the bug. An expert
+leads the analysis when they posted a claim about the cause and said that they will
+examine the bug. Then the comment helps the expert and does not direct the work on the
+bug.
+
+Spawn `bug_investigator` with the bug id, the number of the expert's comment and the
+claim. Ask it for confirmed facts that support or contradict the claim. Ask for no cause
+and no fix sketch.
+
+An expert-led comment gives confirmed facts in place of a root cause and a fix direction.
+Confirm each fact in the code, a log or the reporter's data, and say where it comes from.
+Give no other cause and no fix direction. If a fact does not agree with the claim, state
+the fact and let the expert decide. Name the expert who leads, as "Needs info" says.
+
+Do not post a cause again when the bug already has it and an expert did not agree. Also
+do not post it when an expert did not reply to it. Post it again only with new evidence.
+
+When you have no confirmed fact to add, keep the bug triaged. If severity or priority is
+`--`, set it as `severity-priority.md` says. The recorder needs a comment before a field
+change. So record a short comment that names the expert who leads, and report `analyzed`.
+If severity and priority are set, record nothing and report `watching`.
 
 ### Fix tags
 
@@ -326,6 +347,7 @@ All of these conditions must be true:
 - The cause explains every failure in the bug. A cause of only some failures is not
   sufficient.
 - You can give a concrete fix direction.
+- No expert leads the analysis.
 - A test can show the fix: a crashtest, a gtest, a mochitest, a WPT or a unit test.
 - The fix needs no design decision, no product decision and no spec decision.
 - The bug is not security sensitive. It has no security keyword. It has no sandbox or

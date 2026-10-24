@@ -103,7 +103,8 @@ def _prompt(name: str) -> str:
 _JSON_BLOCK = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 
 # The decisions the model can end with. `watching`: nothing substantive changed since the
-# last ask, by anyone.
+# last ask, by anyone, or an expert leads the analysis and the run has no confirmed fact
+# to add.
 MODEL_DECISIONS = (
     "needs_info",
     "analyzed",
@@ -866,7 +867,9 @@ def make_bug_investigator(searchfox_rev: str | None = None) -> AgentDefinition:
         (
             "Investigates one bug's root cause with the bug-start skill in triage "
             "mode and reports the cause, the affected code and a fix sketch. Give "
-            "it the bug id."
+            "it the bug id. When an expert leads the analysis, also give it the "
+            "expert's comment number and claim. It then reports only the confirmed "
+            "facts that support or contradict the claim."
         ),
         _BUG_INVESTIGATOR_PROMPT.format(revision=revision),
         [

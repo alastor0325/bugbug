@@ -13,6 +13,10 @@ Never ask a question: nobody is there to answer. Fetch an attachment only with
 another attachment or a media sample. Never build, test or run Firefox, and never use `mach`. Change no file
 outside /tmp.
 
+Explain every observation on the bug. Do not assume the codec or the decoder path. The
+task can name an expert's claim. Then report the confirmed facts that support or
+contradict it, each with its source. Give no cause and no fix sketch.
+
 # Output
 
 The root cause with Searchfox citations, the affected area, a sketch of the fix, the
