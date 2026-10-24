@@ -17,17 +17,18 @@ change since that ask is **substantive**:
 
 - **Non-substantive.** The change does not advance the bug. Examples are a second ask for
   the same data, an automation note and a CC change. A comment that is not the awaited
-  answer and has no new artifact is also non-substantive. The bug still waits for the
-  person the ask is on. Record a short comment only if there is something new to say.
-  Otherwise record no actions, report `decision: watching`, and stop. `watching` means
-  that nothing substantive changed since the last ask, by anyone. It also means that a
-  developer or a listed expert leads the analysis, and the run has no confirmed fact and
-  no field change to record. "An expert leads the analysis" says when this is true.
+  answer and has no new artifact is also non-substantive. The exception is a comment in
+  which a developer or a listed expert claims a cause or says that they will examine the
+  bug. The bug still waits for the person the ask is on. Record a short comment only if
+  there is something new to say. Otherwise record no actions, report `decision: watching`,
+  and stop. `watching` means that nothing substantive changed since the last ask, by
+  anyone. It also means that a developer or a listed expert leads the analysis, and the
+  run has no confirmed fact and no field change to record. "An expert leads the analysis"
+  says when this is true.
 - **Substantive.** The reporter gave the awaited data, a new artifact appeared, or someone
-  answered the needinfo. It is also substantive when a developer or a listed expert
-  claims a cause or says that they will examine the bug. Enter the flow at step 2. Step
-  2b matters most here: the reply usually carries the artifact that decides between a new
-  ask and triage.
+  answered the needinfo. The comment of the exception in "Non-substantive" is substantive.
+  Enter the flow at step 2. Step 2b matters most here: the reply usually carries the
+  artifact that decides between a new ask and triage.
 
 **Do not ask twice.** If someone already asked the reporter for X and the reporter has not
 answered, do not ask again. Say that the bug waits for X. Ask only for data that nobody
@@ -333,12 +334,14 @@ other cause and no fix direction. If a fact does not agree with the claim, state
 Name the expert who leads, as "Needs info" says. Needinfo nobody: the expert who leads
 decides.
 
-Put each open question from `bug_investigator` in the comment, for the expert. Set no
-needinfo for it. The ask rule of step 5 does not apply.
+State each open question from `bug_investigator` in the comment as an open point for the
+expert to decide. Do not write it as a request to anyone, and set no needinfo for it. The
+ask rule of "Investigate before you ask" in step 5 does not apply.
 
 When the regressor is a restricted bug, do not needinfo its commit author. Give the expert
-the facts about the change that step 3 gives the author. The limits of step 3 for a
-restricted bug still apply.
+four facts about the change. These are the function, the source file, the landing date
+and the symptom that connects the change to this bug. Do not call the change a cause. The
+limits of step 3 for a restricted bug still apply.
 
 Do not post a cause again when the bug already has it and an expert did not agree. Also
 do not post it when an expert did not reply to it. Post it again only with new evidence.

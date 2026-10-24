@@ -409,7 +409,10 @@ as "Close verification" lists, and is null otherwise.
 `needinfo_warning` is set when the run asks a commit author, whose hg email may not be a
 Bugzilla login. `restricted_warning` lists the bugs of the post-run read that are
 restricted or unreadable, or every one when the read failed, so that a person checks
-that the comment does not name or describe them. Either one sets `auto_apply` to false.
+that the comment does not name or describe them. It also lists each bug that the broker
+withheld from a `get_bugs` read during the run, by the main agent or a subagent, and a
+comment that contains the number of such a bug fails the run. Either warning sets
+`auto_apply` to false.
 
 `agent_version` names the code that made the run, on every run that returns findings,
 skipped runs included. A failed run raises and carries no `agent_version`. A local run

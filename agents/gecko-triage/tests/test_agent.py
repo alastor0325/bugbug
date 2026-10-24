@@ -1289,6 +1289,80 @@ async def test_a_failed_read_keeps_the_regressor_and_holds_the_run(
     assert "bug 9000003" in result.restricted_warning
 
 
+@pytest.fixture
+def run_withheld(monkeypatch):
+    """The withheld bug set of each run, as the run binds it to its get_bugs hook."""
+    sets = []
+    real = agent.withheld_hook
+    monkeypatch.setattr(
+        agent, "withheld_hook", lambda found: sets.append(found) or real(found)
+    )
+    return sets
+
+
+async def test_a_withheld_bug_holds_the_run_for_a_person(
+    fake_client, tmp_path, new_state, monkeypatch, run_withheld
+):
+    _fake_fetch(monkeypatch, {})
+    recorder = ActionsRecorder()
+    fake_client.script = _comment_and_update(
+        recorder,
+        "A recent change in MediaDecoder caused this.",
+        {"severity": "S3"},
+        before=lambda: run_withheld[-1].add(1234567),
+    )
+    result = await _run(tmp_path, new_state, recorder)
+    assert result.auto_apply is False
+    assert "bug 1234567" in result.restricted_warning
+    assert PERSON_CHECK in result.restricted_warning
+
+
+async def test_a_comment_that_names_a_withheld_bug_fails_the_run(
+    fake_client, tmp_path, new_state, monkeypatch, run_withheld
+):
+    _fake_fetch(monkeypatch, {})
+    recorder = ActionsRecorder()
+    fake_client.script = _comment_and_update(
+        recorder,
+        "The change of 1234567 caused this.",
+        {"severity": "S3"},
+        before=lambda: run_withheld[-1].add(1234567),
+    )
+    with pytest.raises(AgentError, match="bug 1234567"):
+        await _run(tmp_path, new_state, recorder)
+
+
+async def test_a_run_that_met_no_withheld_bug_is_unchanged(
+    fake_client, tmp_path, new_state, monkeypatch, run_withheld
+):
+    calls = _fake_fetch(monkeypatch, {})
+    recorder = ActionsRecorder()
+    fake_client.script = _comment_and_update(
+        recorder, "A recent change caused this.", {"severity": "S3"}
+    )
+    result = await _run(tmp_path, new_state, recorder)
+    assert run_withheld[-1] == set()
+    assert calls == [[]]
+    assert result.restricted_warning is None
+    assert result.auto_apply is True
+
+
+async def test_the_session_collects_the_ids_that_get_bugs_withheld():
+    from hackbot_agents.gecko_triage.targets import GET_BUGS_TOOL
+
+    withheld = set()
+    post = agent.session_options(
+        CloseVerdicts(), CommitFacts(), Investigations(), withheld
+    )["hooks"]["PostToolUse"]
+    (hook,) = [m for m in post if m.matcher == GET_BUGS_TOOL]
+    text = json.dumps({"bugs": [], "inaccessible": [1234567]})
+    response = {"content": [{"type": "text", "text": text}]}
+    await hook.hooks[0](
+        {"tool_name": GET_BUGS_TOOL, "tool_response": response}, "toolu_1", None
+    )
+    assert withheld == {1234567}
+
+
 # --- whiteboard fix tags ---------------------------------------------------- #
 
 

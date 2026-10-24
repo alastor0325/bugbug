@@ -13,10 +13,12 @@ duplicate of a meta bug also fails the run: the hooks know only the team's meta 
 the meta bugs among the duplicate candidates. A comment that names an unreadable or
 restricted bug fails the run too, since the comment cannot be dropped in part and must
 not point at that bug. So does a comment that spells the number of a restricted bug
-that a commit message names. A duplicate of a bug that was closed with no fix waits for
-a person (see `dupe_target_warning`).
+that a commit message names, or of a bug that the broker withheld from a `get_bugs`
+read during the run. A withheld bug also holds the run for a person. A duplicate of a
+bug that was closed with no fix waits for a person (see `dupe_target_warning`).
 """
 
+import json
 import re
 import sys
 from collections.abc import Mapping, Set
@@ -26,10 +28,13 @@ from hackbot_runtime import ActionsRecorder, AgentError
 
 from .actions_view import comment_texts, is_bug_id, updates
 from .broker_client import broker_session
+from .closing import response_texts
 from .config import SCOPE_KEYS
 from .preflight import CLOSED_STATUSES, is_meta, is_security
 
 LINK_FIELDS = ("regressed_by", "see_also")
+# The broker tool that lists the requested bugs it withholds as `inaccessible`.
+GET_BUGS_TOOL = "mcp__bugzilla__get_bugs"
 TARGET_FIELDS = "id,summary,groups,component,product,status,resolution,keywords"
 FETCH_TIMEOUT = 60
 
@@ -107,13 +112,15 @@ def screen_comment(
     found: Mapping[int, dict] | None,
     *,
     commit_bugs: Set[int] = frozenset(),
+    withheld: Set[int] = frozenset(),
 ) -> None:
     """Raise :class:`CommentNamesRestricted` when the comment may name a restricted bug.
 
     ``found`` holds the ``bugs_to_read`` bugs that were read, or is None when the read
     failed or has no broker. ``commit_bugs`` are the bugs the run's commit messages
     named; a restricted one, or any one when the read failed, is forbidden in every
-    spelling.
+    spelling. ``withheld`` are the bugs the broker withheld during the run, each
+    forbidden in every spelling.
     """
     named = comment_bug_ids(actions, bug)
     if named and found is None:
@@ -133,6 +140,13 @@ def screen_comment(
             raise CommentNamesRestricted(
                 f"bug {bug}: the comment contains the number of {_bug_list(spelled)}, "
                 "which a commit message names and is restricted or could not be read"
+            )
+        if spelled := [
+            i for i in sorted(withheld - {bug}) if spelled_number(i).search(text)
+        ]:
+            raise CommentNamesRestricted(
+                f"bug {bug}: the comment contains the number of {_bug_list(spelled)}, "
+                "which the broker withheld from a read in this run"
             )
 
 
@@ -245,6 +259,33 @@ def restricted_warning(ids: list[int], found: Mapping[int, dict] | None) -> str 
         f"the run met {_bug_list(hidden)}, restricted or not readable; a person must "
         "check that the comment does not name or describe these bugs"
     )
+
+
+def withheld_bug_ids(response: object) -> set[int]:
+    """The ids that a `GET_BUGS_TOOL` result lists as `inaccessible`."""
+    ids = set()
+    for text in response_texts(response):
+        try:
+            data = json.loads(text) if isinstance(text, str) else None
+        except json.JSONDecodeError:
+            continue
+        listed = data.get("inaccessible") if isinstance(data, dict) else None
+        if isinstance(listed, list):
+            ids.update(i for i in listed if is_bug_id(i))
+    return ids
+
+
+def withheld_hook(withheld: set[int]):
+    """The PostToolUse hook on `GET_BUGS_TOOL` that collects the withheld ids.
+
+    It sees the main agent's reads and the subagents' reads.
+    """
+
+    async def hook(input_data: dict, tool_use_id: str | None, context) -> dict:
+        withheld.update(withheld_bug_ids(input_data.get("tool_response")))
+        return {}
+
+    return hook
 
 
 def dupe_target_warning(

@@ -331,8 +331,12 @@ KEY_PHRASES = (
     ("workflow.md", "Needinfo nobody: the expert who leads decides."),
     (
         "workflow.md",
-        "It is also substantive when a developer or a listed expert claims a cause or "
-        "says that they will examine the bug.",
+        "The exception is a comment in which a developer or a listed expert claims a "
+        "cause or says that they will examine the bug.",
+    ),
+    (
+        "workflow.md",
+        'The comment of the exception in "Non-substantive" is substantive.',
     ),
     (
         "workflow.md",
@@ -344,17 +348,27 @@ KEY_PHRASES = (
     ),
     (
         "workflow.md",
-        "Put each open question from `bug_investigator` in the comment, for the expert.",
+        "State each open question from `bug_investigator` in the comment as an open "
+        "point for the expert to decide.",
     ),
-    ("workflow.md", "The ask rule of step 5 does not apply."),
+    (
+        "workflow.md",
+        "Do not write it as a request to anyone, and set no needinfo for it.",
+    ),
+    (
+        "workflow.md",
+        'ask rule of "Investigate before you ask" in step 5 does not apply.',
+    ),
     (
         "workflow.md",
         "When the regressor is a restricted bug, do not needinfo its commit author.",
     ),
     (
         "workflow.md",
-        "Give the expert the facts about the change that step 3 gives the author.",
+        "These are the function, the source file, the landing date and the symptom "
+        "that connects the change to this bug.",
     ),
+    ("workflow.md", "Do not call the change a cause."),
     (
         "workflow.md",
         "None of this applies when an expert leads the analysis.",
