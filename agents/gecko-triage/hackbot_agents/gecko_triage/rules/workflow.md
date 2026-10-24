@@ -24,8 +24,10 @@ change since that ask is **substantive**:
   developer or a listed expert leads the analysis, and the run has no confirmed fact and
   no field change to record. "An expert leads the analysis" says when this is true.
 - **Substantive.** The reporter gave the awaited data, a new artifact appeared, or someone
-  answered the needinfo. Enter the flow at step 2. Step 2b matters most here: the reply
-  usually carries the artifact that decides between a new ask and triage.
+  answered the needinfo. It is also substantive when a developer or a listed expert
+  claims a cause or says that they will examine the bug. Enter the flow at step 2. Step
+  2b matters most here: the reply usually carries the artifact that decides between a new
+  ask and triage.
 
 **Do not ask twice.** If someone already asked the reporter for X and the reporter has not
 answered, do not ask again. Say that the bug waits for X. Ask only for data that nobody
@@ -125,7 +127,8 @@ author of the regressing change from its commit: the `mozilla_vcs` tools, such a
 author, and in the comment ask them to set the Regressed by field. The bug must have no
 `regressed_by` yet. Add the `regression` keyword in the same change when it is missing.
 For a test or CI failure with no known regressor, do not add the keyword: send the
-needinfo only.
+needinfo only. When an expert leads the analysis, go to "An expert leads the analysis"
+instead of this needinfo.
 
 In the comment, help the author find the change. Name the function and the source file
 that the change touched, and never a test file of the change. Give the date when the
@@ -202,6 +205,8 @@ measurements. Ask the reporter for data only when the investigation names a ques
 the data can answer. Say in the comment which question the data answers. Never ask the
 reporter to repeat a test. Never ask them to show again a fact that the bug already shows.
 A bug with no data at all, with no steps and no logs, can go straight to "Needs info".
+When an expert leads the analysis, go to "An expert leads the analysis" for the open
+questions.
 
 ## Step 6: branch
 
@@ -327,6 +332,13 @@ Confirm each fact in the code, a log or the reporter's data, and give its source
 other cause and no fix direction. If a fact does not agree with the claim, state the fact.
 Name the expert who leads, as "Needs info" says. Needinfo nobody: the expert who leads
 decides.
+
+Put each open question from `bug_investigator` in the comment, for the expert. Set no
+needinfo for it. The ask rule of step 5 does not apply.
+
+When the regressor is a restricted bug, do not needinfo its commit author. Give the expert
+the facts about the change that step 3 gives the author. The limits of step 3 for a
+restricted bug still apply.
 
 Do not post a cause again when the bug already has it and an expert did not agree. Also
 do not post it when an expert did not reply to it. Post it again only with new evidence.

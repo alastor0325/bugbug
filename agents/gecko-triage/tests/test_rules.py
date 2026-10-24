@@ -331,6 +331,32 @@ KEY_PHRASES = (
     ("workflow.md", "Needinfo nobody: the expert who leads decides."),
     (
         "workflow.md",
+        "It is also substantive when a developer or a listed expert claims a cause or "
+        "says that they will examine the bug.",
+    ),
+    (
+        "workflow.md",
+        'go to "An expert leads the analysis" instead of this needinfo.',
+    ),
+    (
+        "workflow.md",
+        'go to "An expert leads the analysis" for the open questions.',
+    ),
+    (
+        "workflow.md",
+        "Put each open question from `bug_investigator` in the comment, for the expert.",
+    ),
+    ("workflow.md", "The ask rule of step 5 does not apply."),
+    (
+        "workflow.md",
+        "When the regressor is a restricted bug, do not needinfo its commit author.",
+    ),
+    (
+        "workflow.md",
+        "Give the expert the facts about the change that step 3 gives the author.",
+    ),
+    (
+        "workflow.md",
         "None of this applies when an expert leads the analysis.",
     ),
     ("workflow.md", "Its answer ends with `Fixable: expert-led`."),

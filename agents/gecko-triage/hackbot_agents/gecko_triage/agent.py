@@ -868,8 +868,9 @@ def make_bug_investigator(searchfox_rev: str | None = None) -> AgentDefinition:
             "Investigates one bug's root cause with the bug-start skill in triage "
             "mode and reports the cause, the affected code and a fix sketch. Give "
             "it the bug id. When an expert leads the analysis, also give it the "
-            "expert's comment number and claim. It then reports only the confirmed "
-            "facts that support or contradict the claim."
+            "expert's comment number and claim. It then reports the confirmed facts "
+            "that support or contradict the claim, the regressor, the open questions "
+            "and a final `Fixable: expert-led` line."
         ),
         _BUG_INVESTIGATOR_PROMPT.format(revision=revision),
         [
