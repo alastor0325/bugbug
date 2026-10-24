@@ -21,8 +21,8 @@ change since that ask is **substantive**:
   person the ask is on. Record a short comment only if there is something new to say.
   Otherwise record no actions, report `decision: watching`, and stop. `watching` means
   that nothing substantive changed since the last ask, by anyone. It also means that a
-  developer or a listed expert leads the analysis and the run has no confirmed fact to
-  add. "An expert leads the analysis" says what the run records then.
+  developer or a listed expert leads the analysis, and the run has no confirmed fact and
+  no field change to record. "An expert leads the analysis" says when this is true.
 - **Substantive.** The reporter gave the awaited data, a new artifact appeared, or someone
   answered the needinfo. Enter the flow at step 2. Step 2b matters most here: the reply
   usually carries the artifact that decides between a new ask and triage.
@@ -245,8 +245,8 @@ Needinfo at most three people, and nobody who already has an open needinfo. The
 
 When a developer already works on the bug, needinfo nobody to confirm or to take it. A
 developer works on it when they wrote that a fix is in progress, or when they attached a
-patch. A developer or a listed expert also works on it when they posted an analysis and
-said that they will examine the bug. Say in the comment who works on it, for
+patch. A developer or a listed expert also works on it when they lead the analysis, as
+"An expert leads the analysis" says. Say in the comment who works on it, for
 example "Rémi is working on a fix (comment 7)". This also applies to a move.
 
 Needinfo a developer only in these cases. On a move, needinfo the target team's
@@ -279,7 +279,8 @@ tools give an email that the needinfo check accepts. If that developer is on the
 the history names them as a commit author, needinfo them and ask them by name in the
 comment. A needinfo on a commit author waits for a person, who checks that the email is a
 Bugzilla login. Only when the history finds nobody, needinfo exactly one person from the
-fallback list in the system prompt. Never needinfo two people from that list.
+fallback list in the system prompt. Never needinfo two people from that list. None of
+this applies when an expert leads the analysis.
 
 In all other cases with no move and no matching expert, needinfo only the reporter or
 someone who confirmed the bug. Do this only when the comment asks them for something.
@@ -319,20 +320,23 @@ bug.
 
 Spawn `bug_investigator` with the bug id, the number of the expert's comment and the
 claim. Ask it for confirmed facts that support or contradict the claim. Ask for no cause
-and no fix sketch.
+and no fix sketch. Its answer ends with `Fixable: expert-led`.
 
 An expert-led comment gives confirmed facts in place of a root cause and a fix direction.
-Confirm each fact in the code, a log or the reporter's data, and say where it comes from.
-Give no other cause and no fix direction. If a fact does not agree with the claim, state
-the fact and let the expert decide. Name the expert who leads, as "Needs info" says.
+Confirm each fact in the code, a log or the reporter's data, and give its source. Give no
+other cause and no fix direction. If a fact does not agree with the claim, state the fact.
+Name the expert who leads, as "Needs info" says. Needinfo nobody: the expert who leads
+decides.
 
 Do not post a cause again when the bug already has it and an expert did not agree. Also
 do not post it when an expert did not reply to it. Post it again only with new evidence.
 
-When you have no confirmed fact to add, keep the bug triaged. If severity or priority is
-`--`, set it as `severity-priority.md` says. The recorder needs a comment before a field
-change. So record a short comment that names the expert who leads, and report `analyzed`.
-If severity and priority are set, record nothing and report `watching`.
+When you have no confirmed fact to add, the routine field rules still apply. These are
+severity and priority, the step 4b meta bug, the `regression` keyword and `see_also`.
+Severity or priority needs a change only when it is `--` and `severity-priority.md` lets
+you set it. The recorder needs a comment before a field change. So when a field change is
+needed, record it with a short comment that names the expert who leads. Then report
+`analyzed`. Otherwise record nothing and report `watching`.
 
 ### Fix tags
 
@@ -378,6 +382,7 @@ a tag. Never remove or change the whiteboard text that is already there.
 | Outcome                              | Meaning                                                                            | Next                                                        |
 | ------------------------------------ | ---------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | Fixable                              | Root cause located, or reliable steps to reproduce                                 | Analyzed: comment, severity, priority, meta bug             |
+| Fixable: expert-led                  | An expert leads the analysis                                                       | Analyzed, as "An expert leads the analysis" says            |
 | Root cause unknown, more data needed | Diagnostic information still missing                                               | Needs info: comment, severity, priority                     |
 | Root cause unknown, no path forward  | All information gathered, still nothing to go on                                   | Close or move: add the `stalled` keyword                    |
 | Works as intended                    | `spec_checker` says `REPORT_WRONG`, or matches the design                          | Close or move: resolve INVALID or WONTFIX                   |

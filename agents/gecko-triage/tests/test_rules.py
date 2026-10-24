@@ -313,18 +313,36 @@ KEY_PHRASES = (
     ),
     (
         "workflow.md",
-        "So record a short comment that names the expert who leads, and report "
-        "`analyzed`.",
+        "record it with a short comment that names the expert who leads.",
     ),
     (
         "workflow.md",
-        "leads the analysis and the run has no confirmed fact to add.",
+        "Severity or priority needs a change only when it is `--` and "
+        "`severity-priority.md` lets you set it.",
+    ),
+    (
+        "workflow.md",
+        "When you have no confirmed fact to add, the routine field rules still apply.",
+    ),
+    (
+        "workflow.md",
+        "and the run has no confirmed fact and no field change to record.",
+    ),
+    ("workflow.md", "Needinfo nobody: the expert who leads decides."),
+    (
+        "workflow.md",
+        "None of this applies when an expert leads the analysis.",
+    ),
+    ("workflow.md", "Its answer ends with `Fixable: expert-led`."),
+    ("media/diagnostics.md", "The table also covers the expert-led answer."),
+    (
+        "bug_investigator",
+        "It ends with a final line `Fixable: expert-led — comment <number>`.",
     ),
     ("workflow.md", "- No expert leads the analysis."),
     (
         "workflow.md",
-        "A developer or a listed expert also works on it when they posted an analysis "
-        "and said that they will examine the bug.",
+        "A developer or a listed expert also works on it when they lead the analysis",
     ),
     (
         "comment.md",
@@ -333,8 +351,8 @@ KEY_PHRASES = (
     ("bug_investigator", "Explain every observation on the bug."),
     (
         "bug_investigator",
-        "Then report the confirmed facts that support or contradict it, each with its "
-        "source.",
+        "the confirmed facts that support the claim and the confirmed facts that "
+        "contradict it, each with its source.",
     ),
     ("workflow.md", "Never choose an expert by yourself."),
     ("workflow.md", "Only when the history finds nobody, needinfo exactly one person"),

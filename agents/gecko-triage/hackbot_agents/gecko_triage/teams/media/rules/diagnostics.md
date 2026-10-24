@@ -128,4 +128,5 @@ Performance and audio-quality bugs are the exception: they need the `about:loggi
 capture from the table, because steps alone do not show the cause. When one item is
 present, missing table items do not block the investigation. Spawn `bug_investigator`,
 then use its "Fixable" answer and the Fixability table in `workflow.md` to choose the
-branch. "The decision" in `workflow.md` then decides between `analyzed` and `needs_info`.
+branch. The table also covers the expert-led answer. "The decision" in `workflow.md`
+then decides between `analyzed` and `needs_info`.

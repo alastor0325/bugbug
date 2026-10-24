@@ -104,7 +104,7 @@ _JSON_BLOCK = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 
 # The decisions the model can end with. `watching`: nothing substantive changed since the
 # last ask, by anyone, or an expert leads the analysis and the run has no confirmed fact
-# to add.
+# and no field change to record.
 MODEL_DECISIONS = (
     "needs_info",
     "analyzed",
