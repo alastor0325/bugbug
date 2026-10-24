@@ -413,8 +413,9 @@ that the comment does not name or describe them. It also lists each bug that the
 withheld from a read during the run, by the main agent or a subagent: an `inaccessible`
 id of `get_bugs`, or a bug that a read refused with `access_denied`. A comment that
 contains the number of such a bug fails the run. The run reads a `get_bugs` result that
-the CLI saved to a file only from the CLI's `tool-results` folder. When it cannot check
-that file, `restricted_warning` says so. The gate fails safe: a mistyped id in a read
+the CLI saved to a file only from the CLI's `tool-results` folder, up to 32 MiB. When it
+cannot check that file, or a `get_bugs` result that is not an error has no `inaccessible`
+list, `restricted_warning` says so. The gate fails safe: a mistyped id in a read
 also holds the run, and the number check can match an unrelated number, such as a
 timestamp. Either warning sets `auto_apply` to false.
 

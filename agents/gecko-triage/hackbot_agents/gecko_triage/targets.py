@@ -254,20 +254,17 @@ def restricted_warning(
     hidden = [i for i in ids if found is None or not _readable(found, i)]
     if not hidden and unchecked is None:
         return None
-    met = (
-        f"the run met {_bug_list(hidden)}, restricted or not readable" if hidden else ""
-    )
-    return "; ".join(
-        filter(
-            None,
-            [
-                met,
-                unchecked,
-                "a person must check that the comment does not name or describe "
-                "these bugs",
-            ],
+    parts = [unchecked] if unchecked else []
+    if hidden:
+        parts.insert(0, f"the run met {_bug_list(hidden)}, restricted or not readable")
+        parts.append(
+            "a person must check that the comment does not name or describe these bugs"
         )
-    )
+    else:
+        parts.append(
+            "a person must check that the comment names or describes no restricted bug"
+        )
+    return "; ".join(parts)
 
 
 def dupe_target_warning(

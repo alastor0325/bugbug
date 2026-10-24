@@ -4,8 +4,10 @@ import asyncio
 import json
 
 import pytest
+from hackbot_agents.gecko_triage import withheld
 from hackbot_agents.gecko_triage.withheld import (
     GET_BUGS_TOOL,
+    UNCHECKED_RESULT,
     UNCHECKED_SPILL,
     WithheldBugs,
     inaccessible_ids,
@@ -56,9 +58,43 @@ def test_every_result_shape_gives_the_ids(response):
     assert store == WithheldBugs({HIDDEN})
 
 
-def test_a_result_that_is_not_json_withholds_nothing():
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"content": [{"type": "text", "text": "oops"}]},
+        {"content": _blocks({"bugs": [], "count": 0})},
+        _blocks(["not", "a", "dict"]),
+        None,
+    ],
+    ids=["not-json", "no-list", "not-an-object", "empty"],
+)
+def test_a_get_bugs_result_that_cannot_be_checked_holds_the_run(response):
     store = WithheldBugs()
-    note_withheld(store, _get_bugs({"content": [{"type": "text", "text": "oops"}]}))
+    note_withheld(store, _get_bugs(response))
+    assert store == WithheldBugs(set(), UNCHECKED_RESULT)
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"content": _blocks({"error": "invalid_ids"}), "is_error": True},
+        {"content": _blocks({"error": "bugzilla_error", "message": "x"})},
+    ],
+)
+def test_a_get_bugs_error_result_holds_nothing(response):
+    store = WithheldBugs()
+    note_withheld(store, _get_bugs(response))
+    assert store == WithheldBugs()
+
+
+def test_another_tool_with_a_result_that_cannot_be_parsed_holds_nothing():
+    store = WithheldBugs()
+    post = {
+        "tool_name": COMMENTS_TOOL,
+        "tool_input": {"bug_id": 9000001},
+        "tool_response": {"content": [{"type": "text", "text": "oops"}]},
+    }
+    note_withheld(store, post)
     assert store == WithheldBugs()
 
 
@@ -92,7 +128,11 @@ def test_a_refusal_result_counts_its_bug():
 )
 def test_a_failed_refusal_counts_its_bug(error):
     store = WithheldBugs()
-    failure = {"tool_name": COMMENTS_TOOL, "tool_input": {"bug_id": HIDDEN}, "error": error}
+    failure = {
+        "tool_name": COMMENTS_TOOL,
+        "tool_input": {"bug_id": HIDDEN},
+        "error": error,
+    }
     note_withheld(store, failure)
     assert store.ids == {HIDDEN}
 
@@ -111,7 +151,11 @@ def test_a_public_comment_that_quotes_access_denied_counts_nothing():
 
 def test_another_failure_counts_nothing():
     store = WithheldBugs()
-    failure = {"tool_name": COMMENTS_TOOL, "tool_input": {"bug_id": 5}, "error": "timeout"}
+    failure = {
+        "tool_name": COMMENTS_TOOL,
+        "tool_input": {"bug_id": 5},
+        "error": "timeout",
+    }
     note_withheld(store, failure)
     assert store == WithheldBugs()
 
@@ -135,7 +179,9 @@ def _notice(path):
 
 
 def _persisted(path):
-    text = f"<persisted-output>\nOutput too large (67KB). Full output saved to: {path}\n"
+    text = (
+        f"<persisted-output>\nOutput too large (67KB). Full output saved to: {path}\n"
+    )
     return [{"type": "text", "text": text}]
 
 
@@ -174,6 +220,31 @@ def test_a_spill_outside_the_tool_results_folder_is_never_read(results_dir, tmp_
         store = WithheldBugs()
         note_withheld(store, _get_bugs(_notice(path)))
         assert store == WithheldBugs(set(), UNCHECKED_SPILL)
+
+
+def test_a_spill_file_over_the_cap_holds_the_run(results_dir, monkeypatch):
+    path = results_dir / "big.txt"
+    path.write_text(json.dumps({"inaccessible": [HIDDEN]}))
+    monkeypatch.setattr(withheld, "MAX_SPILL_BYTES", path.stat().st_size - 1)
+    store = WithheldBugs()
+    note_withheld(store, _get_bugs(_notice(path)))
+    assert store == WithheldBugs(set(), UNCHECKED_SPILL)
+
+
+def test_only_the_notice_line_of_a_spill_block_names_the_file(results_dir, tmp_path):
+    good = results_dir / "good.txt"
+    good.write_text(json.dumps({"inaccessible": [HIDDEN]}))
+    elsewhere = tmp_path / "elsewhere.txt"
+    quoted = f"Output has been saved to {good}.\n"
+    preview = _persisted(elsewhere)[0]["text"] + f"Preview: {_notice(good)}"
+    for response in (
+        [{"type": "text", "text": "a bug quotes it"}, {"type": "text", "text": quoted}],
+        preview,
+        f"Error: result (1 characters) is fine.\n{_notice(good)}",
+    ):
+        assert spill_file(response) is None
+    assert spill_file(_notice(good)) == good.resolve()
+    assert spill_file(_persisted(good)) == good.resolve()
 
 
 def test_a_spill_of_another_tool_is_not_read(results_dir):

@@ -440,8 +440,10 @@ UNCHECKED = "a get_bugs result was saved to a file and could not be checked"
 
 def test_an_unchecked_read_holds_the_run_with_its_reason():
     warning = restricted_warning([], {}, UNCHECKED)
-    assert UNCHECKED in warning
-    assert "the run met" not in warning
+    assert warning == (
+        f"{UNCHECKED}; a person must check that the comment names or describes no "
+        "restricted bug"
+    )
     both = restricted_warning([HIDDEN], {}, UNCHECKED)
     assert f"bug {HIDDEN}" in both and UNCHECKED in both
 
