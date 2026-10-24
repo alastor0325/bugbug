@@ -209,6 +209,14 @@ def test_a_spill_that_cannot_be_checked_holds_the_run(results_dir, content):
     assert store.ids == set()
 
 
+def test_every_reason_a_run_is_held_stays_in_the_warning(results_dir):
+    store = WithheldBugs()
+    note_withheld(store, _get_bugs(_notice(results_dir / "missing.txt")))
+    note_withheld(store, _get_bugs({"content": [{"type": "text", "text": "oops"}]}))
+    note_withheld(store, _get_bugs({"content": [{"type": "text", "text": "oops"}]}))
+    assert store.unchecked == f"{UNCHECKED_SPILL}; {UNCHECKED_RESULT}"
+
+
 def test_a_spill_outside_the_tool_results_folder_is_never_read(results_dir, tmp_path):
     outside = tmp_path / "elsewhere.txt"
     outside.write_text(json.dumps({"inaccessible": [HIDDEN]}))

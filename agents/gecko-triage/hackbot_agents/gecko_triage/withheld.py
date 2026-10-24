@@ -158,7 +158,11 @@ def note_withheld(store: WithheldBugs, input_data: dict) -> None:
             spilled = is_spill_notice(response)
             ids = _spilled_ids(response) if spilled else inaccessible_ids(response)
             if ids is None and (spilled or not _is_error(response)):
-                store.unchecked = UNCHECKED_SPILL if spilled else UNCHECKED_RESULT
+                reason = UNCHECKED_SPILL if spilled else UNCHECKED_RESULT
+                if store.unchecked is None:
+                    store.unchecked = reason
+                elif reason not in store.unchecked:
+                    store.unchecked = f"{store.unchecked}; {reason}"
             store.ids |= ids or set()
         texts = response_texts(response)
     for text in texts:
