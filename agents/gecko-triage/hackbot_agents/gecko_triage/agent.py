@@ -76,7 +76,6 @@ from .investigations import INVESTIGATOR, Investigations, spawn_counter
 from .preflight import reporter_audience
 from .state import AUTOMATION_SUFFIXES, TriageState
 from .targets import (
-    GET_BUGS_TOOL,
     Dropped,
     bugs_to_read,
     drop_writes,
@@ -85,12 +84,12 @@ from .targets import (
     restricted_warning,
     screen_comment,
     screen_writes,
-    withheld_hook,
 )
 from .teamconfig import EMAIL, OTHER_ISSUE_TYPE, Component, scope_for
 from .toolkit import qualified, toolkit_options
 from .version import current_agent_version
 from .visibility import marked_public
+from .withheld import BROKER_TOOLS_MATCHER, WithheldBugs, withheld_hook
 
 HERE = Path(__file__).resolve().parent
 RULES_DIR = HERE / "rules"
@@ -1084,7 +1083,7 @@ def session_options(
     close_verdicts: closing.CloseVerdicts,
     commits: authors.CommitFacts,
     investigations: Investigations,
-    withheld: set[int] | None = None,
+    withheld: WithheldBugs | None = None,
 ) -> dict:
     """The tool set and environment every run's Claude Code session gets.
 
@@ -1093,9 +1092,12 @@ def session_options(
     background on its own unless this switch is set. ``commits`` collects the author
     emails and the commit message bugs of the `mozilla_vcs` results, and
     ``investigations`` counts the `bug_investigator` spawns. ``withheld`` collects the
-    bugs that the broker withheld from a `get_bugs` read.
+    bugs that the broker withheld from a read.
     """
-    withheld = set() if withheld is None else withheld
+    withheld = WithheldBugs() if withheld is None else withheld
+    on_broker = HookMatcher(
+        matcher=BROKER_TOOLS_MATCHER, hooks=[withheld_hook(withheld)]
+    )
     return {
         "tools": list(BASE_TOOLS),
         "env": {
@@ -1139,13 +1141,15 @@ def session_options(
                     matcher=authors.COMMIT_TOOLS_MATCHER,
                     hooks=[authors.commit_hook(commits)],
                 ),
-                HookMatcher(matcher=GET_BUGS_TOOL, hooks=[withheld_hook(withheld)]),
+                on_broker,
                 # A spawn counts once it ran, not when the CLI refused or failed it.
                 HookMatcher(
                     matcher=closing.SPAWN_TOOLS,
                     hooks=[spawn_counter(investigations)],
                 ),
             ],
+            # A refused read can come as a failed call.
+            "PostToolUseFailure": [on_broker],
         },
         # A large attachment or file read can exceed the SDK's 1 MiB default.
         "max_buffer_size": 32 * 1024 * 1024,
@@ -1157,7 +1161,7 @@ def combined_options(
     close_verdicts: closing.CloseVerdicts,
     commits: authors.CommitFacts,
     investigations: Investigations,
-    withheld: set[int] | None = None,
+    withheld: WithheldBugs | None = None,
 ) -> dict:
     """The plugin options and the session options, with their environments merged."""
     toolkit = toolkit_options(toolkit_dir)
@@ -1220,8 +1224,8 @@ async def run_gecko_triage(
     commits = authors.CommitFacts()
     # The spawn hook counts the `bug_investigator` spawns; the needinfo check reads them.
     investigations = Investigations()
-    # The get_bugs hook adds the bugs the broker withheld; the post-run check reads them.
-    withheld: set[int] = set()
+    # The broker hook adds the bugs the broker withheld; the post-run check reads them.
+    withheld = WithheldBugs()
     removals = rerecord.Removals(actions_recorder)
     install_hooks(
         actions_recorder,
@@ -1338,13 +1342,15 @@ async def run_gecko_triage(
         bug,
         found,
         commit_bugs=commits.bugs,
-        withheld=withheld,
+        withheld=withheld.ids,
     )
     dropped = screen_writes(recorded, bug, found)
     tag_drops = fix_tag_drops(plan, recorded, bug)
     asked_authors = author_needinfos(recorded, state, commits.authors)
     needinfo_warning = AUTHOR_NEEDINFO_WARNING if asked_authors else None
-    hidden_warning = restricted_warning(sorted({*to_read, *withheld} - {bug}), found)
+    hidden_warning = restricted_warning(
+        sorted({*to_read, *withheld.ids} - {bug}), found, withheld.unchecked
+    )
     drop_writes(actions_recorder, dropped + tag_drops)
     actions = actions_recorder.actions
     refuted = close_verdicts.refuted()

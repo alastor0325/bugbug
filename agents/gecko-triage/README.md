@@ -410,9 +410,13 @@ as "Close verification" lists, and is null otherwise.
 Bugzilla login. `restricted_warning` lists the bugs of the post-run read that are
 restricted or unreadable, or every one when the read failed, so that a person checks
 that the comment does not name or describe them. It also lists each bug that the broker
-withheld from a `get_bugs` read during the run, by the main agent or a subagent, and a
-comment that contains the number of such a bug fails the run. Either warning sets
-`auto_apply` to false.
+withheld from a read during the run, by the main agent or a subagent: an `inaccessible`
+id of `get_bugs`, or a bug that a read refused with `access_denied`. A comment that
+contains the number of such a bug fails the run. The run reads a `get_bugs` result that
+the CLI saved to a file only from the CLI's `tool-results` folder. When it cannot check
+that file, `restricted_warning` says so. The gate fails safe: a mistyped id in a read
+also holds the run, and the number check can match an unrelated number, such as a
+timestamp. Either warning sets `auto_apply` to false.
 
 `agent_version` names the code that made the run, on every run that returns findings,
 skipped runs included. A failed run raises and carries no `agent_version`. A local run

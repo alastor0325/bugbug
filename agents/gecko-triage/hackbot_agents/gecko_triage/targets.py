@@ -13,12 +13,11 @@ duplicate of a meta bug also fails the run: the hooks know only the team's meta 
 the meta bugs among the duplicate candidates. A comment that names an unreadable or
 restricted bug fails the run too, since the comment cannot be dropped in part and must
 not point at that bug. So does a comment that spells the number of a restricted bug
-that a commit message names, or of a bug that the broker withheld from a `get_bugs`
-read during the run. A withheld bug also holds the run for a person. A duplicate of a
+that a commit message names, or of a bug that the broker withheld from a read during
+the run (see `withheld`). A withheld bug also holds the run for a person. A duplicate of a
 bug that was closed with no fix waits for a person (see `dupe_target_warning`).
 """
 
-import json
 import re
 import sys
 from collections.abc import Mapping, Set
@@ -28,13 +27,10 @@ from hackbot_runtime import ActionsRecorder, AgentError
 
 from .actions_view import comment_texts, is_bug_id, updates
 from .broker_client import broker_session
-from .closing import response_texts
 from .config import SCOPE_KEYS
 from .preflight import CLOSED_STATUSES, is_meta, is_security
 
 LINK_FIELDS = ("regressed_by", "see_also")
-# The broker tool that lists the requested bugs it withholds as `inaccessible`.
-GET_BUGS_TOOL = "mcp__bugzilla__get_bugs"
 TARGET_FIELDS = "id,summary,groups,component,product,status,resolution,keywords"
 FETCH_TIMEOUT = 60
 
@@ -246,46 +242,32 @@ def screen_writes(
     return dropped
 
 
-def restricted_warning(ids: list[int], found: Mapping[int, dict] | None) -> str | None:
+def restricted_warning(
+    ids: list[int], found: Mapping[int, dict] | None, unchecked: str | None = None
+) -> str | None:
     """Why a person must check the comment: the ``ids`` read that are restricted.
 
-    With a failed read, every id counts. The ids stay in the run's findings, which are
-    internal, and never reach a public comment.
+    With a failed read, every id counts. ``unchecked`` says why a read of the run could
+    not be checked, which also holds the run. The ids stay in the run's findings, which
+    are internal, and never reach a public comment.
     """
     hidden = [i for i in ids if found is None or not _readable(found, i)]
-    if not hidden:
+    if not hidden and unchecked is None:
         return None
-    return (
-        f"the run met {_bug_list(hidden)}, restricted or not readable; a person must "
-        "check that the comment does not name or describe these bugs"
+    met = (
+        f"the run met {_bug_list(hidden)}, restricted or not readable" if hidden else ""
     )
-
-
-def withheld_bug_ids(response: object) -> set[int]:
-    """The ids that a `GET_BUGS_TOOL` result lists as `inaccessible`."""
-    ids = set()
-    for text in response_texts(response):
-        try:
-            data = json.loads(text) if isinstance(text, str) else None
-        except json.JSONDecodeError:
-            continue
-        listed = data.get("inaccessible") if isinstance(data, dict) else None
-        if isinstance(listed, list):
-            ids.update(i for i in listed if is_bug_id(i))
-    return ids
-
-
-def withheld_hook(withheld: set[int]):
-    """The PostToolUse hook on `GET_BUGS_TOOL` that collects the withheld ids.
-
-    It sees the main agent's reads and the subagents' reads.
-    """
-
-    async def hook(input_data: dict, tool_use_id: str | None, context) -> dict:
-        withheld.update(withheld_bug_ids(input_data.get("tool_response")))
-        return {}
-
-    return hook
+    return "; ".join(
+        filter(
+            None,
+            [
+                met,
+                unchecked,
+                "a person must check that the comment does not name or describe "
+                "these bugs",
+            ],
+        )
+    )
 
 
 def dupe_target_warning(

@@ -1291,13 +1291,13 @@ async def test_a_failed_read_keeps_the_regressor_and_holds_the_run(
 
 @pytest.fixture
 def run_withheld(monkeypatch):
-    """The withheld bug set of each run, as the run binds it to its get_bugs hook."""
-    sets = []
+    """The withheld bugs of each run, as the run binds them to its broker hook."""
+    stores = []
     real = agent.withheld_hook
     monkeypatch.setattr(
-        agent, "withheld_hook", lambda found: sets.append(found) or real(found)
+        agent, "withheld_hook", lambda found: stores.append(found) or real(found)
     )
-    return sets
+    return stores
 
 
 async def test_a_withheld_bug_holds_the_run_for_a_person(
@@ -1309,7 +1309,7 @@ async def test_a_withheld_bug_holds_the_run_for_a_person(
         recorder,
         "A recent change in MediaDecoder caused this.",
         {"severity": "S3"},
-        before=lambda: run_withheld[-1].add(1234567),
+        before=lambda: run_withheld[-1].ids.add(1234567),
     )
     result = await _run(tmp_path, new_state, recorder)
     assert result.auto_apply is False
@@ -1317,19 +1317,22 @@ async def test_a_withheld_bug_holds_the_run_for_a_person(
     assert PERSON_CHECK in result.restricted_warning
 
 
-async def test_a_comment_that_names_a_withheld_bug_fails_the_run(
+async def test_an_unchecked_spill_holds_the_run_for_a_person(
     fake_client, tmp_path, new_state, monkeypatch, run_withheld
 ):
+    from hackbot_agents.gecko_triage.withheld import UNCHECKED_SPILL
+
+    def unchecked():
+        run_withheld[-1].unchecked = UNCHECKED_SPILL
+
     _fake_fetch(monkeypatch, {})
     recorder = ActionsRecorder()
     fake_client.script = _comment_and_update(
-        recorder,
-        "The change of 1234567 caused this.",
-        {"severity": "S3"},
-        before=lambda: run_withheld[-1].add(1234567),
+        recorder, "A recent change caused this.", {"severity": "S3"}, before=unchecked
     )
-    with pytest.raises(AgentError, match="bug 1234567"):
-        await _run(tmp_path, new_state, recorder)
+    result = await _run(tmp_path, new_state, recorder)
+    assert result.auto_apply is False
+    assert UNCHECKED_SPILL in result.restricted_warning
 
 
 async def test_a_run_that_met_no_withheld_bug_is_unchanged(
@@ -1341,26 +1344,81 @@ async def test_a_run_that_met_no_withheld_bug_is_unchanged(
         recorder, "A recent change caused this.", {"severity": "S3"}
     )
     result = await _run(tmp_path, new_state, recorder)
-    assert run_withheld[-1] == set()
+    assert run_withheld[-1].ids == set() and run_withheld[-1].unchecked is None
     assert calls == [[]]
     assert result.restricted_warning is None
     assert result.auto_apply is True
 
 
-async def test_the_session_collects_the_ids_that_get_bugs_withheld():
-    from hackbot_agents.gecko_triage.targets import GET_BUGS_TOOL
+def _get_bugs_post(ids):
+    text = json.dumps({"bugs": [], "inaccessible": ids})
+    return {
+        "tool_name": "mcp__bugzilla__get_bugs",
+        "tool_input": {"ids": ids},
+        "tool_response": {"content": [{"type": "text", "text": text}]},
+    }
 
-    withheld = set()
-    post = agent.session_options(
-        CloseVerdicts(), CommitFacts(), Investigations(), withheld
-    )["hooks"]["PostToolUse"]
-    (hook,) = [m for m in post if m.matcher == GET_BUGS_TOOL]
-    text = json.dumps({"bugs": [], "inaccessible": [1234567]})
-    response = {"content": [{"type": "text", "text": text}]}
-    await hook.hooks[0](
-        {"tool_name": GET_BUGS_TOOL, "tool_response": response}, "toolu_1", None
+
+def _broker_hook(options, event):
+    from hackbot_agents.gecko_triage.withheld import BROKER_TOOLS_MATCHER
+
+    (matcher,) = [m for m in options.hooks[event] if m.matcher == BROKER_TOOLS_MATCHER]
+    return matcher.hooks[0]
+
+
+def _hooked_script(fake_client, recorder, text):
+    async def script():
+        hook = _broker_hook(fake_client.options, "PostToolUse")
+        await hook(_get_bugs_post([1234567]), "toolu_1", None)
+        _comment_and_update(recorder, text, {"severity": "S3"})()
+
+    return script
+
+
+async def test_a_get_bugs_result_in_the_session_holds_the_run(
+    fake_client, tmp_path, new_state, monkeypatch
+):
+    _fake_fetch(monkeypatch, {})
+    recorder = ActionsRecorder()
+    fake_client.script = _hooked_script(
+        fake_client, recorder, "A recent change caused this."
     )
-    assert withheld == {1234567}
+    result = await _run(tmp_path, new_state, recorder)
+    assert result.auto_apply is False
+    assert "bug 1234567" in result.restricted_warning
+
+
+async def test_a_comment_that_names_a_bug_the_session_met_withheld_fails(
+    fake_client, tmp_path, new_state, monkeypatch
+):
+    _fake_fetch(monkeypatch, {})
+    recorder = ActionsRecorder()
+    fake_client.script = _hooked_script(
+        fake_client, recorder, "The change 1234567 caused this."
+    )
+    with pytest.raises(AgentError, match="withheld from a read"):
+        await _run(tmp_path, new_state, recorder)
+
+
+@pytest.mark.parametrize("event", ["PostToolUse", "PostToolUseFailure"])
+async def test_the_session_hooks_every_broker_result_and_failure(event):
+    from hackbot_agents.gecko_triage.withheld import WithheldBugs
+
+    withheld = WithheldBugs()
+    options = agent.session_options(
+        CloseVerdicts(), CommitFacts(), Investigations(), withheld
+    )
+    hook = _broker_hook(type("O", (), {"hooks": options["hooks"]}), event)
+    if event == "PostToolUse":
+        await hook(_get_bugs_post([1234567]), "toolu_1", None)
+    else:
+        failure = {
+            "tool_name": "mcp__bugzilla__get_bug_comments",
+            "tool_input": {"bug_id": 1234567},
+            "error": "access_denied",
+        }
+        await hook(failure, "toolu_1", None)
+    assert withheld.ids == {1234567}
 
 
 # --- whiteboard fix tags ---------------------------------------------------- #

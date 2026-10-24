@@ -17,14 +17,14 @@ change since that ask is **substantive**:
 
 - **Non-substantive.** The change does not advance the bug. Examples are a second ask for
   the same data, an automation note and a CC change. A comment that is not the awaited
-  answer and has no new artifact is also non-substantive. The exception is a comment in
-  which a developer or a listed expert claims a cause or says that they will examine the
-  bug. The bug still waits for the person the ask is on. Record a short comment only if
-  there is something new to say. Otherwise record no actions, report `decision: watching`,
-  and stop. `watching` means that nothing substantive changed since the last ask, by
-  anyone. It also means that a developer or a listed expert leads the analysis, and the
-  run has no confirmed fact and no field change to record. "An expert leads the analysis"
-  says when this is true.
+  answer and has no new artifact is also non-substantive. The bug still waits for the
+  person the ask is on. Record a short comment only if there is something new to say.
+  Otherwise record no actions, report `decision: watching`, and stop. `watching` means
+  that nothing substantive changed since the last ask, by anyone. It also means that a
+  developer or a listed expert leads the analysis, and the run has no confirmed fact and
+  no field change to record. "An expert leads the analysis" says when this is true. The
+  exception to this bullet is a comment in which a developer or a listed expert claims a
+  cause or says that they will examine the bug.
 - **Substantive.** The reporter gave the awaited data, a new artifact appeared, or someone
   answered the needinfo. The comment of the exception in "Non-substantive" is substantive.
   Enter the flow at step 2. Step 2b matters most here: the reply usually carries the
@@ -340,8 +340,9 @@ ask rule of "Investigate before you ask" in step 5 does not apply.
 
 When the regressor is a restricted bug, do not needinfo its commit author. Give the expert
 four facts about the change. These are the function, the source file, the landing date
-and the symptom that connects the change to this bug. Do not call the change a cause. The
-limits of step 3 for a restricted bug still apply.
+and the symptom that connects the change to this bug. The comment does not call the change
+a cause, also not "the probable cause" that step 3 asks for. The limits of step 3 for a
+restricted bug still apply.
 
 Do not post a cause again when the bug already has it and an expert did not agree. Also
 do not post it when an expert did not reply to it. Post it again only with new evidence.

@@ -331,8 +331,8 @@ KEY_PHRASES = (
     ("workflow.md", "Needinfo nobody: the expert who leads decides."),
     (
         "workflow.md",
-        "The exception is a comment in which a developer or a listed expert claims a "
-        "cause or says that they will examine the bug.",
+        "The exception to this bullet is a comment in which a developer or a listed "
+        "expert claims a cause or says that they will examine the bug.",
     ),
     (
         "workflow.md",
@@ -368,7 +368,11 @@ KEY_PHRASES = (
         "These are the function, the source file, the landing date and the symptom "
         "that connects the change to this bug.",
     ),
-    ("workflow.md", "Do not call the change a cause."),
+    (
+        "workflow.md",
+        'The comment does not call the change a cause, also not "the probable '
+        'cause" that step 3 asks for.',
+    ),
     (
         "workflow.md",
         "None of this applies when an expert leads the analysis.",

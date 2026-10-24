@@ -1,7 +1,6 @@
 """Tests for the post-run check on the other bugs a run's writes name."""
 
 import asyncio
-import json
 
 import pytest
 from conftest import DUPE, _actions, _target, fake_broker
@@ -22,8 +21,6 @@ from hackbot_agents.gecko_triage.targets import (
     restricted_warning,
     screen_comment,
     screen_writes,
-    withheld_bug_ids,
-    withheld_hook,
 )
 from hackbot_runtime.actions import ActionsRecorder
 
@@ -426,49 +423,29 @@ def test_a_run_with_no_duplicate_has_no_dupe_target_warning():
 # --- the bugs the broker withheld during the run ---------------------------- #
 
 
-def _get_bugs_response(payload):
-    return {"content": [{"type": "text", "text": json.dumps(payload)}]}
-
-
-@pytest.mark.parametrize(
-    ("payload", "expected"),
-    [
-        ({"bugs": [], "inaccessible": [HIDDEN, 7654321]}, {HIDDEN, 7654321}),
-        ({"bugs": [], "inaccessible": []}, set()),
-        ({"bugs": []}, set()),
-        ({"inaccessible": ["1234567", True, -1, None]}, set()),
-        (["not", "a", "dict"], set()),
-    ],
-)
-def test_the_withheld_ids_are_the_broker_inaccessible_list(payload, expected):
-    assert withheld_bug_ids(_get_bugs_response(payload)) == expected
-
-
-def test_a_result_that_is_not_json_withholds_nothing():
-    assert withheld_bug_ids({"content": [{"type": "text", "text": "oops"}]}) == set()
-
-
-def test_the_withheld_hook_collects_every_inaccessible_id():
-    withheld = set()
-    hook = withheld_hook(withheld)
-    for ids in ([HIDDEN], [], [7654321]):
-        response = _get_bugs_response({"bugs": [], "inaccessible": ids})
-        assert asyncio.run(hook({"tool_response": response}, "toolu_1", None)) == {}
-    assert withheld == {HIDDEN, 7654321}
-
-
-@pytest.mark.parametrize("text", ["See bug 1234567.", "It is 1,234,567."])
+@pytest.mark.parametrize("text", ["The change 1234567 caused it.", "It is 1,234,567."])
 @pytest.mark.parametrize("found", [{}, {HIDDEN: _target(id=HIDDEN)}])
 def test_a_comment_with_a_withheld_bug_number_fails(text, found):
-    with pytest.raises(CommentNamesRestricted, match=f"bug {HIDDEN}"):
-        screen_comment(_commented(text), BUG, found, withheld={HIDDEN})
-
-
-def test_a_withheld_number_in_another_spelling_names_the_broker():
     with pytest.raises(CommentNamesRestricted, match="withheld from a read"):
-        screen_comment(_commented("It is 1,234,567."), BUG, {}, withheld={HIDDEN})
+        screen_comment(_commented(text), BUG, found, withheld={HIDDEN})
 
 
 def test_a_comment_with_no_withheld_number_passes():
     screen_comment(_commented("A recent change caused it."), BUG, {}, withheld={HIDDEN})
     screen_comment(_commented(f"This bug {BUG} only."), BUG, {}, withheld={BUG})
+
+
+UNCHECKED = "a get_bugs result was saved to a file and could not be checked"
+
+
+def test_an_unchecked_read_holds_the_run_with_its_reason():
+    warning = restricted_warning([], {}, UNCHECKED)
+    assert UNCHECKED in warning
+    assert "the run met" not in warning
+    both = restricted_warning([HIDDEN], {}, UNCHECKED)
+    assert f"bug {HIDDEN}" in both and UNCHECKED in both
+
+
+def test_no_hidden_bug_and_no_unchecked_read_is_no_warning():
+    assert restricted_warning([], {}) is None
+    assert restricted_warning([HIDDEN], {HIDDEN: _target(id=HIDDEN)}, None) is None
