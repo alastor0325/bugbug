@@ -545,8 +545,9 @@ def _check_flags(
 
     ``commit_authors`` are the author emails the run's `mozilla_vcs` results named:
     the developer the code history finds, or the author of a restricted regressor,
-    and the @mozilla.com assignees of their commit message bugs. A needinfo on one
-    holds the run for a person, see `author_needinfos`.
+    and the @mozilla.com assignees of their commit message bugs who have the commit
+    author's name. A needinfo on one holds the run for a person, see
+    `author_needinfos`.
     """
     flags = changes["flags"]
     if not isinstance(flags, list) or not flags:

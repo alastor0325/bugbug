@@ -1039,12 +1039,18 @@ def test_a_commit_author_may_be_asked_for_a_restricted_regressor(bug_new, commen
 def test_the_mozilla_assignee_of_a_commit_bug_may_be_asked(bug_new, comments_new):
     from hackbot_agents.gecko_triage.authors import CommitFacts
 
-    facts = CommitFacts({AUTHOR}, {9000003})
+    facts = CommitFacts()
+    facts.add({AUTHOR}, {9000003: {"jane dev"}, 9000004: {"sheriff"}})
     rec = _author_recorder(bug_new, comments_new, facts.authors)
     _comment(rec)
     with pytest.raises(ToolError, match="not on the team's expert list"):
         _update(rec, _ni("dev@mozilla.com"))
-    facts.add(set(), set(), {9000003: "dev@mozilla.com", 9000004: "other@mozilla.com"})
+    facts.add(
+        assignees={
+            9000003: ("dev@mozilla.com", "jane dev"),
+            9000004: ("other@mozilla.com", "other dev"),
+        }
+    )
     with pytest.raises(ToolError, match="not on the team's expert list"):
         _update(rec, _ni("other@mozilla.com"))
     action = _update(rec, _ni("dev@mozilla.com"))

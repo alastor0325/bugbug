@@ -1129,18 +1129,20 @@ async def test_a_vcs_result_lets_the_run_needinfo_its_commit_author():
     await vcs.hooks[0](
         {"tool_name": MOZILLA_VCS_TOOLS[0], "tool_response": response}, "toolu_1", None
     )
-    assert found == CommitFacts({"a@example.org"}, {1234567})
+    assert found == CommitFacts({"a@example.org"}, {1234567}, {1234567: {"a"}})
 
 
 async def test_a_get_bugs_result_lets_the_run_needinfo_a_commit_bugs_assignee():
     from hackbot_agents.gecko_triage import authors
 
-    found = CommitFacts(bugs={1234567})
+    found = CommitFacts()
+    found.add(bug_authors={1234567: {"jane dev"}})
     post = agent.session_options(CloseVerdicts(), found, Investigations())["hooks"][
         "PostToolUse"
     ]
     (get_bugs,) = [m for m in post if m.matcher == authors.GET_BUGS_TOOL]
-    text = '{"bugs": [{"id": 1234567, "assigned_to": "dev@mozilla.com"}]}'
+    detail = {"email": "dev@mozilla.com", "real_name": "Jane Dev [:jd]"}
+    text = json.dumps({"bugs": [{"id": 1234567, "assigned_to_detail": detail}]})
     response = {"content": [{"type": "text", "text": text}]}
     await get_bugs.hooks[0](
         {"tool_name": authors.GET_BUGS_TOOL, "tool_response": response}, "t", None
@@ -1212,7 +1214,10 @@ async def test_a_commit_bug_assignee_needinfo_never_applies_unattended(
     recorder = ActionsRecorder()
 
     def script():
-        run_authors[-1].add(set(), {1234567}, {1234567: "dev@mozilla.com"})
+        run_authors[-1].add(
+            bug_authors={1234567: {"jane dev"}},
+            assignees={1234567: ("dev@mozilla.com", "jane dev")},
+        )
         recorder.record(
             "bugzilla.add_comment",
             {
@@ -1232,7 +1237,28 @@ async def test_a_commit_bug_assignee_needinfo_never_applies_unattended(
     result = await _run(tmp_path, new_state, recorder)
     assert len(recorder.actions) == 2
     assert result.auto_apply is False
-    assert result.needinfo_warning == agent.AUTHOR_NEEDINFO_WARNING
+    assert agent.ASSIGNEE_NEEDINFO_WARNING in result.needinfo_warning
+    assert agent.AUTHOR_NEEDINFO_WARNING in result.needinfo_warning
+
+
+@pytest.mark.parametrize(
+    ("asked", "expected"),
+    [
+        ([], None),
+        (
+            ["a@example.org"],
+            "a commit author needinfo needs a person to check the Bugzilla login",
+        ),
+        (
+            ["dev@mozilla.com"],
+            "a commit author needinfo needs a person to check the Bugzilla login; a "
+            "needinfo went to the @mozilla.com assignee of a commit's bug; check that "
+            "this person wrote the commit",
+        ),
+    ],
+)
+def test_an_assignee_needinfo_gets_its_own_warning(asked, expected):
+    assert agent.author_needinfo_warning(asked, {"dev@mozilla.com"}) == expected
 
 
 def _ni_flags(email):

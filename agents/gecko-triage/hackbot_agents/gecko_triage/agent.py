@@ -23,7 +23,7 @@ import os
 import re
 import sys
 import tomllib
-from collections.abc import Mapping
+from collections.abc import Mapping, Set
 from functools import partial
 from pathlib import Path
 from typing import Annotated
@@ -520,6 +520,19 @@ def checked_issue_type(plan: Plan) -> tuple[Plan, str | None]:
 AUTHOR_NEEDINFO_WARNING = (
     "a commit author needinfo needs a person to check the Bugzilla login"
 )
+ASSIGNEE_NEEDINFO_WARNING = (
+    "a needinfo went to the @mozilla.com assignee of a commit's bug; check that this "
+    "person wrote the commit"
+)
+
+
+def author_needinfo_warning(asked: list[str], assignees: Set[str]) -> str | None:
+    """The hold reasons of the ``asked`` commit authors; ``assignees`` came from bugs."""
+    if not asked:
+        return None
+    if assignees.intersection(asked):
+        return f"{AUTHOR_NEEDINFO_WARNING}; {ASSIGNEE_NEEDINFO_WARNING}"
+    return AUTHOR_NEEDINFO_WARNING
 
 
 def with_dropped(result: str | None, dropped: list[Dropped]) -> str | None:
@@ -1352,7 +1365,7 @@ async def run_gecko_triage(
     dropped = screen_writes(recorded, bug, found)
     tag_drops = fix_tag_drops(plan, recorded, bug)
     asked_authors = author_needinfos(recorded, state, commits.authors)
-    needinfo_warning = AUTHOR_NEEDINFO_WARNING if asked_authors else None
+    needinfo_warning = author_needinfo_warning(asked_authors, commits.assignee_authors)
     hidden_warning = restricted_warning(
         sorted({*to_read, *withheld.ids} - {bug}), found, withheld.unchecked
     )

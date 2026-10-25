@@ -143,7 +143,9 @@ async def test_the_hook_ignores_a_try_repo():
         "toolu_1",
         None,
     )
-    assert found == authors.CommitFacts({"jane@example.org"}, {9000003})
+    assert found == authors.CommitFacts(
+        {"jane@example.org"}, {9000003}, {9000003: {"jane dev"}}
+    )
 
 
 def test_the_matcher_covers_the_vcs_tools_that_show_a_commit():
@@ -156,6 +158,7 @@ def test_the_matcher_covers_the_vcs_tools_that_show_a_commit():
 
 COMMIT_BUG = 9000003
 ASSIGNEE = "dev@mozilla.com"
+JANE = {"email": ASSIGNEE, "real_name": "Jane  DEV [:jane] (away)"}
 
 
 def _get_bugs(*bugs, inaccessible=()):
@@ -168,13 +171,56 @@ def _get_bugs(*bugs, inaccessible=()):
     }
 
 
+def _bug(email=ASSIGNEE, name="Jane Dev", bug=COMMIT_BUG):
+    return {
+        "id": bug,
+        "assigned_to": email,
+        "assigned_to_detail": {"email": email, "real_name": name},
+    }
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("Jane  DEV [:jane] (away)", "jane dev"),
+        (" Chun-Min Chang [:chunmin] ", "chun-min chang"),
+        (None, ""),
+    ],
+)
+def test_a_name_loses_its_nick_and_notes_and_case(name, expected):
+    assert authors.normalized_name(name) == expected
+
+
+def test_each_commit_bug_maps_to_its_commits_author_names():
+    history = {
+        "changesets": [
+            {"author": "Jane Dev <j@example.org>", "desc": "Bug 9000003 - Fix"},
+            {"author": "Sheriff <s@example.org>", "desc": "Backed out (bug 9000003)"},
+            {"author": "<n@example.org>", "desc": "Bug 9000004 - Other"},
+        ]
+    }
+    assert authors.commit_bug_authors(_content(history)) == {
+        COMMIT_BUG: {"jane dev", "sheriff"},
+        9000004: set(),
+    }
+
+
 @pytest.mark.parametrize(
     ("bug", "expected"),
     [
         (
-            {"id": COMMIT_BUG, "assigned_to": " Dev@Mozilla.com "},
-            {COMMIT_BUG: ASSIGNEE},
+            {
+                "id": COMMIT_BUG,
+                "assigned_to": " Dev@Mozilla.com ",
+                "assigned_to_detail": JANE,
+            },
+            {COMMIT_BUG: (ASSIGNEE, "jane dev")},
         ),
+        (
+            {"id": COMMIT_BUG, "assigned_to_detail": JANE},
+            {COMMIT_BUG: (ASSIGNEE, "jane dev")},
+        ),
+        ({"id": COMMIT_BUG, "assigned_to": ASSIGNEE}, {COMMIT_BUG: (ASSIGNEE, "")}),
         ({"id": COMMIT_BUG, "assigned_to": "nobody@mozilla.org"}, {}),
         ({"id": COMMIT_BUG, "assigned_to": "dev@example.org"}, {}),
         ({"id": COMMIT_BUG, "assigned_to": "dev@mozilla.com.example.org"}, {}),
@@ -182,30 +228,70 @@ def _get_bugs(*bugs, inaccessible=()):
         ({"id": "9000003", "assigned_to": ASSIGNEE}, {}),
         ({"assigned_to": ASSIGNEE}, {}),
     ],
+    ids=[
+        "both",
+        "detail-only",
+        "no-name",
+        "nobody",
+        "not-mozilla",
+        "lookalike",
+        "unassigned",
+        "string-id",
+        "no-id",
+    ],
 )
 def test_only_a_mozilla_com_assignee_counts(bug, expected):
     assert authors.mozilla_assignees(_get_bugs(bug)["tool_response"]) == expected
 
 
-async def test_the_hook_adds_the_mozilla_assignee_of_a_commit_bug():
-    found = authors.CommitFacts(bugs={COMMIT_BUG})
+def _facts(name="Jane Dev"):
+    found = authors.CommitFacts()
+    found.add(bug_authors={COMMIT_BUG: {authors.normalized_name(name)}})
+    return found
+
+
+async def test_the_hook_adds_the_assignee_who_wrote_the_commit():
+    found = _facts()
     hook = authors.assignee_hook(found)
-    other = {"id": 9000004, "assigned_to": "other@mozilla.com"}
-    bug = {"id": COMMIT_BUG, "assigned_to": ASSIGNEE}
-    assert await hook(_get_bugs(bug, other), "toolu_1", None) == {}
+    other = _bug("other@mozilla.com", "Jane Dev", 9000004)
+    assert await hook(_get_bugs(_bug(name="jane dev [:jd]"), other), "t", None) == {}
+    assert found.authors == found.assignee_authors == {ASSIGNEE}
+
+
+async def test_a_detail_only_result_gives_the_assignee():
+    found = _facts()
+    detail_only = {"id": COMMIT_BUG, "assigned_to_detail": JANE}
+    await authors.assignee_hook(found)(_get_bugs(detail_only), "t", None)
     assert found.authors == {ASSIGNEE}
 
 
-async def test_the_hook_ignores_an_assignee_that_is_no_mozilla_com_account():
-    found = authors.CommitFacts(bugs={COMMIT_BUG})
-    hook = authors.assignee_hook(found)
-    for email in ("nobody@mozilla.org", "dev@example.org"):
-        await hook(_get_bugs({"id": COMMIT_BUG, "assigned_to": email}), "t", None)
-    assert found.authors == set()
+@pytest.mark.parametrize(
+    "bug",
+    [
+        _bug(name="Someone Else"),
+        {"id": COMMIT_BUG, "assigned_to": ASSIGNEE},
+        _bug("nobody@mozilla.org"),
+        _bug("dev@example.org"),
+    ],
+    ids=["other-name", "no-name", "nobody", "not-mozilla"],
+)
+async def test_the_hook_ignores_an_assignee_it_cannot_tie_to_the_commit(bug):
+    found = _facts()
+    await authors.assignee_hook(found)(_get_bugs(bug), "t", None)
+    assert found.authors == found.assignee_authors == set()
+
+
+async def test_a_backed_out_bug_does_not_make_its_assignee_askable():
+    found = authors.CommitFacts()
+    backout = {"author": "Sheriff <s@example.org>", "desc": "Backed out (bug 9000003)"}
+    await authors.commit_hook(found)({"tool_response": _content(backout)}, "t", None)
+    await authors.assignee_hook(found)(_get_bugs(_bug()), "t", None)
+    assert found.bugs == {COMMIT_BUG}
+    assert found.authors == {"s@example.org"}
 
 
 async def test_a_restricted_commit_bug_adds_nothing():
-    found = authors.CommitFacts(bugs={COMMIT_BUG})
+    found = _facts()
     await authors.assignee_hook(found)(
         _get_bugs(inaccessible=[COMMIT_BUG]), "toolu_1", None
     )
@@ -214,16 +300,15 @@ async def test_a_restricted_commit_bug_adds_nothing():
 
 async def test_an_assignee_read_before_the_commit_counts_once_the_commit_names_it():
     found = authors.CommitFacts()
-    bug = {"id": COMMIT_BUG, "assigned_to": ASSIGNEE}
-    await authors.assignee_hook(found)(_get_bugs(bug), "toolu_1", None)
+    await authors.assignee_hook(found)(_get_bugs(_bug()), "toolu_1", None)
     assert found.authors == set()
     await authors.commit_hook(found)({"tool_response": _content(INFO)}, "t", None)
     assert found.authors == {"jane@example.org", ASSIGNEE}
 
 
 async def test_the_assignee_hook_skips_other_broker_tools():
-    found = authors.CommitFacts(bugs={COMMIT_BUG})
-    data = _get_bugs({"id": COMMIT_BUG, "assigned_to": ASSIGNEE})
+    found = _facts()
+    data = _get_bugs(_bug())
     data["tool_name"] = "mcp__bugzilla__search_bugs"
     await authors.assignee_hook(found)(data, "toolu_1", None)
     assert found.authors == set()

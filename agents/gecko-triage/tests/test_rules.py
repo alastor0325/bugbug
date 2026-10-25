@@ -531,8 +531,8 @@ KEY_PHRASES = (
     # The Bugzilla account of a commit author.
     (
         "workflow.md",
-        "When you needinfo a person, use their @mozilla.com Bugzilla account when "
-        "they have one.",
+        "When you needinfo a commit author, use their @mozilla.com Bugzilla account "
+        "when they have one.",
     ),
     (
         "workflow.md",
@@ -696,7 +696,7 @@ def test_the_named_sentences_stay_within_25_words():
 
 def test_the_mozilla_account_sentences_stay_within_20_words():
     text = _flat(_read("workflow.md"))
-    start = text.index("When you needinfo a person, use their @mozilla.com")
+    start = text.index("When you needinfo a commit author, use their")
     paragraph = text[start : text.index("Without a move, needinfo an expert", start)]
     for sentence in re.split(r"(?<=\.) ", paragraph.strip()):
         assert len(sentence.split()) <= 20, sentence
