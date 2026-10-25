@@ -592,8 +592,8 @@ def _check_flags(
                 f"{requestee} is not on this bug and not on the team's expert list; ask "
                 "someone on it, a listed expert, or a commit author that a "
                 "mozilla_vcs file_history or get_commit_info result names, or the "
-                "@mozilla.com assignee of a bug the commit names, whose real name is "
-                "that commit's author, or move "
+                "@mozilla.com assignee of a bug the commit names, when the assignee's "
+                "real name is the name of that commit's author, or move "
                 "the bug in the same change to ask the target team's developer"
             )
         asked.add(email)

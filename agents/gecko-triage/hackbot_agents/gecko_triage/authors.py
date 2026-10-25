@@ -50,7 +50,7 @@ DEFAULT_REPO = MozillaVcsContext().default_repo
 # The "[:nick]" and "(...)" parts of a Bugzilla real name.
 _NAME_EXTRAS = re.compile(r"\[[^\]]*\]|\([^)]*\)")
 # An unclosed trailing "[:nick" or a trailing ", :nick" left after `_NAME_EXTRAS`.
-_TRAILING_NICK = re.compile(r"\[[^\]]*$|,?\s*:\S*\s*$")
+_TRAILING_NICK = re.compile(r"\[[^\]]*$|(?:,\s*|\s+):\S*\s*$")
 _QUOTES = str.maketrans("", "", "\"'`\u2018\u2019\u201c\u201d")
 MOZILLA_DOMAIN = "@mozilla.com"
 NOBODY = "nobody@mozilla.org"
@@ -62,7 +62,9 @@ def normalized_name(name: object) -> str:
         return ""
     name = unicodedata.normalize("NFKD", name)
     name = "".join(c for c in name if not unicodedata.combining(c))
-    name = _TRAILING_NICK.sub("", _NAME_EXTRAS.sub(" ", name.translate(_QUOTES)))
+    name = _NAME_EXTRAS.sub(" ", name.translate(_QUOTES))
+    while (shorter := _TRAILING_NICK.sub("", name)) != name:
+        name = shorter
     return " ".join(name.split()).casefold()
 
 

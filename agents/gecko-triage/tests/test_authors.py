@@ -327,3 +327,15 @@ async def test_a_quoted_accented_hg_name_matches_the_bugzilla_name():
     bug = _bug(name="Jose\u0301 Dev [:jd")
     await authors.assignee_hook(found)(_get_bugs(bug), "t", None)
     assert found.assignee_authors == {ASSIGNEE}
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("Jane:Smith", "jane:smith"),
+        ("Jane Dev, :jdev, :jd", "jane dev"),
+        ("Jane Dev :jane", "jane dev"),
+    ],
+)
+def test_a_nick_needs_a_comma_or_a_space_before_its_colon(raw, expected):
+    assert authors.normalized_name(raw) == expected
