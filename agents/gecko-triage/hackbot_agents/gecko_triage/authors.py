@@ -16,6 +16,7 @@ commit's author, so a backout or a "regressed by" bug makes nobody else askable.
 
 import json
 import re
+import unicodedata
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 
@@ -48,15 +49,21 @@ MAIN_REPO = re.compile(
 DEFAULT_REPO = MozillaVcsContext().default_repo
 # The "[:nick]" and "(...)" parts of a Bugzilla real name.
 _NAME_EXTRAS = re.compile(r"\[[^\]]*\]|\([^)]*\)")
+# An unclosed trailing "[:nick" or a trailing ", :nick" left after `_NAME_EXTRAS`.
+_TRAILING_NICK = re.compile(r"\[[^\]]*$|,?\s*:\S*\s*$")
+_QUOTES = str.maketrans("", "", "\"'`\u2018\u2019\u201c\u201d")
 MOZILLA_DOMAIN = "@mozilla.com"
 NOBODY = "nobody@mozilla.org"
 
 
 def normalized_name(name: object) -> str:
-    """A person's name without its "[:nick]" and "(...)" parts, casefolded."""
+    """A person's name to compare: no nick, "(...)" part, quote or accent; casefolded."""
     if not isinstance(name, str):
         return ""
-    return " ".join(_NAME_EXTRAS.sub(" ", name).split()).casefold()
+    name = unicodedata.normalize("NFKD", name)
+    name = "".join(c for c in name if not unicodedata.combining(c))
+    name = _TRAILING_NICK.sub("", _NAME_EXTRAS.sub(" ", name.translate(_QUOTES)))
+    return " ".join(name.split()).casefold()
 
 
 def is_main_repo(tool_input: object) -> bool:
@@ -74,6 +81,7 @@ class CommitFacts:
     authors of the commits that name it. ``assignees`` maps each bug the run read to
     its @mozilla.com assignee's email and normalized real name. An assignee whose
     name is an author name of that bug is in ``assignee_authors`` and ``authors``.
+    ``commit_emails`` are the author emails of the commit results themselves.
     """
 
     authors: set[str] = field(default_factory=set)
@@ -81,6 +89,7 @@ class CommitFacts:
     bug_authors: dict[int, set[str]] = field(default_factory=dict)
     assignees: dict[int, tuple[str, str]] = field(default_factory=dict)
     assignee_authors: set[str] = field(default_factory=set)
+    commit_emails: set[str] = field(default_factory=set)
 
     def add(
         self,
@@ -89,6 +98,7 @@ class CommitFacts:
         assignees: dict[int, tuple[str, str]] | None = None,
     ) -> None:
         self.authors |= authors
+        self.commit_emails |= authors
         for bug, names in (bug_authors or {}).items():
             self.bugs.add(bug)
             self.bug_authors.setdefault(bug, set()).update(n for n in names if n)

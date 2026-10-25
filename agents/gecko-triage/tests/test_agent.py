@@ -1129,7 +1129,8 @@ async def test_a_vcs_result_lets_the_run_needinfo_its_commit_author():
     await vcs.hooks[0](
         {"tool_name": MOZILLA_VCS_TOOLS[0], "tool_response": response}, "toolu_1", None
     )
-    assert found == CommitFacts({"a@example.org"}, {1234567}, {1234567: {"a"}})
+    assert found.authors == found.commit_emails == {"a@example.org"}
+    assert found.bug_authors == {1234567: {"a"}}
 
 
 async def test_a_get_bugs_result_lets_the_run_needinfo_a_commit_bugs_assignee():
@@ -1237,28 +1238,39 @@ async def test_a_commit_bug_assignee_needinfo_never_applies_unattended(
     result = await _run(tmp_path, new_state, recorder)
     assert len(recorder.actions) == 2
     assert result.auto_apply is False
-    assert agent.ASSIGNEE_NEEDINFO_WARNING in result.needinfo_warning
-    assert agent.AUTHOR_NEEDINFO_WARNING in result.needinfo_warning
+    assert result.needinfo_warning == agent.ASSIGNEE_NEEDINFO_WARNING
+
+
+AUTHOR_TEXT = "a commit author needinfo needs a person to check the Bugzilla login"
+ASSIGNEE_TEXT = (
+    "a needinfo went to the @mozilla.com assignee of a commit's bug: check that this "
+    "person wrote the commit"
+)
 
 
 @pytest.mark.parametrize(
-    ("asked", "expected"),
+    ("asked", "commit_emails", "expected"),
     [
-        ([], None),
+        ([], set(), None),
+        (["a@example.org"], set(), AUTHOR_TEXT),
+        (["dev@mozilla.com"], set(), ASSIGNEE_TEXT),
         (
-            ["a@example.org"],
-            "a commit author needinfo needs a person to check the Bugzilla login",
+            ["a@example.org", "dev@mozilla.com"],
+            set(),
+            f"{AUTHOR_TEXT}; {ASSIGNEE_TEXT}",
         ),
-        (
-            ["dev@mozilla.com"],
-            "a commit author needinfo needs a person to check the Bugzilla login; a "
-            "needinfo went to the @mozilla.com assignee of a commit's bug; check that "
-            "this person wrote the commit",
-        ),
+        (["dev@mozilla.com"], {"dev@mozilla.com"}, AUTHOR_TEXT),
     ],
+    ids=["none", "commit-email", "assignee-only", "both", "commit-email-is-assignee"],
 )
-def test_an_assignee_needinfo_gets_its_own_warning(asked, expected):
-    assert agent.author_needinfo_warning(asked, {"dev@mozilla.com"}) == expected
+def test_an_assignee_needinfo_gets_its_own_warning(asked, commit_emails, expected):
+    commits = CommitFacts()
+    commits.add({"a@example.org", *commit_emails})
+    commits.add(
+        bug_authors={1234567: {"jane dev"}},
+        assignees={1234567: ("dev@mozilla.com", "jane dev")},
+    )
+    assert agent.author_needinfo_warning(asked, commits) == expected
 
 
 def _ni_flags(email):

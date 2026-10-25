@@ -407,7 +407,9 @@ person, since the rest of the run passed its checks.
 as "Close verification" lists, and is null otherwise.
 
 `needinfo_warning` is set when the run asks a commit author, whose hg email may not be a
-Bugzilla login. `restricted_warning` lists the bugs of the post-run read that are
+Bugzilla login. The run may instead ask the @mozilla.com assignee of a bug that the
+commit message names, when the assignee's real name is the commit author's name. Then
+`needinfo_warning` asks a person to check that this person wrote the commit. `restricted_warning` lists the bugs of the post-run read that are
 restricted or unreadable, or every one when the read failed, so that a person checks
 that the comment does not name or describe them. It also lists each bug that the broker
 withheld from a read during the run, by the main agent or a subagent: an `inaccessible`

@@ -143,9 +143,8 @@ async def test_the_hook_ignores_a_try_repo():
         "toolu_1",
         None,
     )
-    assert found == authors.CommitFacts(
-        {"jane@example.org"}, {9000003}, {9000003: {"jane dev"}}
-    )
+    assert found.authors == found.commit_emails == {"jane@example.org"}
+    assert found.bug_authors == {9000003: {"jane dev"}}
 
 
 def test_the_matcher_covers_the_vcs_tools_that_show_a_commit():
@@ -184,10 +183,17 @@ def _bug(email=ASSIGNEE, name="Jane Dev", bug=COMMIT_BUG):
     [
         ("Jane  DEV [:jane] (away)", "jane dev"),
         (" Chun-Min Chang [:chunmin] ", "chun-min chang"),
+        ("Jos\u00e9 N\u00fa\u00f1ez", "jose nunez"),
+        ("Jose\u0301 Nu\u0301n\u0303ez", "jose nunez"),
+        ('"Jane Dev" ', "jane dev"),
+        ("\u201cJane Dev\u201d", "jane dev"),
+        ("Jane Dev [:jane", "jane dev"),
+        ("Jane Dev, :jane", "jane dev"),
+        ("Jane Dev, :jane (away)", "jane dev"),
         (None, ""),
     ],
 )
-def test_a_name_loses_its_nick_and_notes_and_case(name, expected):
+def test_a_name_loses_its_nick_notes_quotes_accents_and_case(name, expected):
     assert authors.normalized_name(name) == expected
 
 
@@ -312,3 +318,12 @@ async def test_the_assignee_hook_skips_other_broker_tools():
     data["tool_name"] = "mcp__bugzilla__search_bugs"
     await authors.assignee_hook(found)(data, "toolu_1", None)
     assert found.authors == set()
+
+
+async def test_a_quoted_accented_hg_name_matches_the_bugzilla_name():
+    found = authors.CommitFacts()
+    commit = {"author": '"Jos\u00e9 Dev" <j@example.org>', "desc": "Bug 9000003 - Fix"}
+    await authors.commit_hook(found)({"tool_response": _content(commit)}, "t", None)
+    bug = _bug(name="Jose\u0301 Dev [:jd")
+    await authors.assignee_hook(found)(_get_bugs(bug), "t", None)
+    assert found.assignee_authors == {ASSIGNEE}
