@@ -21,7 +21,8 @@ What they enforce:
 - at most three needinfos, each on one full email address, never the bot, never twice,
   not on someone with one open, and only on someone on the bug, a listed expert of the
   team, anyone when the bug moves, or a commit author that a `mozilla_vcs` result of
-  the run named (the run then waits for a person);
+  the run named or the @mozilla.com assignee of its commit message bug (the run then
+  waits for a person);
 - the first needinfo on a reporter who is not a developer or an expert is refused when
   no `bug_investigator` ran before it, and a second attempt passes (see
   `investigations.py`);
@@ -543,8 +544,9 @@ def _check_flags(
     """``moving`` is whether ``changes`` move the bug; ``_check_move`` checked it.
 
     ``commit_authors`` are the author emails the run's `mozilla_vcs` results named:
-    the developer the code history finds, or the author of a restricted regressor. A
-    needinfo on one holds the run for a person, see `author_needinfos`.
+    the developer the code history finds, or the author of a restricted regressor,
+    and the @mozilla.com assignees of their commit message bugs. A needinfo on one
+    holds the run for a person, see `author_needinfos`.
     """
     flags = changes["flags"]
     if not isinstance(flags, list) or not flags:
@@ -588,7 +590,8 @@ def _check_flags(
             raise ToolError(
                 f"{requestee} is not on this bug and not on the team's expert list; ask "
                 "someone on it, a listed expert, or a commit author that a "
-                "mozilla_vcs file_history or get_commit_info result names, or move "
+                "mozilla_vcs file_history or get_commit_info result names, or the "
+                "@mozilla.com assignee of its commit message bug, or move "
                 "the bug in the same change to ask the target team's developer"
             )
         asked.add(email)
@@ -851,10 +854,10 @@ def update_bug_hook(
     concept search adds to it during the run, so it is read at each check.
     ``close_verdicts`` is what `record_close_verdict` stores, read the same way. It
     keeps every refused update that tries to close the triaged bug, whichever check
-    refuses it. ``commit_authors`` is what `authors.author_hook` collects, read the
-    same way, and so is ``investigations``, which `investigations.spawn_counter`
-    fills. An update with a missing or malformed bug id counts as one on the triaged
-    bug.
+    refuses it. ``commit_authors`` is what `authors.commit_hook` and
+    `authors.assignee_hook` collect, read the same way, and so is
+    ``investigations``, which `investigations.spawn_counter` fills. An update with a
+    missing or malformed bug id counts as one on the triaged bug.
     """
 
     def hook(action: dict) -> None:

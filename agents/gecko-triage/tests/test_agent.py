@@ -1132,6 +1132,22 @@ async def test_a_vcs_result_lets_the_run_needinfo_its_commit_author():
     assert found == CommitFacts({"a@example.org"}, {1234567})
 
 
+async def test_a_get_bugs_result_lets_the_run_needinfo_a_commit_bugs_assignee():
+    from hackbot_agents.gecko_triage import authors
+
+    found = CommitFacts(bugs={1234567})
+    post = agent.session_options(CloseVerdicts(), found, Investigations())["hooks"][
+        "PostToolUse"
+    ]
+    (get_bugs,) = [m for m in post if m.matcher == authors.GET_BUGS_TOOL]
+    text = '{"bugs": [{"id": 1234567, "assigned_to": "dev@mozilla.com"}]}'
+    response = {"content": [{"type": "text", "text": text}]}
+    await get_bugs.hooks[0](
+        {"tool_name": authors.GET_BUGS_TOOL, "tool_response": response}, "t", None
+    )
+    assert found.authors == {"dev@mozilla.com"}
+
+
 @pytest.fixture
 def run_authors(monkeypatch):
     """The commit facts of each run, as the run binds them to its vcs hook."""
@@ -1187,6 +1203,40 @@ async def test_a_commit_author_needinfo_never_applies_unattended(
     assert result.needinfo_warning == (
         "a commit author needinfo needs a person to check the Bugzilla login"
     )
+
+
+async def test_a_commit_bug_assignee_needinfo_never_applies_unattended(
+    fake_client, tmp_path, new_state, monkeypatch, run_authors
+):
+    _fake_fetch(monkeypatch, {})
+    recorder = ActionsRecorder()
+
+    def script():
+        run_authors[-1].add(set(), {1234567}, {1234567: "dev@mozilla.com"})
+        recorder.record(
+            "bugzilla.add_comment",
+            {
+                "bug_id": BUG,
+                "text": "A recent change caused this.",
+                "is_private": False,
+            },
+            reasoning="r",
+        )
+        recorder.record(
+            "bugzilla.update_bug",
+            {"bug_id": BUG, "changes": {"flags": _ni_flags("dev@mozilla.com")}},
+            reasoning="r",
+        )
+
+    fake_client.script = script
+    result = await _run(tmp_path, new_state, recorder)
+    assert len(recorder.actions) == 2
+    assert result.auto_apply is False
+    assert result.needinfo_warning == agent.AUTHOR_NEEDINFO_WARNING
+
+
+def _ni_flags(email):
+    return [{"name": "needinfo", "status": "?", "requestee": email}]
 
 
 async def test_a_run_with_no_commit_author_needinfo_has_no_needinfo_warning(

@@ -60,7 +60,7 @@ def _json(text: object) -> object:
         return None
 
 
-def _payloads(response: object) -> Iterator[dict]:
+def payloads(response: object) -> Iterator[dict]:
     """The JSON objects of a result, also when a text holds the content blocks."""
     for text in response_texts(response):
         data = _json(text) if isinstance(text, str) else text
@@ -74,7 +74,7 @@ def _payloads(response: object) -> Iterator[dict]:
 
 def inaccessible_ids(response: object) -> set[int] | None:
     """The ids a `get_bugs` result lists as `inaccessible`; None with no such list."""
-    lists = [p["inaccessible"] for p in _payloads(response) if "inaccessible" in p]
+    lists = [p["inaccessible"] for p in payloads(response) if "inaccessible" in p]
     if not lists:
         return None
     return {
@@ -93,7 +93,7 @@ def denied_bug_id(text: object, tool_input: object, failed: bool = False) -> int
     """
     if not isinstance(text, str) or ACCESS_DENIED not in text:
         return None
-    for payload in _payloads(text):
+    for payload in payloads(text):
         if payload.get("error") == ACCESS_DENIED and is_bug_id(payload.get("bug_id")):
             return payload["bug_id"]
     bug_id = (
@@ -140,7 +140,7 @@ def _is_error(response: object) -> bool:
     """Whether a result is a tool error: it carries no bug, so it withholds none."""
     if isinstance(response, dict) and response.get("is_error"):
         return True
-    return any("error" in payload for payload in _payloads(response))
+    return any("error" in payload for payload in payloads(response))
 
 
 def note_withheld(store: WithheldBugs, input_data: dict) -> None:

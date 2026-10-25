@@ -7,6 +7,10 @@ code when no expert's area matches. The PostToolUse hook collects, from each
 author emails, which the needinfo check accepts, and the bug numbers of the commit
 messages. The post-run
 check reads those bugs, and the comment must not contain one that is restricted.
+
+A commit email is often not the author's Bugzilla login. The PostToolUse hook on
+`get_bugs` collects the @mozilla.com assignee of each bug that a commit message names,
+which the needinfo check also accepts.
 """
 
 import json
@@ -16,9 +20,11 @@ from dataclasses import dataclass, field
 
 from agent_tools.mozilla_vcs import MozillaVcsContext
 
+from .actions_view import is_bug_id
 from .closing import response_texts
 from .targets import explicit_bug_ids
 from .teamconfig import EMAIL
+from .withheld import GET_BUGS_TOOL, payloads
 
 # The tools that show a commit: its author, as the hg `user` "Name <email>" in
 # `author`, and its message, in `desc` or in the hg export text of `diff`.
@@ -39,6 +45,8 @@ MAIN_REPO = re.compile(
     r"|(?:releases/)?mozilla-(?:beta|release|esr\d+)"
 )
 DEFAULT_REPO = MozillaVcsContext().default_repo
+MOZILLA_DOMAIN = "@mozilla.com"
+NOBODY = "nobody@mozilla.org"
 
 
 def is_main_repo(tool_input: object) -> bool:
@@ -50,10 +58,23 @@ def is_main_repo(tool_input: object) -> bool:
 
 @dataclass
 class CommitFacts:
-    """What the run's commit results named: author emails and commit message bugs."""
+    """What the run's commit results named: author emails and commit message bugs.
+
+    ``assignees`` are the @mozilla.com assignees of the bugs the run read; the one of
+    a commit message bug is also in ``authors``.
+    """
 
     authors: set[str] = field(default_factory=set)
     bugs: set[int] = field(default_factory=set)
+    assignees: dict[int, str] = field(default_factory=dict)
+
+    def add(self, authors: set[str], bugs: set[int], assignees: dict[int, str]):
+        self.authors |= authors
+        self.bugs |= bugs
+        self.assignees |= assignees
+        self.authors |= {
+            email for bug, email in self.assignees.items() if bug in self.bugs
+        }
 
 
 def _entries(response: object) -> Iterator[dict]:
@@ -122,8 +143,34 @@ def commit_hook(facts: CommitFacts):
     async def hook(input_data: dict, tool_use_id: str | None, context) -> dict:
         if is_main_repo(input_data.get("tool_input")):
             response = input_data.get("tool_response")
-            facts.authors.update(commit_author_emails(response))
-            facts.bugs.update(commit_bug_ids(response))
+            facts.add(commit_author_emails(response), commit_bug_ids(response), {})
+        return {}
+
+    return hook
+
+
+def mozilla_assignees(response: object) -> dict[int, str]:
+    """The @mozilla.com `assigned_to` of each bug of a `get_bugs` result, lower case."""
+    found = {}
+    for payload in payloads(response):
+        bugs = payload.get("bugs")
+        for bug in bugs if isinstance(bugs, list) else ():
+            if not isinstance(bug, dict) or not is_bug_id(bug.get("id")):
+                continue
+            email = bug.get("assigned_to")
+            email = email.strip().lower() if isinstance(email, str) else ""
+            if email.endswith(MOZILLA_DOMAIN) and email != NOBODY:
+                found[bug["id"]] = email
+    return found
+
+
+def assignee_hook(facts: CommitFacts):
+    """The PostToolUse hook on `get_bugs` that adds the commit bugs' assignees."""
+
+    async def hook(input_data: dict, tool_use_id: str | None, context) -> dict:
+        if input_data.get("tool_name") == GET_BUGS_TOOL:
+            response = input_data.get("tool_response")
+            facts.add(set(), set(), mozilla_assignees(response))
         return {}
 
     return hook

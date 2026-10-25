@@ -272,6 +272,13 @@ politely in the comment. Two exceptions use a commit author's email from the
 that the history names when no expert's area matches. Such a run never applies by
 itself: a person checks that the email is a Bugzilla login.
 
+When you needinfo a person, use their @mozilla.com Bugzilla account when they have one.
+When a commit author's email is not @mozilla.com, read the bug that the commit message
+names with `get_bugs`. Its assignee is the commit's author when the real names match or
+the bug's patch is by that author. If that assignee has an @mozilla.com email, needinfo
+that email in place of the commit email. A restricted bug gives no assignee: then use the
+commit email.
+
 Without a move, needinfo an expert only from the expert list in the system prompt. The bug
 must be in the expert's area, and the expert's condition must hold. Use the email from the
 list exactly. Never choose an expert by yourself. Ask the expert politely in the comment,

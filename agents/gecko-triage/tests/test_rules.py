@@ -528,6 +528,17 @@ KEY_PHRASES = (
         "decide `needs_info`.",
     ),
     ("workflow.md", "Never ask the reporter to repeat a test."),
+    # The Bugzilla account of a commit author.
+    (
+        "workflow.md",
+        "When you needinfo a person, use their @mozilla.com Bugzilla account when "
+        "they have one.",
+    ),
+    (
+        "workflow.md",
+        "If that assignee has an @mozilla.com email, needinfo that email in place of "
+        "the commit email.",
+    ),
 )
 
 
@@ -681,6 +692,14 @@ def test_the_named_sentences_stay_within_25_words():
         text = _read(name)
         sentence = text[text.index(start) :].split(". ", 1)[0]
         assert len(sentence.split()) <= 25, sentence
+
+
+def test_the_mozilla_account_sentences_stay_within_20_words():
+    text = _flat(_read("workflow.md"))
+    start = text.index("When you needinfo a person, use their @mozilla.com")
+    paragraph = text[start : text.index("Without a move, needinfo an expert", start)]
+    for sentence in re.split(r"(?<=\.) ", paragraph.strip()):
+        assert len(sentence.split()) <= 20, sentence
 
 
 @pytest.mark.parametrize(

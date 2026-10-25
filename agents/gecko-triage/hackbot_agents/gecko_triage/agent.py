@@ -1090,7 +1090,8 @@ def session_options(
     A one-shot job ends when the main agent ends its turn, so a subagent left running
     in the background would never report back; the CLI starts subagents in the
     background on its own unless this switch is set. ``commits`` collects the author
-    emails and the commit message bugs of the `mozilla_vcs` results, and
+    emails and the commit message bugs of the `mozilla_vcs` results, and the
+    @mozilla.com assignees of those bugs from `get_bugs`, and
     ``investigations`` counts the `bug_investigator` spawns. ``withheld`` collects the
     bugs that the broker withheld from a read.
     """
@@ -1142,6 +1143,10 @@ def session_options(
                     hooks=[authors.commit_hook(commits)],
                 ),
                 on_broker,
+                HookMatcher(
+                    matcher=authors.GET_BUGS_TOOL,
+                    hooks=[authors.assignee_hook(commits)],
+                ),
                 # A spawn counts once it ran, not when the CLI refused or failed it.
                 HookMatcher(
                     matcher=closing.SPAWN_TOOLS,

@@ -152,3 +152,78 @@ def test_the_matcher_covers_the_vcs_tools_that_show_a_commit():
     assert matcher.fullmatch("mcp__mozilla_vcs__get_commit_diff")
     assert all(matcher.fullmatch(t) for t in authors.COMMIT_TOOLS)
     assert not matcher.fullmatch("mcp__bugzilla__get_bugs")
+
+
+COMMIT_BUG = 9000003
+ASSIGNEE = "dev@mozilla.com"
+
+
+def _get_bugs(*bugs, inaccessible=()):
+    return {
+        "tool_name": authors.GET_BUGS_TOOL,
+        "tool_input": {},
+        "tool_response": _content(
+            {"bugs": list(bugs), "inaccessible": list(inaccessible)}
+        ),
+    }
+
+
+@pytest.mark.parametrize(
+    ("bug", "expected"),
+    [
+        (
+            {"id": COMMIT_BUG, "assigned_to": " Dev@Mozilla.com "},
+            {COMMIT_BUG: ASSIGNEE},
+        ),
+        ({"id": COMMIT_BUG, "assigned_to": "nobody@mozilla.org"}, {}),
+        ({"id": COMMIT_BUG, "assigned_to": "dev@example.org"}, {}),
+        ({"id": COMMIT_BUG, "assigned_to": "dev@mozilla.com.example.org"}, {}),
+        ({"id": COMMIT_BUG}, {}),
+        ({"id": "9000003", "assigned_to": ASSIGNEE}, {}),
+        ({"assigned_to": ASSIGNEE}, {}),
+    ],
+)
+def test_only_a_mozilla_com_assignee_counts(bug, expected):
+    assert authors.mozilla_assignees(_get_bugs(bug)["tool_response"]) == expected
+
+
+async def test_the_hook_adds_the_mozilla_assignee_of_a_commit_bug():
+    found = authors.CommitFacts(bugs={COMMIT_BUG})
+    hook = authors.assignee_hook(found)
+    other = {"id": 9000004, "assigned_to": "other@mozilla.com"}
+    bug = {"id": COMMIT_BUG, "assigned_to": ASSIGNEE}
+    assert await hook(_get_bugs(bug, other), "toolu_1", None) == {}
+    assert found.authors == {ASSIGNEE}
+
+
+async def test_the_hook_ignores_an_assignee_that_is_no_mozilla_com_account():
+    found = authors.CommitFacts(bugs={COMMIT_BUG})
+    hook = authors.assignee_hook(found)
+    for email in ("nobody@mozilla.org", "dev@example.org"):
+        await hook(_get_bugs({"id": COMMIT_BUG, "assigned_to": email}), "t", None)
+    assert found.authors == set()
+
+
+async def test_a_restricted_commit_bug_adds_nothing():
+    found = authors.CommitFacts(bugs={COMMIT_BUG})
+    await authors.assignee_hook(found)(
+        _get_bugs(inaccessible=[COMMIT_BUG]), "toolu_1", None
+    )
+    assert found.authors == set()
+
+
+async def test_an_assignee_read_before_the_commit_counts_once_the_commit_names_it():
+    found = authors.CommitFacts()
+    bug = {"id": COMMIT_BUG, "assigned_to": ASSIGNEE}
+    await authors.assignee_hook(found)(_get_bugs(bug), "toolu_1", None)
+    assert found.authors == set()
+    await authors.commit_hook(found)({"tool_response": _content(INFO)}, "t", None)
+    assert found.authors == {"jane@example.org", ASSIGNEE}
+
+
+async def test_the_assignee_hook_skips_other_broker_tools():
+    found = authors.CommitFacts(bugs={COMMIT_BUG})
+    data = _get_bugs({"id": COMMIT_BUG, "assigned_to": ASSIGNEE})
+    data["tool_name"] = "mcp__bugzilla__search_bugs"
+    await authors.assignee_hook(found)(data, "toolu_1", None)
+    assert found.authors == set()
