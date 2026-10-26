@@ -255,6 +255,12 @@ patch. A developer or a listed expert also works on it when they lead the analys
 "An expert leads the analysis" says. Say in the comment who works on it, for
 example "Rémi is working on a fix (comment 7)". This also applies to a move.
 
+A patch from the Hackbot bug-fix agent also counts: someone works on the bug. Never send
+a needinfo to ask for a code review. The review request belongs to the patch, for
+example its reviewer in Phabricator. A needinfo for another purpose needs a strong
+reason, for example a question that only that person can answer. Give the reason in the
+comment.
+
 Needinfo a developer only in these cases. On a move, needinfo the target team's
 developer, unless a developer already works on the bug. With or without a move, you may
 needinfo a listed expert when the bug is in the expert's area and the condition holds.

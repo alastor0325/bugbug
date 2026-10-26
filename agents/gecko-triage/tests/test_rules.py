@@ -398,6 +398,11 @@ KEY_PHRASES = (
         "the confirmed facts that support the claim and the confirmed facts that "
         "contradict it, each with its source.",
     ),
+    (
+        "workflow.md",
+        "A patch from the Hackbot bug-fix agent also counts: someone works on the bug.",
+    ),
+    ("workflow.md", "Never send a needinfo to ask for a code review."),
     ("workflow.md", "Never choose an expert by yourself."),
     ("workflow.md", "Only when the history finds nobody, needinfo exactly one person"),
     ("workflow.md", "an unknown requestee makes Bugzilla refuse the whole update"),
