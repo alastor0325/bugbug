@@ -266,7 +266,7 @@ KEY_PHRASES = (
     ),
     (
         "workflow.md",
-        "When a developer already works on the bug, needinfo nobody to confirm or to",
+        "When someone already works on the bug, needinfo nobody to confirm or to",
     ),
     (
         "workflow.md",
@@ -400,8 +400,16 @@ KEY_PHRASES = (
     ),
     (
         "workflow.md",
-        "A patch from the Hackbot bug-fix agent also counts: someone works on the bug.",
+        "A Hackbot patch is a Phabricator revision or a patch attachment by "
+        "hackbot@mozilla.tld",
     ),
+    ("workflow.md", "A Hackbot patch also counts: someone works on the bug."),
+    (
+        "workflow.md",
+        "On a bug with a Hackbot patch, a needinfo for another purpose needs a strong "
+        "reason",
+    ),
+    ("workflow.md", "It must also be one of the cases below."),
     ("workflow.md", "Never send a needinfo to ask for a code review."),
     ("workflow.md", "Never choose an expert by yourself."),
     ("workflow.md", "Only when the history finds nobody, needinfo exactly one person"),
