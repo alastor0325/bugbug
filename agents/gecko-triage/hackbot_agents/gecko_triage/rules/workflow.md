@@ -257,11 +257,11 @@ example "Rémi is working on a fix (comment 7)". This also applies to a move.
 
 A Hackbot patch is a Phabricator revision or a patch attachment by hackbot@mozilla.tld,
 from the Hackbot bug-fix agent. A Hackbot patch also counts: someone works on the bug.
-Never send a needinfo to ask for a code review. The patch already asks its reviewer in
-Phabricator. On a bug with a Hackbot patch, a needinfo for another purpose needs a strong
-reason, for example data that only the reporter can give. It must also be one of the
-cases below. Give the reason in the comment. When an expert leads the analysis, needinfo
-nobody.
+Never send a needinfo to ask for a code review. The patch already asks for its review. On
+a bug with a Hackbot patch, a needinfo for another purpose needs a strong reason. An
+example is data that only the reporter can give. It must also be a case that this
+section allows. Give the reason in the comment. When an expert leads the analysis,
+needinfo nobody.
 
 Needinfo a developer only in these cases. On a move, needinfo the target team's
 developer, unless someone already works on the bug. With or without a move, you may

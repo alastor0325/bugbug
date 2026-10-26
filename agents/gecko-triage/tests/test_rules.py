@@ -406,10 +406,10 @@ KEY_PHRASES = (
     ("workflow.md", "A Hackbot patch also counts: someone works on the bug."),
     (
         "workflow.md",
-        "On a bug with a Hackbot patch, a needinfo for another purpose needs a strong "
-        "reason",
+        "a bug with a Hackbot patch, a needinfo for another purpose needs a strong "
+        "reason.",
     ),
-    ("workflow.md", "It must also be one of the cases below."),
+    ("workflow.md", "It must also be a case that this section allows."),
     ("workflow.md", "Never send a needinfo to ask for a code review."),
     ("workflow.md", "Never choose an expert by yourself."),
     ("workflow.md", "Only when the history finds nobody, needinfo exactly one person"),
