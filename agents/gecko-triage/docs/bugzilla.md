@@ -8,6 +8,10 @@ and every change it can make.
 Open, public defects in the components the run's team lists (see `configuration.md`). A
 run with no team looks at one bug in its own component.
 
+When a run finds that a public bug is a security vulnerability, it adds the bug to the
+product's security group in the same update as its comment. The bug and the comment
+then become private together.
+
 The agent never triages a restricted or security bug. The preflight skips a bug, before
 any model turn, when any of these is true:
 

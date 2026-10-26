@@ -156,8 +156,15 @@ ALLOWED_UPDATE_FIELDS = (
         "regressed_by",
         "see_also",
         "whiteboard",
+        "groups",
     }
 )
+# The security group each product's bugs go into: Bugzilla's `default_security_group`.
+SECURITY_GROUPS = {
+    "Core": "core-security",
+    "Firefox": "firefox-core-security",
+    "Toolkit": "firefox-core-security",
+}
 # Bugzilla refuses a move to another product unless the version and milestone exist
 # there; these two exist in every product.
 CROSS_PRODUCT_DEFAULTS = {"version": "unspecified", "target_milestone": "---"}

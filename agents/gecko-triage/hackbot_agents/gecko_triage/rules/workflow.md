@@ -427,6 +427,22 @@ debug or release assertion, a sanitizer error or a wrong result. Keep the bug op
 "Analyzed", and rate it by its release consequence. A debug-only assertion that is
 benign in release is S4, as `severity-priority.md` says.
 
+### A security vulnerability
+
+The analysis can show that a public bug is a security vulnerability. Examples are memory
+corruption that web content can cause, a use-after-free, a sandbox escape, or data that
+leaks across origins. Then add the bug to its product's security group. Record
+`groups` as `{"add": ["<group>"]}` in the update that goes with the comment. The group
+is `core-security` for Core, and `firefox-core-security` for Firefox and Toolkit. The
+bug and the comment then become private together. Do not close or move the bug, and
+give it no fix tag.
+
+A safe crash is not a security vulnerability. A null pointer dereference, a Rust panic,
+a release assertion and `MOZ_CRASH` are safe crashes. A safe crash of the parent process
+is also not a vulnerability when only a compromised content process can cause it. Add no
+security group for a safe crash. Mozilla's client security severity ratings give these
+rules.
+
 ### The cause is in another team's code
 
 The team's code paths are the `Code:` part of each component in the user prompt. When

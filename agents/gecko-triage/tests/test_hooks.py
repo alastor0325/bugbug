@@ -2033,3 +2033,68 @@ def test_a_fix_tag_on_a_close_or_a_move_is_refused(new_state, changes):
     with pytest.raises(ToolError, match="not analyzed"):
         _update(rec, {**changes, "whiteboard": {"add": [EASY]}})
     assert len(rec.actions) == 1
+
+
+# --- security group --------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    ("product", "group"),
+    [
+        ("Core", "core-security"),
+        ("Firefox", "firefox-core-security"),
+        ("Toolkit", "firefox-core-security"),
+    ],
+)
+def test_the_product_security_group_may_be_added(bug_new, comments_new, product, group):
+    bug = dict(bug_new, product=product, groups=[])
+    rec = _recorder(TriageState(bug=bug, comments=comments_new, now=NOW))
+    _comment(rec)
+    _update(rec, {"groups": {"add": [group]}})
+    assert rec.actions[-1]["params"]["changes"] == {"groups": {"add": [group]}}
+
+
+@pytest.mark.parametrize(
+    ("product", "current", "changes", "reason"),
+    [
+        ("Core", [], {"groups": {"add": ["firefox-core-security"]}}, "only add"),
+        ("Core", [], {"groups": {"add": ["core-security", "x"]}}, "only add"),
+        ("Core", [], {"groups": {"remove": ["core-security"]}}, "only add"),
+        ("Core", [], {"groups": "core-security"}, "only add"),
+        ("Core", ["core-security"], {"groups": {"add": ["core-security"]}}, "already"),
+        ("Fenix", [], {"groups": {"add": ["core-security"]}}, "no security group"),
+        (
+            "Core",
+            [],
+            {"groups": {"add": ["core-security"]}, "component": "Audio/Video"},
+            "neither closed nor moved",
+        ),
+        (
+            "Core",
+            [],
+            {
+                "groups": {"add": ["core-security"]},
+                "status": "RESOLVED",
+                "resolution": "INVALID",
+            },
+            "neither closed nor moved",
+        ),
+        (
+            "Core",
+            [],
+            {"groups": {"add": ["core-security"]}, "whiteboard": {"add": [EASY]}},
+            "neither closed nor moved",
+        ),
+    ],
+)
+def test_every_other_group_change_is_refused(
+    bug_new, comments_new, product, current, changes, reason
+):
+    bug = dict(bug_new, product=product, groups=current, whiteboard="")
+    rec = _recorder(TriageState(bug=bug, comments=comments_new, now=NOW))
+    _comment(rec)
+    with pytest.raises(ToolError, match=reason):
+        _update(rec, changes)
+    assert len(rec.actions) == 1
+    _update(rec, {"severity": "S3"})
+    assert rec.actions[-1]["params"]["changes"] == {"severity": "S3"}

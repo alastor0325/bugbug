@@ -89,6 +89,7 @@ from .config import (
     NEEDINFO_EXPERTS,
     NEEDINFO_FALLBACK,
     RESOLUTION_FIELDS,
+    SECURITY_GROUPS,
     TEAM,
     TEAM_META_BUGS,
     TERMS,
@@ -770,6 +771,27 @@ def _check_whiteboard(changes: dict, state: TriageState) -> None:
     changes["whiteboard"] = with_fix_tags(current, [t for t in fix_tags if t in tags])
 
 
+def _check_groups(changes: dict, state: TriageState) -> None:
+    """Allow only adding the product's security group to a public bug."""
+    group = SECURITY_GROUPS.get(state.bug.get("product"))
+    if group is None:
+        raise ToolError(
+            "this product has no security group here; say in the comment that the "
+            "security team should look at the bug"
+        )
+    if changes["groups"] != {"add": [group]}:
+        raise ToolError(
+            f'groups may only add the security group: {{"add": ["{group}"]}}'
+        )
+    if state.bug.get("groups"):
+        raise ToolError("the bug is already in a group")
+    if (RESOLUTION_FIELDS | MOVE_FIELDS | {"whiteboard"}) & set(changes):
+        raise ToolError(
+            "a bug that goes into the security group is neither closed nor moved, and "
+            "gets no fix tag"
+        )
+
+
 def _same_name(a: object, b: object) -> bool:
     return (
         isinstance(a, str)
@@ -908,6 +930,8 @@ def update_bug_hook(
                 f"{', '.join(sorted(ALLOWED_UPDATE_FIELDS))}. Suggest anything else in "
                 "the comment."
             )
+        if "groups" in changes:
+            _check_groups(changes, state)
         if "severity" in changes:
             changes["severity"] = _check_severity(
                 changes["severity"], state.bug.get("severity"), state.bug.get("type")

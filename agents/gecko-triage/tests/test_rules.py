@@ -21,6 +21,7 @@ from hackbot_agents.gecko_triage.agent import (
     rule_files,
 )
 from hackbot_agents.gecko_triage.config import (
+    SECURITY_GROUPS,
     TEAM,
     TEAM_RULES_DIR,
     TEAMS_DIR,
@@ -412,6 +413,13 @@ KEY_PHRASES = (
     ("workflow.md", "It must also be a case that this section allows."),
     ("workflow.md", "Never send a needinfo to ask for a code review."),
     ("workflow.md", "Never choose an expert by yourself."),
+    ("workflow.md", "Then add the bug to its product's security group."),
+    ("workflow.md", "A safe crash is not a security vulnerability."),
+    (
+        "workflow.md",
+        "A safe crash of the parent process is also not a vulnerability when only a "
+        "compromised content process can cause it.",
+    ),
     ("workflow.md", "Only when the history finds nobody, needinfo exactly one person"),
     ("workflow.md", "an unknown requestee makes Bugzilla refuse the whole update"),
     (
@@ -791,3 +799,8 @@ def test_the_media_severity_examples_follow_the_definitions():
     assert "Browser crashes on media playback on common sites" in s2
     assert "A tab crash on a rare media pattern that a reload recovers" in s3
     assert "P4" not in raw and "P5" not in raw
+
+
+@pytest.mark.parametrize("group", sorted(set(SECURITY_GROUPS.values())))
+def test_the_workflow_names_each_product_security_group(group):
+    assert f"`{group}` for" in _read("workflow.md")

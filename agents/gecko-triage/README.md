@@ -5,7 +5,7 @@ its own rules. With no team, the run uses the shared rules for the bug's compone
 Firefox Profiler captures, logs, crash reports and specs. It records one comment plus
 the field changes it is allowed. These are severity and priority when they are unset,
 needinfo flags, a meta bug in `blocks`, keywords, `regressed_by`, `see_also`, fix tags in
-the whiteboard, a component move and a resolution. On a duplicate, it also adds the team meta bug to the `dupe_of` bug. A bug
+the whiteboard, a component move, a resolution and the product's security group. On a duplicate, it also adds the team meta bug to the `dupe_of` bug. A bug
 runs again when someone changes it. Each run reads the whole bug, with all comments, and
 decides from it the status, what is missing and the next step. Who asked for what does
 not matter.
