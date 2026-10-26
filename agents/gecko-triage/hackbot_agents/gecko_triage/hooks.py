@@ -776,10 +776,10 @@ def _check_groups(changes: dict, state: TriageState) -> None:
     group = SECURITY_GROUPS.get(state.bug.get("product"))
     if group is None:
         raise ToolError(
-            "this product has no security group here. The bug stays public, so remove "
-            "the recorded comment with remove_recorded_actions and record one that does "
-            "not describe the vulnerability. Say in the final message that the security "
-            "team must look at the bug."
+            "this product has no security group here, so the bug stays public. Remove "
+            "the recorded comment with remove_recorded_actions. Record a comment that "
+            "does not describe the vulnerability. Say in the final message that the "
+            "security team must look at the bug."
         )
     if changes["groups"] != {"add": [group]}:
         raise ToolError(

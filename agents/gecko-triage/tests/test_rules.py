@@ -414,7 +414,8 @@ KEY_PHRASES = (
     ("workflow.md", "Never send a needinfo to ask for a code review."),
     ("workflow.md", "Never choose an expert by yourself."),
     ("workflow.md", "Then add the bug to its product's security group."),
-    ("workflow.md", "A safe crash is not a security vulnerability."),
+    ("workflow.md", "Some crashes are not security vulnerabilities."),
+    ("workflow.md", "This rule comes before a move, a close and a fix tag."),
     (
         "workflow.md",
         "A safe crash of the parent process is also not a vulnerability when only a "
@@ -808,3 +809,7 @@ def test_the_workflow_names_the_main_security_groups(product):
 
 def test_the_system_prompt_lists_the_security_group():
     assert "`groups`" in PROMPT.read_text()
+
+
+def test_every_no_team_product_has_a_security_group():
+    assert set(TERMS.no_team.products) <= set(SECURITY_GROUPS)

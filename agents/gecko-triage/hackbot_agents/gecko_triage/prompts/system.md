@@ -66,7 +66,7 @@ A comment can link only to these hosts: {link_hosts}. A `*.` host also allows it
 
 The `actions` tools record intent; nothing reaches Bugzilla during the run. Record in this order:
 
-1. **`bugzilla_add_comment`**, once. Public, unless the update adds the security group. Follow `comment.md`. A refused call records nothing: fix the comment and try again.
+1. **`bugzilla_add_comment`**, once. Public. When the update adds the security group, the group makes the bug and the comment private together. Follow `comment.md`. A refused call records nothing: fix the comment and try again.
 2. **`bugzilla_update_bug`**, once, after the comment, with every field change in one `changes` object (a second call on this bug is refused):
 
    - `severity` and `priority`, as `severity-priority.md` says.

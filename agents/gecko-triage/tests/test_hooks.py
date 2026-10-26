@@ -34,6 +34,7 @@ from hackbot_agents.gecko_triage.config import (
     ENABLED_ACTION_TYPES,
     MOZREGRESSION_BLOCK,
     MOZREGRESSION_PLACEHOLDER,
+    SECURITY_GROUPS,
     TEAM,
     TEAM_META_BUGS,
     TERMS,
@@ -2038,14 +2039,7 @@ def test_a_fix_tag_on_a_close_or_a_move_is_refused(new_state, changes):
 # --- security group --------------------------------------------------------- #
 
 
-@pytest.mark.parametrize(
-    ("product", "group"),
-    [
-        ("Core", "core-security"),
-        ("Firefox", "firefox-core-security"),
-        ("Toolkit", "firefox-core-security"),
-    ],
-)
+@pytest.mark.parametrize(("product", "group"), sorted(SECURITY_GROUPS.items()))
 def test_the_product_security_group_may_be_added(bug_new, comments_new, product, group):
     bug = dict(bug_new, product=product, groups=[])
     rec = _recorder(TriageState(bug=bug, comments=comments_new, now=NOW))
@@ -2084,6 +2078,17 @@ def test_the_product_security_group_may_be_added(bug_new, comments_new, product,
             [],
             {"groups": {"add": ["core-security"]}, "whiteboard": {"add": [EASY]}},
             "neither closed nor moved",
+        ),
+        (
+            "Core",
+            [],
+            {
+                "groups": {"add": ["core-security"]},
+                "flags": [
+                    {"name": "needinfo", "status": "?", "requestee": "a@example.com"}
+                ],
+            },
+            "no needinfo",
         ),
     ],
 )

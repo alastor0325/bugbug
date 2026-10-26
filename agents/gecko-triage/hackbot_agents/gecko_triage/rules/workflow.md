@@ -434,16 +434,22 @@ corruption that web content can cause, or a use-after-free. Other examples are a
 escape, or data that leaks across origins. Then add the bug to its product's security
 group. Record `groups` as `{"add": ["<group>"]}` in the update that goes with the
 comment. The group is `core-security` for Core, and `firefox-core-security` for Firefox
-and Toolkit. The tool gives the group of another product. The bug and the comment then
-become private together. This comes before a move, a close or a fix tag: do not close or
-move the bug, give it no fix tag and needinfo nobody. The comment can give the full
-analysis. Say in it that the security team now looks at the bug.
+and Toolkit. For another product, the refusal message of `bugzilla_update_bug` gives the
+group. The bug and the comment then become private together.
 
-A safe crash is not a security vulnerability. A safe crash of a content process is one
-example, such as a null pointer dereference with no offset that content controls. A
-Rust panic or a `MOZ_CRASH` is also a safe crash. A safe crash of the parent process is
-also not a vulnerability when only a compromised content process can cause it. Add no
-security group for these. Mozilla's client security severity ratings give these rules.
+This rule comes before a move, a close and a fix tag. Do not close or move the bug. Give
+it no fix tag, and set no needinfo. The comment can give the full analysis. Say in it
+that the security team now looks at the bug.
+
+Some crashes are not security vulnerabilities. One is a safe crash of a content process,
+such as a null pointer dereference. A crash near null at an offset that content controls
+is not safe. A safe crash of the parent process is also not a vulnerability when only a
+compromised content process can cause it. Mozilla's client security severity ratings
+give these rules. Add no security group for these crashes.
+
+A release assertion that web content can trigger is a denial of service. The ratings
+call it sec-low. Add no security group for it. Say in the comment that the security
+team can rate it.
 
 ### The cause is in another team's code
 
