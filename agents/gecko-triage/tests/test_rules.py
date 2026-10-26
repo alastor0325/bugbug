@@ -416,6 +416,7 @@ KEY_PHRASES = (
     ("workflow.md", "Never choose an expert by yourself."),
     ("workflow.md", "Then add the bug to its product's security group."),
     ("workflow.md", "Some crashes are not security vulnerabilities."),
+    ("workflow.md", "Then do not describe the vulnerability in the comment."),
     ("workflow.md", "This rule comes before a move, a close and a fix tag."),
     (
         "workflow.md",
@@ -809,10 +810,6 @@ def test_the_system_prompt_names_each_security_group(product, group):
     entry = next(e for e in rendered.split("; ") if e.startswith(f"`{group}` for "))
     assert product in entry.removeprefix(f"`{group}` for ").split(", ")
     assert rendered in load_system_prompt()
-
-
-def test_the_system_prompt_lists_the_security_group():
-    assert "`groups`" in PROMPT.read_text()
 
 
 def test_every_no_team_product_has_a_security_group():

@@ -434,7 +434,9 @@ corruption that web content can cause, or a use-after-free. Other examples are a
 escape, or data that leaks across origins. Then add the bug to its product's security
 group. Record `groups` as `{"add": ["<group>"]}` in the update that goes with the
 comment. The bug and the comment then become private together. The `groups` entry of
-the system prompt gives the group of each product.
+the system prompt gives the group of each product. When the product has no group there,
+the bug stays public. Then do not describe the vulnerability in the comment. Say in the
+final message that the security team must look at the bug.
 
 This rule comes before a move, a close and a fix tag. Do not close or move the bug. Give
 it no fix tag, and set no needinfo. The comment can give the full analysis. Say in it
