@@ -1,11 +1,10 @@
-"""The test-evidence comment a team run puts on its revision.
+"""The checks a team run did, as a table on its revision.
 
-Code builds the comment from the gates as the submit guard saw them when it let the
+Code builds the table from the gates as the submit guard saw them when it let the
 patch through: the evidence the agent recorded with ``record_gate``, and the review
-rounds that a hook took from the reviewer's own results. It is recorded after the
-patch action, and the patch action carries a ``ref``, so the comment reaches the new
-revision through ``{{actions.<ref>.revision_id}}`` when hackbot-api applies the actions
-in order.
+rounds that a hook took from the reviewer's own results. For a new revision, a recorder
+hook adds the table to the patch's test plan, under what the agent wrote there. An
+update cannot change the test plan, so the table goes on the revision as a comment.
 """
 
 from hackbot_runtime import ActionsRecorder
@@ -116,31 +115,55 @@ def _numbered_ref(base: str):
     return hook
 
 
-def label_refs(recorder: ActionsRecorder) -> None:
-    """Give the patch and try actions a unique ``ref`` when the agent sets none."""
+def _try_url(recorder: ActionsRecorder) -> str | None:
+    """The link to the last try push the run recorded, as an action placeholder."""
+    url = None
+    for action in recorder.actions:
+        if action["type"] == "try_server.push":
+            url = f"{{{{actions.{action['ref']}.url}}}}"
+    return url
+
+
+def attach(recorder: ActionsRecorder, gates: Gates, platform: str) -> None:
+    """Label the patch and try actions, and add the checks to a new patch's test plan.
+
+    Each patch and try action without a ``ref`` gets a unique one, so later actions can
+    point at it.
+    """
     recorder.add_hook("phabricator.submit_patch", _numbered_ref(PATCH_REF))
     recorder.add_hook("try_server.push", _numbered_ref(TRY_REF))
 
+    def add_checks(action: dict) -> None:
+        if gates.sent is None:
+            return
+        checks = render(gates.sent, platform, try_url=_try_url(recorder))
+        test_plan = (action["params"].get("test_plan") or "").rstrip()
+        action["params"]["test_plan"] = (
+            f"{test_plan}\n\n{checks}" if test_plan else checks
+        )
+
+    recorder.add_hook("phabricator.submit_patch", add_checks)
+
 
 def record_test_comment(recorder: ActionsRecorder, gates: Gates, platform: str) -> None:
-    """Record the comment on the run's revision, if the guard let a patch through.
+    """Record the checks as a comment on a revision the run updated.
 
-    The comment goes on the last revision the run recorded, with its last try push.
+    A new revision already has them in its test plan. The comment goes on the last
+    revision the run updated, if the guard let the update through.
     """
     if gates.sent is None:
         return
-    target = try_url = None
+    target = None
     for action in recorder.actions:
-        if action["type"] == "phabricator.submit_patch":
-            target = f"{{{{actions.{action['ref']}.revision_id}}}}"
-        elif action["type"] == "phabricator.update_patch":
+        if action["type"] == "phabricator.update_patch":
             target = action["params"]["revision_id"]
-        elif action["type"] == "try_server.push":
-            try_url = f"{{{{actions.{action['ref']}.url}}}}"
     if target is None:
         return
     recorder.record(
         "phabricator.add_comment",
-        {"revision_id": target, "text": render(gates.sent, platform, try_url=try_url)},
+        {
+            "revision_id": target,
+            "text": render(gates.sent, platform, try_url=_try_url(recorder)),
+        },
         reasoning="The checks the team loop ran, from the gates at submit time.",
     )

@@ -207,7 +207,7 @@ def test_team_prompt_names_the_runner_platform(tmp_path, monkeypatch):
     assert "This run is on Windows." in prompt
 
 
-async def test_team_run_records_the_test_comment_after_its_patch(monkeypatch, tmp_path):
+async def test_team_run_puts_its_checks_in_the_patch_test_plan(monkeypatch, tmp_path):
     from types import SimpleNamespace
 
     from hackbot_agents.bug_fix import agent
@@ -272,11 +272,8 @@ async def test_team_run_records_the_test_comment_after_its_patch(monkeypatch, tm
         actions_recorder=recorder,
     )
 
-    types = [a["type"] for a in recorder.actions]
-    assert types == ["phabricator.submit_patch", "phabricator.add_comment"]
-    assert (
-        recorder.actions[-1]["params"]["revision_id"] == "{{actions.patch.revision_id}}"
-    )
+    assert [a["type"] for a in recorder.actions] == ["phabricator.submit_patch"]
+    assert "| Test fails first" in recorder.actions[0]["params"]["test_plan"]
 
 
 def test_team_for_bug_skips_a_broken_team(tmp_path, capsys):

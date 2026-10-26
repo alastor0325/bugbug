@@ -14,12 +14,12 @@ You may record a patch only after this loop. A hook refuses `phabricator_submit_
 
    If a test fails, run only that test again without the patch. If it fails the same way, it is a failure that was already there. If not, the patch broke it: fix it and go back to step 2. A test that cannot run on {platform} is not a failure: list it as not run, and record a try push for it if you can. Record `associated_tests` with each test and its result.
 
-5. **Repeat:** any change to the patch after step 2, a format change too, needs steps 2 to 4 again. After {max_rounds} review rounds with blocking findings, stop fixing and record the patch as it is. Hackbot lists the open findings in its comment on the revision, for a person to decide.
+5. **Repeat:** any change to the patch after step 2, a format change too, needs steps 2 to 4 again. After {max_rounds} review rounds with blocking findings, stop fixing and record the patch as it is. Hackbot lists the open findings in the checks table, for a person to decide.
 6. **Record the patch last:** do not change the tree after you record it. A change after it makes the run fail, and nothing is sent.
 
-An update to an existing revision skips step 1. Keep the revision's test plan short: name the new tests and the try push. Record `not_checked` with what you could not check on {platform}, and why.
+An update to an existing revision skips step 1. Write the revision's test plan as usual. Record `not_checked` with what you could not check on {platform}, and why.
 
-After the run, Hackbot adds a comment to the revision with a table of these checks, written from what you recorded with `record_gate`. Do not record a comment of your own about the tests.
+When you record a new patch, Hackbot adds a table of these checks to its test plan, under what you wrote, from what you recorded with `record_gate`. For an update, it adds the table as a comment on the revision. Do not repeat the table yourself.
 
 Before you record the patch, commit it locally with the revision's title as the subject and its summary as the body, so the commit message is the one that will land.
 

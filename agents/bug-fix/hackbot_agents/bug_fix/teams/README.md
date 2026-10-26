@@ -54,9 +54,10 @@ and they refuse the patch actions until every step passes on the current diff:
    without the patch.
 
 Any change after step 3 repeats steps 3 to 5. After `max_review_rounds` review rounds
-with blocking findings, the patch goes out as it is, and the comment on the revision
+with blocking findings, the patch goes out as it is, and the checks table
 lists the open findings for a person to decide. Its tests and checks must still pass. If the tree changes after the
 guard lets the patch through, the run fails and nothing is sent.
 
-After the run, the agent adds a comment to the revision with a table of these checks.
-The code is in `gates.py` and `comment.py`, and the loop text is in `prompts/team.md`.
+A table of these checks goes into the revision's test plan, under the agent's own text.
+For an update to an existing revision, it goes on the revision as a comment. The code
+is in `gates.py` and `comment.py`, and the loop text is in `prompts/team.md`.

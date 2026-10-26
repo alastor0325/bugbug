@@ -204,7 +204,7 @@ async def record_gate(
     same way without the patch. List each test and its result, and each test that could
     not run here. ``not_checked``: what you could not check here, and why.
 
-    The evidence goes into a table cell of a comment on the revision, so keep it under
+    The evidence goes into a table cell of the revision's checks table, so keep it under
     400 characters: short, simple sentences, test names in backticks, counts as
     numbers, and paths relative to the source tree.
     """

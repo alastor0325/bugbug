@@ -100,27 +100,45 @@ async def test_the_guard_keeps_the_gates_it_let_through(monkeypatch):
     assert g.sent.evidence["verify"] == "Format, lint and build pass."
 
 
-def _recorder(tmp_path) -> ActionsRecorder:
+def _recorder(tmp_path, gates_state=None) -> ActionsRecorder:
     recorder = ActionsRecorder(artifacts_dir=tmp_path)
-    comment.label_refs(recorder)
+    comment.attach(recorder, gates_state or _sent(), "macOS")
     return recorder
 
 
-@pytest.mark.parametrize(("ref", "expected"), [(None, "patch"), ("fix", "fix")])
-def test_comment_goes_on_the_new_revision(tmp_path, ref, expected):
+@pytest.mark.parametrize(("ref", "expected"), [(None, "try"), ("ci", "ci")])
+def test_checks_go_under_the_agents_test_plan(tmp_path, ref, expected):
     recorder = _recorder(tmp_path)
-    recorder.record("try_server.push", {"auto": True}, reasoning="r")
-    recorder.record("phabricator.submit_patch", {"bug_id": 1}, reasoning="r", ref=ref)
+    recorder.record("try_server.push", {"auto": True}, reasoning="r", ref=ref)
+    recorder.record(
+        "phabricator.submit_patch",
+        {"bug_id": 1, "test_plan": "Benchmark: 3165 ms -> 2269 ms."},
+        reasoning="r",
+    )
+
+    test_plan = recorder.actions[-1]["params"]["test_plan"]
+    assert test_plan.startswith("Benchmark: 3165 ms -> 2269 ms.\n\n")
+    assert comment.INTRO in test_plan
+    assert "| Test fails first" in test_plan
+    assert f"Try push: {{{{actions.{expected}.url}}}}" in test_plan
+
+
+def test_checks_are_the_test_plan_when_the_agent_wrote_none(tmp_path):
+    recorder = _recorder(tmp_path)
+    recorder.record("phabricator.submit_patch", {"bug_id": 1}, reasoning="r")
+    assert recorder.actions[-1]["params"]["test_plan"].startswith(comment.INTRO)
+
+
+def test_a_new_revision_gets_no_separate_comment(tmp_path):
+    recorder = _recorder(tmp_path)
+    recorder.record("phabricator.submit_patch", {"bug_id": 1}, reasoning="r")
 
     comment.record_test_comment(recorder, _sent(), "macOS")
 
-    last = recorder.actions[-1]
-    assert last["type"] == "phabricator.add_comment"
-    assert last["params"]["revision_id"] == f"{{{{actions.{expected}.revision_id}}}}"
-    assert "Try push: {{actions.try.url}}" in last["params"]["text"]
+    assert "phabricator.add_comment" not in [a["type"] for a in recorder.actions]
 
 
-def test_comment_on_an_updated_revision_uses_its_id(tmp_path):
+def test_an_updated_revision_gets_the_checks_as_a_comment(tmp_path):
     recorder = _recorder(tmp_path)
     recorder.record(
         "phabricator.update_patch", {"revision_id": 42, "bug_id": 1}, reasoning="r"
@@ -128,18 +146,24 @@ def test_comment_on_an_updated_revision_uses_its_id(tmp_path):
 
     comment.record_test_comment(recorder, _sent(), "macOS")
 
-    assert recorder.actions[-1]["params"]["revision_id"] == 42
+    last = recorder.actions[-1]
+    assert last["type"] == "phabricator.add_comment"
+    assert last["params"]["revision_id"] == 42
+    assert "| Test fails first" in last["params"]["text"]
 
 
-@pytest.mark.parametrize("let_through", [True, False])
-def test_no_comment_without_a_patch_the_guard_let_through(tmp_path, let_through):
-    recorder = _recorder(tmp_path)
-    if not let_through:
-        recorder.record("phabricator.submit_patch", {"bug_id": 1}, reasoning="r")
-    gates_state = _sent() if let_through else _gates()
+def test_no_checks_without_a_patch_the_guard_let_through(tmp_path):
+    recorder = _recorder(tmp_path, gates_state=_gates())
+    recorder.record(
+        "phabricator.submit_patch", {"bug_id": 1, "test_plan": "t"}, reasoning="r"
+    )
+    recorder.record(
+        "phabricator.update_patch", {"revision_id": 42, "bug_id": 1}, reasoning="r"
+    )
 
-    comment.record_test_comment(recorder, gates_state, "macOS")
+    comment.record_test_comment(recorder, _gates(), "macOS")
 
+    assert recorder.actions[0]["params"]["test_plan"] == "t"
     assert "phabricator.add_comment" not in [a["type"] for a in recorder.actions]
 
 

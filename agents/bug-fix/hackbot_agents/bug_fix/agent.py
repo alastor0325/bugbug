@@ -29,7 +29,7 @@ from hackbot_runtime.changes import base_commit
 from hackbot_runtime.claude import Reporter
 
 from . import gates
-from .comment import label_refs, record_test_comment
+from .comment import attach, record_test_comment
 from .config import (
     BUG_FIX_ACTIONS,
     BUGZILLA_READ_TOOLS,
@@ -273,8 +273,6 @@ async def run_bug_fix(
         actions_recorder, types=BUG_FIX_ACTIONS
     )
     enabled_action_tools = actions_to_tool_names(BUG_FIX_ACTIONS)
-    if team_dir:
-        label_refs(actions_recorder)
 
     system_prompt = build_system_prompt(rules_dir, team_dir)
     team = (
@@ -282,6 +280,8 @@ async def run_bug_fix(
         if team_dir
         else {}
     )
+    if team:
+        attach(actions_recorder, team["gates"], runner_platform(sys.platform))
 
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
