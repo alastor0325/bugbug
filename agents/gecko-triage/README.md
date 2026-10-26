@@ -401,6 +401,10 @@ final message, so the post-run check drops the whiteboard change of a run that i
 `analyzed`. Then `result` names the drop. The drop alone does not hold the run for a
 person, since the rest of the run passed its checks.
 
+`security_group` names the product's security group that the run adds to the bug, when
+the analysis shows a security vulnerability. It is null otherwise. Such a run never
+vouches for unattended apply.
+
 `close_verification` is `refuted` when `close_verifier` refuted a close in the run, and
 `confirmed` when its confirm covers the close the run recorded, the same resolution and
 `dupe_of`. Otherwise it is null. `close_warning` says why a person must check the close,

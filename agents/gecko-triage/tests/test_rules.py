@@ -801,6 +801,10 @@ def test_the_media_severity_examples_follow_the_definitions():
     assert "P4" not in raw and "P5" not in raw
 
 
-@pytest.mark.parametrize("group", sorted(set(SECURITY_GROUPS.values())))
-def test_the_workflow_names_each_product_security_group(group):
-    assert f"`{group}` for" in _read("workflow.md")
+@pytest.mark.parametrize("product", ["Core", "Firefox"])
+def test_the_workflow_names_the_main_security_groups(product):
+    assert f"`{SECURITY_GROUPS[product]}` for {product}" in _read("workflow.md")
+
+
+def test_the_system_prompt_lists_the_security_group():
+    assert "`groups`" in PROMPT.read_text()

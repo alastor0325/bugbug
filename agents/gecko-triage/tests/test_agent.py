@@ -1754,3 +1754,29 @@ def test_comment_zero_and_the_newest_stay_over_the_cap():
 def test_render_bug_names_the_attachment_of_a_comment():
     text = agent.render_bug({"id": BUG}, [_comment(2, "log", attachment_id=42)])
     assert _comments_in(text)[0]["attachment_id"] == 42
+
+
+async def test_a_run_that_adds_the_security_group_waits_for_a_person(
+    fake_client, tmp_path, new_state
+):
+    recorder = ActionsRecorder()
+
+    def script():
+        recorder.record(
+            "bugzilla.add_comment",
+            {"bug_id": BUG, "text": "Short note.", "is_private": False},
+            reasoning="r",
+        )
+        recorder.record(
+            "bugzilla.update_bug",
+            {"bug_id": BUG, "changes": {"groups": {"add": ["core-security"]}}},
+            reasoning="r",
+        )
+
+    fake_client.script = script
+    fake_client.result = _result(
+        '```json\n{"decision": "analyzed", "issue_type": "drm"}\n```'
+    )
+    result = await _run(tmp_path, new_state, recorder)
+    assert result.security_group == "core-security"
+    assert result.auto_apply is False

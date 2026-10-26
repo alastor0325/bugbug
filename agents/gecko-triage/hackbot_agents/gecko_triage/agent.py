@@ -9,7 +9,7 @@ through the Bugzilla broker, reads attached diagnostics (Firefox Profiler captur
 `attachments.fetch_attachment`), and records a comment plus the field
 changes the rules allow: severity and priority when unset, needinfo flags, a meta bug in
 `blocks`, keywords, `regressed_by`, `see_also`, fix tags in the whiteboard, a component
-move and a resolution. On a duplicate it also adds the team meta bug to the `dupe_of` bug. The triage knowledge is in `rules/`
+move, a resolution and the product's security group. On a duplicate it also adds the team meta bug to the `dupe_of` bug. The triage knowledge is in `rules/`
 and `teams/<team>/rules/`. A run with no team uses `rules/` alone, in the bug's own
 component, and never vouches for unattended apply.
 
@@ -255,6 +255,8 @@ class GeckoTriageResult(Plan, HackbotAgentResult):
     fix_tags: Annotated[list[str], BeforeValidator(_as_fix_tags)] = Field(
         default_factory=list
     )
+    # The security group the run adds the bug to, or None. Such a run waits for a person.
+    security_group: str | None = None
     # The code that made this run: see `version.py`.
     agent_version: str = Field(default_factory=current_agent_version)
     result: str | None = None
@@ -470,6 +472,15 @@ def added_fix_tags(actions: list[dict], bug: int, state: TriageState) -> list[st
         for t in TERMS.whiteboard.fix_tags
         if t in change[1] and t not in state.whiteboard
     ]
+
+
+def added_security_group(actions: list[dict], bug: int) -> str | None:
+    """The security group that the recorded field change adds to ``bug``, or None."""
+    for update in updates(actions, bug):
+        groups = update.changes.get("groups")
+        if isinstance(groups, dict) and groups.get("add"):
+            return groups["add"][0]
+    return None
 
 
 def issue_type_refusal(plan: Plan) -> str | None:
@@ -1397,6 +1408,7 @@ async def run_gecko_triage(
         else None
     )
 
+    security_group = added_security_group(actions, bug)
     return GeckoTriageResult(
         bug_id=bug,
         result="\n\n".join(
@@ -1408,6 +1420,7 @@ async def run_gecko_triage(
         num_turns=result_msg.num_turns,
         total_cost_usd=result_msg.total_cost_usd,
         auto_apply=not dropped
+        and security_group is None
         and needinfo_warning is None
         and hidden_warning is None
         and may_apply_unattended(actions, plan, close_verification, close_warning),
@@ -1417,5 +1430,6 @@ async def run_gecko_triage(
         needinfo_warning=needinfo_warning,
         restricted_warning=hidden_warning,
         fix_tags=added_fix_tags(actions, bug, state),
+        security_group=security_group,
         **plan.model_dump(),
     )

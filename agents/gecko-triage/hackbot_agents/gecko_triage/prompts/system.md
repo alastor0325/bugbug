@@ -66,7 +66,7 @@ A comment can link only to these hosts: {link_hosts}. A `*.` host also allows it
 
 The `actions` tools record intent; nothing reaches Bugzilla during the run. Record in this order:
 
-1. **`bugzilla_add_comment`**, once. Public. Follow `comment.md`. A refused call records nothing: fix the comment and try again.
+1. **`bugzilla_add_comment`**, once. Public, unless the update adds the security group. Follow `comment.md`. A refused call records nothing: fix the comment and try again.
 2. **`bugzilla_update_bug`**, once, after the comment, with every field change in one `changes` object (a second call on this bug is refused):
 
    - `severity` and `priority`, as `severity-priority.md` says.
@@ -77,6 +77,7 @@ The `actions` tools record intent; nothing reaches Bugzilla during the run. Reco
    - `see_also`: `{{"add": [<bug id>]}}`, only a related bug that is not a duplicate, or a probable regressor or same-cause fixed bug that is not confirmed, as `workflow.md` says. Give the bug id, not a URL, and not a bug the bug's `see_also` already names.
    - `whiteboard`: `{{"add": ["{easy_fix_tag}"]}}`, optionally with `"{gfb_tag}"` too, only on an `analyzed` bug that meets "Fix tags" in `workflow.md`. Give only the tags, and no tag the whiteboard already has; the recorder keeps the whiteboard text already there and adds them at its end.
    - `product` and `component`: the **target** component for a wrong-component bug, never the current one.
+   - `groups`: `{{"add": ["<group>"]}}`, only the product's security group, only for a security vulnerability, as "A security vulnerability" in `workflow.md` says.
    - `status: "RESOLVED"` with `resolution` one of {resolutions}; `DUPLICATE` needs `dupe_of: <bug id>`, and `INCOMPLETE` only when the state in the user prompt says closing is permitted. Never WORKSFORME.
 
    Anything else (assignee, another whiteboard change, CC, another status) is refused. Suggest it in the comment for a person to apply.

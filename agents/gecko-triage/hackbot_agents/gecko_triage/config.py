@@ -164,6 +164,13 @@ SECURITY_GROUPS = {
     "Core": "core-security",
     "Firefox": "firefox-core-security",
     "Toolkit": "firefox-core-security",
+    "DevTools": "firefox-core-security",
+    "WebExtensions": "firefox-core-security",
+    "GeckoView": "mobile-core-security",
+    "Firefox for Android": "mobile-core-security",
+    "Remote Protocol": "general-core-security",
+    "Firefox Build System": "general-core-security",
+    "Testing": "core-security-release",
 }
 # Bugzilla refuses a move to another product unless the version and milestone exist
 # there; these two exist in every product.

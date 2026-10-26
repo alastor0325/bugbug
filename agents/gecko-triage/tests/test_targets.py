@@ -201,6 +201,25 @@ def test_dropping_a_field_keeps_the_rest_of_the_change():
     assert [a["params"]["changes"] for a in recorder.actions] == [{"severity": "S3"}]
 
 
+def test_dropping_a_field_keeps_the_security_group():
+    recorder = ActionsRecorder()
+    action = recorder.record(
+        "bugzilla.update_bug",
+        {
+            "bug_id": BUG,
+            "changes": {
+                "groups": {"add": ["core-security"]},
+                "see_also": {"add": [DUPE]},
+            },
+        },
+        reasoning="r",
+    )
+    drop_writes(recorder, [Dropped(action["action_id"], "x", "see_also")])
+    assert recorder.actions[0]["params"]["changes"] == {
+        "groups": {"add": ["core-security"]}
+    }
+
+
 def test_dropping_an_action_removes_it():
     recorder = ActionsRecorder()
     action = recorder.record(

@@ -430,18 +430,20 @@ benign in release is S4, as `severity-priority.md` says.
 ### A security vulnerability
 
 The analysis can show that a public bug is a security vulnerability. Examples are memory
-corruption that web content can cause, a use-after-free, a sandbox escape, or data that
-leaks across origins. Then add the bug to its product's security group. Record
-`groups` as `{"add": ["<group>"]}` in the update that goes with the comment. The group
-is `core-security` for Core, and `firefox-core-security` for Firefox and Toolkit. The
-bug and the comment then become private together. Do not close or move the bug, and
-give it no fix tag.
+corruption that web content can cause, or a use-after-free. Other examples are a sandbox
+escape, or data that leaks across origins. Then add the bug to its product's security
+group. Record `groups` as `{"add": ["<group>"]}` in the update that goes with the
+comment. The group is `core-security` for Core, and `firefox-core-security` for Firefox
+and Toolkit. The tool gives the group of another product. The bug and the comment then
+become private together. This comes before a move, a close or a fix tag: do not close or
+move the bug, give it no fix tag and needinfo nobody. The comment can give the full
+analysis. Say in it that the security team now looks at the bug.
 
-A safe crash is not a security vulnerability. A null pointer dereference, a Rust panic,
-a release assertion and `MOZ_CRASH` are safe crashes. A safe crash of the parent process
-is also not a vulnerability when only a compromised content process can cause it. Add no
-security group for a safe crash. Mozilla's client security severity ratings give these
-rules.
+A safe crash is not a security vulnerability. A safe crash of a content process is one
+example, such as a null pointer dereference with no offset that content controls. A
+Rust panic or a `MOZ_CRASH` is also a safe crash. A safe crash of the parent process is
+also not a vulnerability when only a compromised content process can cause it. Add no
+security group for these. Mozilla's client security severity ratings give these rules.
 
 ### The cause is in another team's code
 

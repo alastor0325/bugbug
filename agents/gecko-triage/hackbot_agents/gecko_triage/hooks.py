@@ -776,8 +776,10 @@ def _check_groups(changes: dict, state: TriageState) -> None:
     group = SECURITY_GROUPS.get(state.bug.get("product"))
     if group is None:
         raise ToolError(
-            "this product has no security group here; say in the comment that the "
-            "security team should look at the bug"
+            "this product has no security group here. The bug stays public, so remove "
+            "the recorded comment with remove_recorded_actions and record one that does "
+            "not describe the vulnerability. Say in the final message that the security "
+            "team must look at the bug."
         )
     if changes["groups"] != {"add": [group]}:
         raise ToolError(
@@ -785,10 +787,10 @@ def _check_groups(changes: dict, state: TriageState) -> None:
         )
     if state.bug.get("groups"):
         raise ToolError("the bug is already in a group")
-    if (RESOLUTION_FIELDS | MOVE_FIELDS | {"whiteboard"}) & set(changes):
+    if (RESOLUTION_FIELDS | MOVE_FIELDS | {"whiteboard", "flags"}) & set(changes):
         raise ToolError(
             "a bug that goes into the security group is neither closed nor moved, and "
-            "gets no fix tag"
+            "gets no fix tag and no needinfo"
         )
 
 
