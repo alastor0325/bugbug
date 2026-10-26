@@ -64,6 +64,7 @@ from .config import (
     MOZREGRESSION_BLOCK,
     MOZREGRESSION_PLACEHOLDER,
     SEARCHFOX_TOOLS,
+    SECURITY_GROUPS,
     STALE_NEEDINFO_DAYS,
     TEAM,
     TEAM_RULES_DIR,
@@ -757,6 +758,14 @@ def render_rules() -> str:
     )
 
 
+def render_security_groups() -> str:
+    """Each security group with the products whose bugs go into it."""
+    products: dict[str, list[str]] = {}
+    for product, group in SECURITY_GROUPS.items():
+        products.setdefault(group, []).append(product)
+    return "; ".join(f"`{g}` for {', '.join(p)}" for g, p in products.items())
+
+
 def load_system_prompt() -> str:
     """The system prompt: the same for every run of a team, so it can be cached."""
     tmpl = (PROMPTS_DIR / "system.md").read_text()
@@ -771,6 +780,7 @@ def load_system_prompt() -> str:
         keywords=render_keywords(),
         easy_fix_tag=TERMS.whiteboard.easy_fix,
         gfb_tag=TERMS.whiteboard.gfb_candidate,
+        security_groups=render_security_groups(),
         needinfo_experts=render_needinfo_experts(),
         issue_types=render_issue_types(),
         resolutions=", ".join(f"`{r}`" for r in sorted(TRIAGE_RESOLUTIONS)),

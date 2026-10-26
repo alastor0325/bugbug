@@ -17,6 +17,7 @@ from hackbot_agents.gecko_triage.agent import (
     make_spec_checker,
     render_needinfo_experts,
     render_scope_for_search,
+    render_security_groups,
     render_user_prompt,
     rule_files,
 )
@@ -418,8 +419,8 @@ KEY_PHRASES = (
     ("workflow.md", "This rule comes before a move, a close and a fix tag."),
     (
         "workflow.md",
-        "A safe crash of the parent process is also not a vulnerability when only a "
-        "compromised content process can cause it.",
+        "Another is a safe crash of the parent process that only a compromised "
+        "content process can cause.",
     ),
     ("workflow.md", "Only when the history finds nobody, needinfo exactly one person"),
     ("workflow.md", "an unknown requestee makes Bugzilla refuse the whole update"),
@@ -802,9 +803,12 @@ def test_the_media_severity_examples_follow_the_definitions():
     assert "P4" not in raw and "P5" not in raw
 
 
-@pytest.mark.parametrize("product", ["Core", "Firefox"])
-def test_the_workflow_names_the_main_security_groups(product):
-    assert f"`{SECURITY_GROUPS[product]}` for {product}" in _read("workflow.md")
+@pytest.mark.parametrize(("product", "group"), sorted(SECURITY_GROUPS.items()))
+def test_the_system_prompt_names_each_security_group(product, group):
+    rendered = render_security_groups()
+    entry = next(e for e in rendered.split("; ") if e.startswith(f"`{group}` for "))
+    assert product in entry.removeprefix(f"`{group}` for ").split(", ")
+    assert rendered in load_system_prompt()
 
 
 def test_the_system_prompt_lists_the_security_group():
