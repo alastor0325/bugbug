@@ -17,13 +17,13 @@ since that ask is **substantive**. This check applies only when the bug has an e
 comment of the agent: a comment whose `tags` field holds `gecko-triage`.
 
 When no comment has that tag, the agent has not triaged the bug yet. A comment without the
-tag never counts, also a full triage by a person. Then do the whole flow, also when
-someone else asked for data. In step 5, ask only for the data that nobody asked for yet,
-as **Do not ask twice** below says. This does not apply when an expert leads the analysis.
-Say in the comment that the bug also waits for the earlier ask, and name it. If the
-reporter already has an open needinfo, keep it and set no second one. **A stale needinfo**
-below still applies on a first run: when closing is permitted, the INCOMPLETE case comes
-first.
+tag does not count. This is also true for a full triage by a person. Then do the whole
+flow, also when someone else asked for data. In step 5, ask only for the data that nobody
+asked for yet, as **Do not ask twice** below says. When an expert leads the analysis, ask
+nobody for data, as "An expert leads the analysis" says. Say in the comment that the bug
+also waits for the earlier ask, and name it. If the reporter already has an open needinfo,
+keep it and set no second one. **A stale needinfo** below still applies on a first run.
+When closing is permitted, the INCOMPLETE case comes before the rest of the flow.
 
 When the bug has an earlier agent comment, decide:
 
@@ -254,9 +254,9 @@ Check the bug's current values and omit any change whose target is already set.
 
 ## Needs info
 
-Draft a comment that asks only for the items identified as missing in step 5, and
-about:support if the bug has none and nobody asked for it yet, as "A needs-info comment"
-in `comment.md` says.
+Draft a comment as "A needs-info comment" in `comment.md` says. Ask only for the items
+that step 5 found missing. Also ask for about:support if the bug has none and nobody asked
+for it yet.
 
 Needinfo the reporter and the other people who confirmed the problem in the comments.
 Needinfo at most three people, and nobody who already has an open needinfo. The

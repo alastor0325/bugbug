@@ -423,9 +423,12 @@ KEY_PHRASES = (
     ("workflow.md", "Then do the whole flow, also when someone else asked for data."),
     (
         "workflow.md",
-        "A comment without the tag never counts, also a full triage by a person.",
+        "This is also true for a full triage by a person.",
     ),
-    ("workflow.md", "about:support if the bug has none and nobody asked for it yet"),
+    (
+        "workflow.md",
+        "Also ask for about:support if the bug has none and nobody asked for it yet.",
+    ),
     ("workflow.md", "Then add the bug to its product's security group."),
     ("workflow.md", "Some crashes are not security vulnerabilities."),
     ("workflow.md", "Then do not describe the vulnerability in the comment."),
