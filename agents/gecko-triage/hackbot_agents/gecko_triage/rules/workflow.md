@@ -13,7 +13,16 @@ they are.
 
 **An earlier ask.** Find the last time anyone asked for data on this bug. It can be the
 agent, a developer or a triager. Who asked does not matter. Then decide whether the
-change since that ask is **substantive**:
+change since that ask is **substantive**. This check applies only when the bug has an
+earlier comment of the agent: a comment with the `gecko-triage` tag.
+
+When no comment has that tag, the agent has not triaged the bug yet. A short ask by a
+developer or a triager, for example for about:support, is not a triage. Then do the whole
+flow, also when someone else asked for data. In step 5, ask only for the data that nobody
+asked for yet, as **Do not ask twice** below says. Say in the comment that the bug also
+waits for the earlier ask, and name it.
+
+When the bug has an earlier agent comment, decide:
 
 - **Non-substantive.** The change does not advance the bug. Examples are a second ask for
   the same data, an automation note and a CC change. A comment that is not the awaited

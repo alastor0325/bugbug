@@ -22,6 +22,7 @@ from hackbot_agents.gecko_triage.agent import (
     rule_files,
 )
 from hackbot_agents.gecko_triage.config import (
+    AGENT_TAG,
     SECURITY_GROUPS,
     TEAM,
     TEAM_RULES_DIR,
@@ -414,6 +415,12 @@ KEY_PHRASES = (
     ("workflow.md", "It must also be a case that this section allows."),
     ("workflow.md", "Never send a needinfo to ask for a code review."),
     ("workflow.md", "Never choose an expert by yourself."),
+    (
+        "workflow.md",
+        "This check applies only when the bug has an earlier comment of the agent: a "
+        "comment with the `gecko-triage` tag.",
+    ),
+    ("workflow.md", "Then do the whole flow, also when someone else asked for data."),
     ("workflow.md", "Then add the bug to its product's security group."),
     ("workflow.md", "Some crashes are not security vulnerabilities."),
     ("workflow.md", "Then do not describe the vulnerability in the comment."),
@@ -814,3 +821,7 @@ def test_the_system_prompt_names_each_security_group(product, group):
 
 def test_every_no_team_product_has_a_security_group():
     assert set(TERMS.no_team.products) <= set(SECURITY_GROUPS)
+
+
+def test_the_first_run_rule_names_the_agent_comment_tag():
+    assert f"`{AGENT_TAG}` tag" in _read("workflow.md")
