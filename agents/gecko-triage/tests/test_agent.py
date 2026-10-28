@@ -1076,6 +1076,7 @@ def test_the_close_verifier_reads_a_saved_result_before_it_confirms():
         'refute with the reason "a tool result was too large to read, so the close '
         'cannot be verified"' in prompt
     )
+    assert "pages, with `start` and `limit` of `get_bug_comments`" in prompt
     hooks = agent.session_options(CloseVerdicts(), CommitFacts(), Investigations())[
         "hooks"
     ]

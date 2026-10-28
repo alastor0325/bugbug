@@ -440,6 +440,11 @@ KEY_PHRASES = (
         "workflow.md",
         "Also ask for about:support if the bug has none and nobody asked for it yet.",
     ),
+    (
+        "workflow.md",
+        "Read the comments of a long bug, here or on another bug, in pages with "
+        "`start` and `limit`.",
+    ),
     ("workflow.md", "Then add the bug to its product's security group."),
     ("workflow.md", "Some crashes are not security vulnerabilities."),
     ("workflow.md", "Then do not describe the vulnerability in the comment."),

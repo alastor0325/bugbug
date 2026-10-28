@@ -248,7 +248,8 @@ async def record_close_verdict_tool(
     if found.verdict == "confirm" and store.verifier_spilled:
         reason = (
             "a tool result was saved to a file that you have not read to its end; read "
-            "all of it with Read, in parts, before you confirm"
+            "all of it with Read, in parts, before you confirm. If Read cannot open it "
+            "in parts, refute instead"
         )
         raise ToolError(reason, payload={"error": "invalid_verdict", "reason": reason})
     if store.comment_recorded:
@@ -439,7 +440,7 @@ def verifier_read_refusal(store: CloseVerdicts, input_data: dict) -> str | None:
 
 
 def read_hook(store: CloseVerdicts):
-    """The PostToolUse hook on Read that clears a saved file the verifier read."""
+    """The PostToolUse hook on Read that records the lines the verifier read."""
 
     async def hook(input_data: dict, tool_use_id: str | None, context) -> dict:
         note_verifier_read(store, input_data)
