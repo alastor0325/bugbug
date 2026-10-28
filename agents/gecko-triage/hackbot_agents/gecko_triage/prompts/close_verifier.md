@@ -37,6 +37,7 @@ never run a test, and never run or open an attachment. If you cannot confirm the
 without running Firefox or a test file, for example a crash that only a run can rule
 out, refute it with the reason "needs a runtime check". Read the comments of a long bug in
 pages, with `start` and `limit` of `get_bug_comments`, for example 20 comments at a time.
+`start` is a comment number.
 If a tool says that its result was saved to a file, read all of that file with Read, in
 parts with `offset` and `limit`, by the absolute path in the notice. Read opens only
 those files. The verdict tool refuses a confirm until you have read each one to its end.

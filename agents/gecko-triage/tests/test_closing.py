@@ -400,8 +400,9 @@ async def test_a_confirm_passes_once_each_saved_result_is_read_to_its_end(result
     second = _saved(results_dir, "mcp-b.txt", 5)
     store = _spilled_store(first, second)
     closing.note_verifier_read(store, _read(first))
-    with pytest.raises(ToolError, match="not read to its end"):
+    with pytest.raises(ToolError, match="not read to its end") as e:
         await _record(store)
+    assert "If Read cannot open it in parts, refute instead" in str(e.value)
     closing.note_verifier_read(store, _read(second, offset=1, limit=2))
     closing.note_verifier_read(store, _read(second, offset=3, limit=3))
     await _record(store)
