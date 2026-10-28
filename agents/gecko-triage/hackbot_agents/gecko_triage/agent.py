@@ -1007,7 +1007,9 @@ def make_close_verifier() -> AgentDefinition:
             "the draft comment. Returns confirm or refute, with corrections."
         ),
         prompt=_CLOSE_VERIFIER_PROMPT.format(stale_days=STALE_NEEDINFO_DAYS),
+        # Read opens only the files its tool results were saved to; see `closing`.
         tools=[
+            "Read",
             *(t for t in BUGZILLA_READ_TOOLS if t not in ATTACHMENT_READ_TOOLS),
             *SEARCHFOX_TOOLS,
             *MOZILLA_VCS_TOOLS,
@@ -1180,6 +1182,7 @@ def session_options(
                     matcher=closing.SPAWN_TOOLS,
                     hooks=[closing.spawn_guard(close_verdicts)],
                 ),
+                HookMatcher(matcher="Read", hooks=[closing.verifier_read_guard]),
                 HookMatcher(
                     matcher=rerecord.REMOVE_RECORDED_ACTIONS_TOOL,
                     hooks=[rerecord.removal_caller_guard],
@@ -1190,11 +1193,12 @@ def session_options(
                     hooks=[ci_logs.caller_guard],
                 ),
             ],
-            # A verifier result saved to a file blocks a confirm.
+            # A verifier result saved to a file blocks a confirm until it is read.
             "PostToolUse": [
                 HookMatcher(
                     matcher="mcp__.*", hooks=[closing.spill_hook(close_verdicts)]
                 ),
+                HookMatcher(matcher="Read", hooks=[closing.read_hook(close_verdicts)]),
                 HookMatcher(
                     matcher=authors.COMMIT_TOOLS_MATCHER,
                     hooks=[authors.commit_hook(commits)],

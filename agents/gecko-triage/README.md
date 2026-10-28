@@ -180,15 +180,16 @@ confirm the close, it refutes with "needs a runtime check".
 
 The bundled Claude Code CLI saves an MCP tool result that is too large, such as the
 comments of a long bug or a large Searchfox file, to a file and tells the model to Read
-it. The verifier has no Read, so it fails closed: it refutes with "a tool result was too
-large to read, so the close cannot be verified", and the bug stays open for a person.
-This is also enforced in code. A PostToolUse hook on the MCP tools (`spill_hook`) looks
-for the CLI's notice in a verifier result: "exceeds maximum allowed tokens. Output has
-been saved to", `<persisted-output>` or "Full output saved to:". Once it sees one, the
-verdict tool refuses a `confirm` and still takes a `refute`. A result of the main agent
-or another subagent sets nothing. The CLI returns a spill as a normal result, so
-PostToolUseFailure needs no hook. The comment tool takes no page bounds, so the verifier
-cannot read a long thread in parts.
+it. The verifier has Read for these files only: a PreToolUse hook on Read
+(`verifier_read_guard`) refuses any other path for the verifier, so it reads no source
+file, attachment or note on disk. A PostToolUse hook on the MCP tools (`spill_hook`)
+looks for the CLI's notice in a verifier result: "exceeds maximum allowed tokens. Output
+has been saved to", `<persisted-output>` or "Full output saved to:". It notes the saved
+file, and a PostToolUse hook on Read (`read_hook`) clears it once the verifier reads it.
+Until each noted file is read, the verdict tool refuses a `confirm` and still takes a
+`refute`. A saved file outside the CLI's `tool-results` folder can never be read, so it
+always blocks a confirm. A result of the main agent or another subagent notes nothing.
+The CLI returns a spill as a normal result, so PostToolUseFailure needs no hook.
 
 The verifier records its verdict with `record_close_verdict`, an in-process MCP server
 (`closing.py`) bound to the run's verdict store. A verdict is `confirm` or `refute`, with

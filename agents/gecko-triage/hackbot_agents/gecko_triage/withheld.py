@@ -12,27 +12,17 @@ the file, the run waits for a person.
 """
 
 import json
-import os
-import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from .actions_view import is_bug_id
-from .closing import PERSISTED_OUTPUT, is_spill_notice, response_texts
+from .closing import is_spill_notice, response_texts, spill_file
 
 GET_BUGS_TOOL = "mcp__bugzilla__get_bugs"
 BROKER_TOOLS_MATCHER = r"mcp__bugzilla__.*"
 ACCESS_DENIED = "access_denied"
 UNCHECKED_SPILL = "a get_bugs result was saved to a file and could not be checked"
 UNCHECKED_RESULT = "a get_bugs result could not be checked"
-# The notice line of each spill notice of `closing`, with the path of the saved file:
-# the first line of the MCP notice, the second line of the persisted output.
-_SPILL_LINE = re.compile(
-    r"(?:Error: result \([^)]*\) .*? Output has been saved to"
-    r"|Output too large \([^)]*\)\. Full output saved to:) (\S+?)\.?"
-)
-SPILL_FOLDER = "tool-results"
 # A larger saved file is not read, and holds the run; the SDK buffer has the same cap.
 MAX_SPILL_BYTES = 32 * 1024 * 1024
 
@@ -43,12 +33,6 @@ class WithheldBugs:
 
     ids: set[int] = field(default_factory=set)
     unchecked: str | None = None
-
-
-def spill_root() -> Path:
-    """The folder of the CLI's session files; a spill file must be under it."""
-    config = os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude"
-    return Path(config) / "projects"
 
 
 def _json(text: object) -> object:
@@ -100,27 +84,6 @@ def denied_bug_id(text: object, tool_input: object, failed: bool = False) -> int
         tool_input.get("bug_id") if failed and isinstance(tool_input, dict) else None
     )
     return bug_id if is_bug_id(bug_id) else None
-
-
-def spill_file(response: object) -> Path | None:
-    """The file a spill notice names, only when it is in a tool-results folder."""
-    root = spill_root().resolve()
-    for text in response_texts(response):
-        if not isinstance(text, str) or not is_spill_notice(text):
-            continue
-        lines = text.split("\n")
-        line = (
-            lines[1]
-            if text.startswith(PERSISTED_OUTPUT) and len(lines) > 1
-            else lines[0]
-        )
-        match = _SPILL_LINE.fullmatch(line.rstrip())
-        if not match:
-            continue
-        path = Path(match[1]).resolve()
-        if path.is_relative_to(root) and path.parent.name == SPILL_FOLDER:
-            return path
-    return None
 
 
 def _spilled_ids(response: object) -> set[int] | None:
