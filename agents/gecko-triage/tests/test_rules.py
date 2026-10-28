@@ -418,9 +418,14 @@ KEY_PHRASES = (
     (
         "workflow.md",
         "This check applies only when the bug has an earlier comment of the agent: a "
-        "comment with the `gecko-triage` tag.",
+        "comment whose `tags` field holds `gecko-triage`.",
     ),
     ("workflow.md", "Then do the whole flow, also when someone else asked for data."),
+    (
+        "workflow.md",
+        "A comment without the tag never counts, also a full triage by a person.",
+    ),
+    ("workflow.md", "about:support if the bug has none and nobody asked for it yet"),
     ("workflow.md", "Then add the bug to its product's security group."),
     ("workflow.md", "Some crashes are not security vulnerabilities."),
     ("workflow.md", "Then do not describe the vulnerability in the comment."),
@@ -824,4 +829,4 @@ def test_every_no_team_product_has_a_security_group():
 
 
 def test_the_first_run_rule_names_the_agent_comment_tag():
-    assert f"`{AGENT_TAG}` tag" in _read("workflow.md")
+    assert f"`tags` field holds `{AGENT_TAG}`" in _read("workflow.md")
