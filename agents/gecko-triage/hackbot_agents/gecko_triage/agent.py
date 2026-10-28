@@ -1182,7 +1182,9 @@ def session_options(
                     matcher=closing.SPAWN_TOOLS,
                     hooks=[closing.spawn_guard(close_verdicts)],
                 ),
-                HookMatcher(matcher="Read", hooks=[closing.verifier_read_guard]),
+                HookMatcher(
+                    matcher="Read", hooks=[closing.verifier_read_guard(close_verdicts)]
+                ),
                 HookMatcher(
                     matcher=rerecord.REMOVE_RECORDED_ACTIONS_TOOL,
                     hooks=[rerecord.removal_caller_guard],

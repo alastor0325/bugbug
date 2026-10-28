@@ -337,7 +337,7 @@ async def test_a_spill_notice_then_a_confirm_is_refused():
     await closing.spill_hook(store)(_post(MCP_SPILL), "toolu_1", None)
     with pytest.raises(ToolError) as e:
         await _record(store)
-    assert "a tool result was saved to a file that you have not read" in str(e.value)
+    assert "cannot be read; refute instead" in str(e.value)
     assert store.verdicts == []
 
 
@@ -360,6 +360,12 @@ def results_dir(tmp_path, monkeypatch):
     return folder
 
 
+def _saved(folder, name, lines):
+    path = folder / name
+    path.write_text("".join(f"line {n}\n" for n in range(1, lines + 1)))
+    return path
+
+
 def _spill_notice(path):
     return (
         "Error: result (912,334 characters) exceeds maximum allowed tokens. Output has "
@@ -367,68 +373,109 @@ def _spill_notice(path):
     )
 
 
-def _read(path, agent_type=VERIFIER):
+def _read(path, agent_type=VERIFIER, offset=None, limit=None, response=None):
+    tool_input = {"file_path": str(path)}
+    if offset is not None:
+        tool_input["offset"] = offset
+    if limit is not None:
+        tool_input["limit"] = limit
     return {
         "hook_event_name": "PostToolUse",
         "agent_type": agent_type,
         "tool_name": "Read",
-        "tool_input": {"file_path": str(path), "offset": 1, "limit": 2000},
+        "tool_input": tool_input,
+        "tool_response": response,
     }
 
 
-async def test_a_confirm_passes_once_the_verifier_read_each_saved_result(results_dir):
-    first, second = results_dir / "mcp-a.txt", results_dir / "mcp-b.txt"
+def _spilled_store(*paths):
     store = CloseVerdicts()
-    for path in (first, second):
+    for path in paths:
         closing.note_verifier_spill(store, _post(_spill_notice(path)))
+    return store
+
+
+async def test_a_confirm_passes_once_each_saved_result_is_read_to_its_end(results_dir):
+    first = _saved(results_dir, "mcp-a.txt", 3)
+    second = _saved(results_dir, "mcp-b.txt", 5)
+    store = _spilled_store(first, second)
     closing.note_verifier_read(store, _read(first))
-    with pytest.raises(ToolError):
+    with pytest.raises(ToolError, match="not read to its end"):
         await _record(store)
-    closing.note_verifier_read(store, _read(second))
+    closing.note_verifier_read(store, _read(second, offset=1, limit=2))
+    closing.note_verifier_read(store, _read(second, offset=3, limit=3))
     await _record(store)
     assert store.verdicts[-1].verdict == "confirm"
 
 
-async def test_a_read_by_another_agent_does_not_clear_a_saved_result(results_dir):
-    path = results_dir / "mcp-a.txt"
-    store = CloseVerdicts()
-    closing.note_verifier_spill(store, _post(_spill_notice(path)))
+async def test_a_partial_read_does_not_clear_a_saved_result(results_dir):
+    path = _saved(results_dir, "mcp-a.txt", 50)
+    store = _spilled_store(path)
+    closing.note_verifier_read(store, _read(path, offset=1, limit=20))
+    closing.note_verifier_read(store, _read(path, offset=30, limit=21))
+    assert store.verifier_spilled
+    closing.note_verifier_read(store, _read(path, offset=21, limit=9))
+    assert not store.verifier_spilled
+
+
+def test_the_read_response_gives_the_lines_it_returned(results_dir):
+    path = _saved(results_dir, "mcp-a.txt", 10)
+    store = _spilled_store(path)
+    response = {"type": "text", "file": {"startLine": 1, "numLines": 4}}
+    closing.note_verifier_read(store, _read(path, response=response))
+    assert store.spills[str(path)].read == {1, 2, 3, 4}
+
+
+async def test_a_read_by_another_agent_does_not_count(results_dir):
+    path = _saved(results_dir, "mcp-a.txt", 3)
+    store = _spilled_store(path)
     closing.note_verifier_read(store, _read(path, agent_type=None))
     closing.note_verifier_read(store, _read(path, agent_type="bug_investigator"))
     assert store.verifier_spilled
 
 
-async def test_a_spill_outside_the_results_folder_always_blocks_a_confirm(results_dir):
-    store = CloseVerdicts()
-    closing.note_verifier_spill(store, _post(_spill_notice("/tmp/elsewhere.txt")))
-    closing.note_verifier_read(store, _read("/tmp/elsewhere.txt"))
-    assert store.unread_spills == {closing.UNREADABLE_SPILL}
-    with pytest.raises(ToolError):
+async def test_an_unreadable_spill_asks_for_a_refute(results_dir):
+    store = _spilled_store("/tmp/elsewhere.txt", results_dir / "missing.txt")
+    assert set(store.spills) == {closing.UNREADABLE_SPILL}
+    with pytest.raises(ToolError, match="cannot be read; refute instead"):
         await _record(store)
 
 
-def test_the_verifier_reads_only_saved_results(results_dir, tmp_path):
-    assert closing.verifier_read_refusal(_read(results_dir / "mcp-a.txt")) is None
+def test_the_verifier_reads_only_its_own_saved_results(results_dir, tmp_path):
+    own = _saved(results_dir, "mcp-a.txt", 3)
+    other = _saved(results_dir, "mcp-main-agent.txt", 3)
+    store = _spilled_store(own)
+    assert closing.verifier_read_refusal(store, _read(own)) is None
     for path in (
+        other,
         tmp_path / "firefox" / "dom" / "media" / "MediaDecoder.cpp",
-        results_dir.parent / "notes.txt",
         results_dir / ".." / ".." / "x.txt",
+        "tool-results/mcp-a.txt",
     ):
-        assert "reads only the files" in closing.verifier_read_refusal(_read(path))
-    assert closing.verifier_read_refusal({"agent_type": VERIFIER, "tool_input": {}})
+        assert "reads only the files" in closing.verifier_read_refusal(
+            store, _read(path)
+        )
+    assert closing.verifier_read_refusal(
+        store, {"agent_type": VERIFIER, "tool_input": {}}
+    )
 
 
 def test_the_read_guard_leaves_the_other_agents_alone(tmp_path):
     for agent_type in (None, "bug_investigator"):
-        assert closing.verifier_read_refusal(_read(tmp_path / "x", agent_type)) is None
+        assert (
+            closing.verifier_read_refusal(
+                CloseVerdicts(), _read(tmp_path / "x", agent_type)
+            )
+            is None
+        )
 
 
 async def test_the_read_hooks_answer_as_hooks(results_dir):
-    path = results_dir / "mcp-a.txt"
-    store = CloseVerdicts()
-    closing.note_verifier_spill(store, _post(_spill_notice(path)))
+    path = _saved(results_dir, "mcp-a.txt", 2)
+    store = _spilled_store(path)
     assert await closing.read_hook(store)(_read(path), "toolu_1", None) == {}
     assert not store.verifier_spilled
-    denied = await closing.verifier_read_guard(_read("/etc/hosts"), "toolu_2", None)
+    guard = closing.verifier_read_guard(store)
+    denied = await guard(_read("/etc/hosts"), "toolu_2", None)
     assert denied["hookSpecificOutput"]["permissionDecision"] == "deny"
-    assert await closing.verifier_read_guard(_read(path), "toolu_3", None) == {}
+    assert await guard(_read(path), "toolu_3", None) == {}

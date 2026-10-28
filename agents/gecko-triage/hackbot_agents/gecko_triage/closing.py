@@ -49,8 +49,8 @@ class CloseVerdicts:
     ``comment_recorded`` is set once the run's comment is recorded,
     ``verifier_spawns`` counts the spawns of `close_verifier`, ``late_spawns`` the
     spawns refused after the comment, ``refused`` holds the resolution and the
-    `dupe_of` of each close the hooks refused, and ``unread_spills`` holds each file
-    that a tool result of the verifier was saved to, until the verifier reads it.
+    `dupe_of` of each close the hooks refused, and ``spills`` holds each file that a
+    tool result of the verifier was saved to, with the lines the verifier read.
     """
 
     verdicts: list[CloseVerdict] = field(default_factory=list)
@@ -58,11 +58,16 @@ class CloseVerdicts:
     verifier_spawns: int = 0
     late_spawns: int = 0
     refused: list[tuple[object, object]] = field(default_factory=list)
-    unread_spills: set[str] = field(default_factory=set)
+    spills: dict[str, "SpillRead"] = field(default_factory=dict)
 
     @property
     def verifier_spilled(self) -> bool:
-        return bool(self.unread_spills)
+        """Whether a saved verifier result is not read to its end."""
+        return any(not s.complete for s in self.spills.values())
+
+    @property
+    def unreadable_spill(self) -> bool:
+        return UNREADABLE_SPILL in self.spills
 
     def refuted(self) -> bool:
         return any(v.verdict == "refute" for v in self.verdicts)
@@ -237,10 +242,13 @@ async def record_close_verdict_tool(
         raise ToolError(
             str(e), payload={"error": "invalid_verdict", "reason": str(e)}
         ) from None
+    if found.verdict == "confirm" and store.unreadable_spill:
+        reason = "a tool result was saved to a file that cannot be read; refute instead"
+        raise ToolError(reason, payload={"error": "invalid_verdict", "reason": reason})
     if found.verdict == "confirm" and store.verifier_spilled:
         reason = (
-            "a tool result was saved to a file that you have not read; read it with "
-            "Read, in parts if needed, before you confirm"
+            "a tool result was saved to a file that you have not read to its end; read "
+            "all of it with Read, in parts, before you confirm"
         )
         raise ToolError(reason, payload={"error": "invalid_verdict", "reason": reason})
     if store.comment_recorded:
@@ -288,6 +296,30 @@ _SPILL_LINE = re.compile(
 SPILL_FOLDER = "tool-results"
 # A spill whose file is not in a tool-results folder; the verifier can never read it.
 UNREADABLE_SPILL = "<unreadable>"
+# The lines a Read returns when it gives no `limit`.
+READ_DEFAULT_LIMIT = 2000
+
+
+@dataclass
+class SpillRead:
+    """A saved verifier result: its line count, and the lines the verifier read."""
+
+    lines: int | None
+    read: set[int] = field(default_factory=set)
+
+    @property
+    def complete(self) -> bool:
+        return self.lines is not None and len(self.read) >= self.lines
+
+
+def line_count(path: Path) -> int | None:
+    """The lines of ``path``, as Read numbers them; None when it cannot be read."""
+    try:
+        with path.open("rb") as f:
+            data = f.read()
+    except OSError:
+        return None
+    return data.count(b"\n") + (0 if data.endswith(b"\n") else 1)
 
 
 def spill_root() -> Path:
@@ -347,36 +379,62 @@ def spill_file(response: object) -> Path | None:
 def note_verifier_spill(store: CloseVerdicts, input_data: dict) -> None:
     """Note the file that a `close_verifier` tool result was saved to.
 
-    A file outside a tool-results folder can never be read, so it blocks a confirm.
+    A file outside a tool-results folder, or one that cannot be read, blocks a confirm.
     """
     response = input_data.get("tool_response")
     if input_data.get("agent_type") != VERIFIER or not is_spill_notice(response):
         return
     path = spill_file(response)
-    store.unread_spills.add(str(path) if path else UNREADABLE_SPILL)
+    lines = line_count(path) if path else None
+    key = str(path) if path and lines else UNREADABLE_SPILL
+    store.spills.setdefault(key, SpillRead(lines))
 
 
 def _read_path(input_data: dict) -> Path | None:
+    """The absolute path a Read opens, resolved; None for a relative path."""
     path = (input_data.get("tool_input") or {}).get("file_path")
-    return Path(path).resolve() if isinstance(path, str) else None
+    if not isinstance(path, str) or not Path(path).is_absolute():
+        return None
+    return Path(path).resolve()
+
+
+def _read_lines(input_data: dict) -> range:
+    """The lines a successful Read returned: its response, else its input."""
+    tool_input = input_data.get("tool_input") or {}
+    response = input_data.get("tool_response")
+    file = response.get("file") if isinstance(response, dict) else None
+    if isinstance(file, dict) and all(
+        isinstance(file.get(k), int) for k in ("startLine", "numLines")
+    ):
+        return range(file["startLine"], file["startLine"] + file["numLines"])
+    start = tool_input.get("offset")
+    start = start if isinstance(start, int) and start > 0 else 1
+    limit = tool_input.get("limit")
+    limit = limit if isinstance(limit, int) and limit > 0 else READ_DEFAULT_LIMIT
+    return range(start, start + limit)
 
 
 def note_verifier_read(store: CloseVerdicts, input_data: dict) -> None:
-    """Clear a saved file once `close_verifier` read it."""
-    if input_data.get("agent_type") == VERIFIER and (path := _read_path(input_data)):
-        store.unread_spills.discard(str(path))
+    """Add the lines `close_verifier` read to the saved file they come from."""
+    if input_data.get("agent_type") != VERIFIER:
+        return
+    path = _read_path(input_data)
+    spill = store.spills.get(str(path)) if path else None
+    if spill is not None and spill.lines:
+        spill.read.update(n for n in _read_lines(input_data) if 1 <= n <= spill.lines)
 
 
-def verifier_read_refusal(input_data: dict) -> str | None:
-    """Why a Read is refused, or None: `close_verifier` reads only saved tool results."""
+def verifier_read_refusal(store: CloseVerdicts, input_data: dict) -> str | None:
+    """Why a Read is refused, or None: `close_verifier` reads only its saved results."""
     if input_data.get("agent_type") != VERIFIER:
         return None
     path = _read_path(input_data)
-    if path is not None and is_spill_path(path):
+    if path is not None and str(path) in store.spills:
         return None
     return (
-        f"{VERIFIER} reads only the files that its tool results were saved to; read "
-        "the bug and the code with the bugzilla, searchfox and mozilla_vcs tools"
+        f"{VERIFIER} reads only the files that its own tool results were saved to, by "
+        "the absolute path in the notice. Read the bug and the code with the bugzilla, "
+        "searchfox and mozilla_vcs tools"
     )
 
 
@@ -390,11 +448,14 @@ def read_hook(store: CloseVerdicts):
     return hook
 
 
-async def verifier_read_guard(
-    input_data: dict, tool_use_id: str | None, context
-) -> dict:
-    reason = verifier_read_refusal(input_data)
-    return {} if reason is None else _deny(reason)
+def verifier_read_guard(store: CloseVerdicts):
+    """The PreToolUse hook on Read that keeps `close_verifier` to its saved results."""
+
+    async def guard(input_data: dict, tool_use_id: str | None, context) -> dict:
+        reason = verifier_read_refusal(store, input_data)
+        return {} if reason is None else _deny(reason)
+
+    return guard
 
 
 def spill_hook(store: CloseVerdicts):
