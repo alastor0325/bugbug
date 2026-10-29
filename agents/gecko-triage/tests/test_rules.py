@@ -415,6 +415,12 @@ KEY_PHRASES = (
     ("workflow.md", "It must also be a case that this section allows."),
     ("workflow.md", "Never send a needinfo to ask for a code review."),
     ("workflow.md", "Never choose an expert by yourself."),
+    ("comment.md", "Never tell a developer how to plan their work."),
+    (
+        "comment.md",
+        "Do not say whether to skip, disable or keep a test, what to work on first, or "
+        "how to land a fix.",
+    ),
     (
         "workflow.md",
         "This check applies only when the bug has an earlier comment of the agent: a "

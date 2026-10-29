@@ -20,6 +20,10 @@ later. "An expert leads the analysis" in `workflow.md` gives the one exception. 
 be plain and actionable is the part the reporter acts on: a numbered workaround or a
 concrete "what to capture".
 
+**Never tell a developer how to plan their work.** Do not say whether to skip, disable or
+keep a test, what to work on first, or how to land a fix. These are the developer's
+decisions. Give the facts, the probable cause, the fix direction and the debugging steps.
+
 **Never link a local file or an internal document.** Cite bugs, Searchfox permalinks and
 pages on the allowed link hosts that the system prompt lists. The recorder refuses a link
 to any other host.
