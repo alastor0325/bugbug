@@ -66,7 +66,7 @@ def test_restricted(bug_new, comments_new):
     assert "restricted" in skip_reason(_state(bug, comments_new))
 
 
-def test_a_bug_the_broker_withholds_is_skipped_as_restricted():
+def test_a_bug_that_bugzilla_withholds_is_skipped_as_restricted():
     state = TriageState(bug={"id": 9000001}, now=NOW, restricted=True)
     assert require_state(state) is state
     assert skip_reason(state) == "restricted bug (Bugzilla withheld it)"

@@ -693,8 +693,8 @@ def render_bug(
 ) -> str:
     """The bug's fields and its public comments, as escaped data for the user prompt.
 
-    A comment not marked public is dropped here. A thread with comments but none marked public raises, so the run
-    never triages an empty thread. A thread over ``cap`` leaves out comments, as
+    A comment not marked public is dropped here. A thread with comments but none marked
+    public raises, so the run never triages an empty thread. A thread over ``cap`` leaves out comments, as
     `fit_comments` says, and names them.
     """
     shown = [c for c in comments if isinstance(c, dict) and marked_public(c)]
@@ -1148,7 +1148,7 @@ def session_options(
     emails and the commit message bugs of the `mozilla_vcs` results, and the
     @mozilla.com assignees of those bugs from `get_bugs`, and
     ``investigations`` counts the `bug_investigator` spawns. ``withheld`` collects the
-    bugs that the broker withheld from a read. ``steps`` counts the tool calls of each
+    bugs that a read withheld. ``steps`` counts the tool calls of each
     session and notes a subagent that stopped at its step limit.
     """
     withheld = WithheldBugs() if withheld is None else withheld
@@ -1293,7 +1293,7 @@ async def run_gecko_triage(
     commits = authors.CommitFacts()
     # The spawn hook counts the `bug_investigator` spawns; the needinfo check reads them.
     investigations = Investigations()
-    # The broker hook adds the bugs the broker withheld; the post-run check reads them.
+    # The read hook adds the bugs that a read withheld; the post-run check reads them.
     withheld = WithheldBugs()
     # The step hooks count each session's tool calls, for the step limits.
     steps = Steps()

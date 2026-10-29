@@ -2,8 +2,8 @@
 
 The bot account reads only public bugs. `get_bugs` lists each requested bug that
 Bugzilla does not return as `inaccessible`, and the other reads of one bug refuse a
-restricted bug with `access_denied`. The hooks collect those ids from the main agent's reads and the
-subagents' reads. The post-run check holds the run for a person when it met one, and
+restricted bug with `access_denied`. The hooks collect those ids from the main
+agent's reads and the subagents' reads. The post-run check holds the run for a person when it met one, and
 refuses a comment that contains its number.
 
 A large result reaches the hook as a spill notice, with the result in a file. The hook
@@ -82,8 +82,10 @@ def denied_bug_id(text: object, tool_input: object, failed: bool = False) -> int
     input_id = tool_input.get("bug_id") if isinstance(tool_input, dict) else None
     for payload in payloads(text):
         if payload.get("error") == ACCESS_DENIED:
-            bug_id = payload.get("bug_id", input_id)
-            return bug_id if is_bug_id(bug_id) else None
+            bug_id = payload.get("bug_id")
+            if is_bug_id(bug_id):
+                return bug_id
+            return input_id if is_bug_id(input_id) else None
     return input_id if failed and is_bug_id(input_id) else None
 
 
@@ -108,7 +110,7 @@ def _is_error(response: object) -> bool:
 
 
 def note_withheld(store: WithheldBugs, input_data: dict) -> None:
-    """Add the bugs that one broker result or refusal withheld to ``store``.
+    """Add the bugs that one read result or refusal withheld to ``store``.
 
     A PostToolUseFailure input carries ``error`` in place of ``tool_response``.
     """

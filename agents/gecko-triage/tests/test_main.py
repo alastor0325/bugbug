@@ -74,7 +74,7 @@ async def test_a_restricted_bug_is_skipped_before_the_checkout_and_the_model(
     assert set(calls) == {"fetch_state"}
 
 
-async def test_a_bug_the_broker_withholds_is_skipped_not_failed(wired):
+async def test_a_bug_that_bugzilla_withholds_is_skipped_not_failed(wired):
     use_state, calls = wired
     use_state(TriageState(bug={"id": BUG}, now=NOW, restricted=True))
     ctx = FakeContext()

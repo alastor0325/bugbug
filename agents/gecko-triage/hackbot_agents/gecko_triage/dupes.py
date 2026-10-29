@@ -176,7 +176,7 @@ MAX_QUERY_WORDS = 12
 MAX_WORDS = 8
 # A word with this many summary matches is too common to weigh, so it is dropped.
 WORD_CAP = 300
-# A word query asks for one more than WORD_CAP, to see that a word reaches it.
+# A word query asks for one more than WORD_CAP. A word that reaches WORD_CAP is dropped.
 WORD_QUERY_LIMIT = WORD_CAP + 1
 WEIGHT_FLOOR = 5
 SEARCH_LIMIT = 50

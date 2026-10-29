@@ -347,7 +347,8 @@ async def fetch_state(
 ) -> TriageState | None:
     """The bug's fields and comments, read through the broker, as a :class:`TriageState`.
 
-    Never raises. A bug the broker withholds gives a `restricted` state with no fields.
+    Never raises. A bug that Bugzilla withholds gives a `restricted` state with no
+    fields.
     None on a missing url, a broker failure, a read that takes more than
     `STATE_TIMEOUT` seconds, or a bug that is not returned for another reason; the
     caller decides what a missing state means for each consumer.

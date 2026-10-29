@@ -297,3 +297,18 @@ def test_a_spill_of_another_tool_is_not_read(results_dir):
     }
     note_withheld(store, post)
     assert store == WithheldBugs()
+
+
+@pytest.mark.parametrize("bad_id", [None, "1234567", True])
+def test_a_refusal_with_a_bad_bug_id_counts_the_bug_of_the_input(bad_id):
+    store = WithheldBugs()
+    post = {
+        "tool_name": COMMENTS_TOOL,
+        "tool_input": {"bug_id": HIDDEN},
+        "tool_response": {
+            "content": _blocks({**TOOLS_DENIED, "bug_id": bad_id}),
+            "is_error": True,
+        },
+    }
+    note_withheld(store, post)
+    assert store.ids == {HIDDEN}

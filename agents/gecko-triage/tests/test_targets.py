@@ -439,7 +439,7 @@ def test_a_run_with_no_duplicate_has_no_dupe_target_warning():
     assert dupe_target_warning(actions, BUG, {}) is None
 
 
-# --- the bugs the broker withheld during the run ---------------------------- #
+# --- the bugs that a read withheld during the run ---------------------------- #
 
 
 @pytest.mark.parametrize("text", ["The change 1234567 caused it.", "It is 1,234,567."])
