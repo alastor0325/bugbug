@@ -218,6 +218,9 @@ KEY_PHRASES = (
     ("diagnostics.md", "never write that they pass from an empty list"),
     ("system.md", "log attachments and CI logs (through `log_analyst`)"),
     ("workflow.md", "The run fails when the comment names a restricted bug."),
+    ("comment.md", "Never tell a developer how to plan their work."),
+    ("comment.md", "Do not say whether to skip, disable or keep a test."),
+    ("comment.md", "Where the fix belongs is a fact, for example upstream first and"),
     ("comment.md", "Never name a bug that the agent cannot read."),
     # Close verification.
     (
@@ -415,12 +418,6 @@ KEY_PHRASES = (
     ("workflow.md", "It must also be a case that this section allows."),
     ("workflow.md", "Never send a needinfo to ask for a code review."),
     ("workflow.md", "Never choose an expert by yourself."),
-    ("comment.md", "Never tell a developer how to plan their work."),
-    (
-        "comment.md",
-        "Do not say whether to skip, disable or keep a test, what to work on first, or "
-        "how to land a fix.",
-    ),
     (
         "workflow.md",
         "This check applies only when the bug has an earlier comment of the agent: a "

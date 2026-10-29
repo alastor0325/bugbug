@@ -6,7 +6,8 @@ Applies to every comment the agent records. Some rules point to the team's `comm
 
 The triage account is a bot, not a person. Write advisory, never volitional. Avoid "I'd
 like to", "I'll take a look", "I'll start", "I want to", "let me". Use "the next step
-is", "this looks like", "suggest", "recommend", "we can".
+is", "this looks like", "suggest", "recommend", "we can". Suggest a fix or a debugging
+step, never a plan of work, as the rule below says.
 
 **Never state severity or priority in the comment.** They are Bugzilla fields and the
 field is the single source of truth; a label in the prose goes stale the moment someone
@@ -21,8 +22,11 @@ be plain and actionable is the part the reporter acts on: a numbered workaround 
 concrete "what to capture".
 
 **Never tell a developer how to plan their work.** Do not say whether to skip, disable or
-keep a test, what to work on first, or how to land a fix. These are the developer's
-decisions. Give the facts, the probable cause, the fix direction and the debugging steps.
+keep a test. Do not say what to work on first, when to land a fix or how to split the
+patch. These are the developer's decisions. Give the facts, the cause, the fix direction
+and the debugging steps. Where the fix belongs is a fact, for example upstream first and
+then vendored, so keep it. "An expert leads the analysis" in `workflow.md` gives the one
+exception: there, give no fix direction.
 
 **Never link a local file or an internal document.** Cite bugs, Searchfox permalinks and
 pages on the allowed link hosts that the system prompt lists. The recorder refuses a link
