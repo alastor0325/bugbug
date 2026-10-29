@@ -60,6 +60,7 @@ from .config import (
     CAPTURE_PLACEHOLDER,
     ENABLED_ACTION_TYPES,
     ISSUE_TYPES,
+    LIMITS,
     MOZILLA_VCS_TOOLS,
     MOZREGRESSION_BLOCK,
     MOZREGRESSION_PLACEHOLDER,
@@ -76,6 +77,7 @@ from .hooks import author_needinfos, install_hooks
 from .investigations import INVESTIGATOR, Investigations, spawn_counter
 from .preflight import reporter_audience
 from .state import AUTOMATION_SUFFIXES, TriageState
+from .steps import Steps, call_counter, limit_hit_hook
 from .targets import (
     Dropped,
     bugs_to_read,
@@ -258,6 +260,10 @@ class GeckoTriageResult(Plan, HackbotAgentResult):
     )
     # The security group the run adds the bug to, or None. Such a run waits for a person.
     security_group: str | None = None
+    # The tool calls of each session (`main` or a subagent type), for the step limits.
+    steps: list[dict] = Field(default_factory=list)
+    # The subagent spawns that stopped at their step limit, with that limit.
+    limit_hits: list[dict] = Field(default_factory=list)
     # The code that made this run: see `version.py`.
     agent_version: str = Field(default_factory=current_agent_version)
     result: str | None = None
@@ -836,12 +842,12 @@ def make_investigator() -> AgentDefinition:
             attachments.FETCH_ATTACHMENT_TOOL,
         ],
         model="inherit",
-        maxTurns=30,
+        maxTurns=LIMITS.turn_limit("investigator"),
     )
 
 
 def _skill_agent(
-    skill: str, description: str, prompt: str, tools: list[str], max_turns: int = 30
+    skill: str, description: str, prompt: str, tools: list[str], session: str
 ) -> AgentDefinition:
     """A subagent that follows one fx-bug-toolkit skill, preloaded into its context."""
     return AgentDefinition(
@@ -850,7 +856,7 @@ def _skill_agent(
         tools=tools,
         skills=[qualified(skill)],
         model="inherit",
-        maxTurns=max_turns,
+        maxTurns=LIMITS.turn_limit(session),
     )
 
 
@@ -868,6 +874,7 @@ def make_profile_analyst() -> AgentDefinition:
         ),
         _PROFILE_ANALYST_PROMPT.format(analyst_rule=parts["analyst_rule"]),
         ["Bash", "Read"],
+        session="profile_analyst",
     )
 
 
@@ -893,6 +900,7 @@ def make_log_analyst() -> AgentDefinition:
             attachments.FETCH_ATTACHMENT_TOOL,
             ci_logs.FETCH_CI_LOG_TOOL,
         ],
+        session="log_analyst",
     )
 
 
@@ -930,7 +938,7 @@ def make_bug_investigator(searchfox_rev: str | None = None) -> AgentDefinition:
             *MOZILLA_VCS_TOOLS,
             attachments.FETCH_ATTACHMENT_TOOL,
         ],
-        max_turns=50,
+        session="bug_investigator",
     )
 
 
@@ -947,6 +955,7 @@ def make_spec_checker() -> AgentDefinition:
         ),
         _SPEC_CHECKER_PROMPT,
         ["Read", "Grep", "Glob", "Bash", "WebFetch", "WebSearch", *SEARCHFOX_TOOLS],
+        session="spec_checker",
     )
 
 
@@ -978,7 +987,7 @@ def make_duplicate_hunter(scope: tuple[Component, ...]) -> AgentDefinition:
             dupes.SEARCH_CONCEPTS_TOOL,
         ],
         model="inherit",
-        maxTurns=16,
+        maxTurns=LIMITS.turn_limit("duplicate_hunter"),
     )
 
 
@@ -1005,7 +1014,7 @@ def make_close_verifier() -> AgentDefinition:
             closing.RECORD_CLOSE_VERDICT_TOOL,
         ],
         model="inherit",
-        maxTurns=25,
+        maxTurns=LIMITS.turn_limit("close_verifier"),
     )
 
 
@@ -1128,6 +1137,7 @@ def session_options(
     commits: authors.CommitFacts,
     investigations: Investigations,
     withheld: WithheldBugs | None = None,
+    steps: Steps | None = None,
 ) -> dict:
     """The tool set and environment every run's Claude Code session gets.
 
@@ -1137,9 +1147,12 @@ def session_options(
     emails and the commit message bugs of the `mozilla_vcs` results, and the
     @mozilla.com assignees of those bugs from `get_bugs`, and
     ``investigations`` counts the `bug_investigator` spawns. ``withheld`` collects the
-    bugs that the broker withheld from a read.
+    bugs that the broker withheld from a read. ``steps`` counts the tool calls of each
+    session and notes a subagent that stopped at its step limit.
     """
     withheld = WithheldBugs() if withheld is None else withheld
+    steps = Steps() if steps is None else steps
+    on_any_tool = HookMatcher(matcher=None, hooks=[call_counter(steps)])
     on_broker = HookMatcher(
         matcher=BROKER_TOOLS_MATCHER, hooks=[withheld_hook(withheld)]
     )
@@ -1194,11 +1207,12 @@ def session_options(
                 # A spawn counts once it ran, not when the CLI refused or failed it.
                 HookMatcher(
                     matcher=closing.SPAWN_TOOLS,
-                    hooks=[spawn_counter(investigations)],
+                    hooks=[spawn_counter(investigations), limit_hit_hook(steps)],
                 ),
+                on_any_tool,
             ],
             # A refused read can come as a failed call.
-            "PostToolUseFailure": [on_broker],
+            "PostToolUseFailure": [on_broker, on_any_tool],
         },
         # A large attachment or file read can exceed the SDK's 1 MiB default.
         "max_buffer_size": 32 * 1024 * 1024,
@@ -1211,17 +1225,18 @@ def combined_options(
     commits: authors.CommitFacts,
     investigations: Investigations,
     withheld: WithheldBugs | None = None,
+    steps: Steps | None = None,
 ) -> dict:
     """The plugin options and the session options, with their environments merged."""
     toolkit = toolkit_options(toolkit_dir)
-    session = session_options(close_verdicts, commits, investigations, withheld)
+    session = session_options(close_verdicts, commits, investigations, withheld, steps)
     return {**toolkit, **session, "env": {**toolkit["env"], **session["env"]}}
 
 
-# Observed runs took up to 21 main-agent turns and about $1.85 with the subagents. A
-# limit ends the run with a result instead of losing it to the job timeout.
-DEFAULT_MAX_TURNS = 60
-DEFAULT_MAX_BUDGET_USD = 5.0
+# A limit ends the run with a result instead of losing it to the job timeout. None means
+# no limit. The values come from `limits.toml` or the `TURN_LIMITS_FILE` file.
+DEFAULT_MAX_TURNS = LIMITS.turn_limit("main")
+DEFAULT_MAX_BUDGET_USD = LIMITS.max_budget_usd
 
 
 async def run_gecko_triage(
@@ -1275,6 +1290,8 @@ async def run_gecko_triage(
     investigations = Investigations()
     # The broker hook adds the bugs the broker withheld; the post-run check reads them.
     withheld = WithheldBugs()
+    # The step hooks count each session's tool calls, for the step limits.
+    steps = Steps()
     removals = rerecord.Removals(actions_recorder)
     install_hooks(
         actions_recorder,
@@ -1334,7 +1351,7 @@ async def run_gecko_triage(
         **({"effort": effort} if effort else {}),
         setting_sources=[],
         **combined_options(
-            toolkit_dir, close_verdicts, commits, investigations, withheld
+            toolkit_dir, close_verdicts, commits, investigations, withheld, steps
         ),
     )
 
@@ -1441,5 +1458,7 @@ async def run_gecko_triage(
         restricted_warning=hidden_warning,
         fix_tags=added_fix_tags(actions, bug, state),
         security_group=security_group,
+        steps=steps.report(),
+        limit_hits=steps.limit_hits,
         **plan.model_dump(),
     )

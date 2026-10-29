@@ -10,6 +10,7 @@ from pathlib import Path
 from .teamconfig import (
     EMAIL,
     OTHER_ISSUE_TYPE,
+    load_limits,
     load_people,
     load_team,
     load_terms,
@@ -73,6 +74,10 @@ CAPTURE = TEAM.comment if TEAM else None
 SHARED_DIR = Path(__file__).parent / "shared"
 TERMS = load_terms(SHARED_DIR / "bugzilla.toml")
 PEOPLE = load_people(SHARED_DIR / "people.toml")
+# The step limit of each session and the cost limit of a run. `TURN_LIMITS_FILE` names
+# another file, for example one with every limit at 0 for a local run.
+LIMITS_FILE = Path(os.environ.get("TURN_LIMITS_FILE") or SHARED_DIR / "limits.toml")
+LIMITS = load_limits(LIMITS_FILE)
 
 
 def parse_bot_aliases(text: str) -> frozenset[str]:

@@ -297,6 +297,13 @@ no option to read the parts that it knows. A new Firefox Profiler release can ch
 format. Then the agent cannot read new profiles until the pin above is updated. Check for
 a new `profiler-cli` release when the agent says that a profile format is not supported.
 
+`hackbot_agents/gecko_triage/shared/limits.toml` sets the step limit of the main agent
+and of each subagent, and the cost limit of a run. A limit stops a session that loops.
+0 means no limit. `TURN_LIMITS_FILE` names another file in place of this one, for
+example a local file with every limit at 0. Each run records the tool calls of each
+session in `findings.steps`, and each subagent that stopped at its limit in
+`findings.limit_hits`. These numbers show what limits a deploy needs.
+
 ## Running it
 
 With Docker, an Anthropic API key and a Bugzilla key in a gitignored `.env` at the repo

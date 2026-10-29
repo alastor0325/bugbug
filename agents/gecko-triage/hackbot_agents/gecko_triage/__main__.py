@@ -33,8 +33,8 @@ class AgentInputs(BaseSettings):
     bug_id: int
     broker_url: str
     model: str = DEFAULT_MODEL
-    max_turns: int = DEFAULT_MAX_TURNS
-    max_budget_usd: float = DEFAULT_MAX_BUDGET_USD
+    max_turns: int | None = DEFAULT_MAX_TURNS
+    max_budget_usd: float | None = DEFAULT_MAX_BUDGET_USD
     effort: str = DEFAULT_EFFORT
     fx_bug_toolkit_dir: Path = Path(DEFAULT_TOOLKIT_DIR)
 

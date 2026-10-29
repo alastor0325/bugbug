@@ -291,6 +291,51 @@ def scope_for(team: Team | None, bug: dict) -> tuple[Component, ...]:
     return (own,)
 
 
+# The sessions of a run that have a step limit: the main agent and each subagent.
+SESSIONS = (
+    "main",
+    "investigator",
+    "bug_investigator",
+    "profile_analyst",
+    "log_analyst",
+    "spec_checker",
+    "duplicate_hunter",
+    "close_verifier",
+)
+
+
+class Turns(_Strict):
+    main: Annotated[int, Field(ge=0)]
+    investigator: Annotated[int, Field(ge=0)]
+    bug_investigator: Annotated[int, Field(ge=0)]
+    profile_analyst: Annotated[int, Field(ge=0)]
+    log_analyst: Annotated[int, Field(ge=0)]
+    spec_checker: Annotated[int, Field(ge=0)]
+    duplicate_hunter: Annotated[int, Field(ge=0)]
+    close_verifier: Annotated[int, Field(ge=0)]
+
+
+class Budget(_Strict):
+    max_usd: Annotated[float, Field(ge=0)]
+
+
+class Limits(_Strict):
+    turns: Turns
+    budget: Budget
+
+    def turn_limit(self, session: str) -> int | None:
+        """The step limit of ``session``, or None for no limit."""
+        return getattr(self.turns, session) or None
+
+    @property
+    def max_budget_usd(self) -> float | None:
+        return self.budget.max_usd or None
+
+
+def load_limits(path: Path) -> Limits:
+    return Limits.model_validate(tomllib.loads(path.read_text()))
+
+
 def load_team(path: Path) -> Team:
     return Team.model_validate(tomllib.loads(path.read_text()))
 

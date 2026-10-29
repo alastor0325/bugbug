@@ -28,6 +28,7 @@ from hackbot_agents.gecko_triage.authors import CommitFacts
 from hackbot_agents.gecko_triage.closing import CloseVerdicts
 from hackbot_agents.gecko_triage.investigations import Investigations
 from hackbot_agents.gecko_triage.state import TriageState
+from hackbot_agents.gecko_triage.steps import Steps
 from hackbot_runtime import AgentError
 from hackbot_runtime.actions import ActionsRecorder
 
@@ -738,7 +739,7 @@ async def test_the_session_counts_the_bug_investigator_spawns_and_refuses_none()
     found = Investigations()
     hooks = agent.session_options(CloseVerdicts(), CommitFacts(), found)["hooks"]
     (spawn,) = [m for m in hooks["PostToolUse"] if m.matcher == closing.SPAWN_TOOLS]
-    (counter,) = spawn.hooks
+    counter, _limit_hits = spawn.hooks
     # The pre-spawn guard is the close verifier's alone.
     (pre,) = [m for m in hooks["PreToolUse"] if m.matcher == closing.SPAWN_TOOLS]
     assert len(pre.hooks) == 1
@@ -1780,3 +1781,44 @@ async def test_a_run_that_adds_the_security_group_waits_for_a_person(
     result = await _run(tmp_path, new_state, recorder)
     assert result.security_group == "core-security"
     assert result.auto_apply is False
+
+
+async def test_the_session_counts_the_tool_calls_of_each_session():
+    steps = Steps()
+    hooks = agent.session_options(
+        CloseVerdicts(), CommitFacts(), Investigations(), steps=steps
+    )["hooks"]
+    (every,) = [m for m in hooks["PostToolUse"] if m.matcher is None]
+    assert every in hooks["PostToolUseFailure"]
+    (count,) = every.hooks
+    for data in (
+        {"tool_name": "Read"},
+        {"tool_name": "Bash", "agent_id": "a1", "agent_type": "profile_analyst"},
+        {"tool_name": "Bash", "agent_id": "a1", "agent_type": "profile_analyst"},
+    ):
+        assert await count(data, None, None) == {}
+    assert steps.report() == [
+        {"session": "main", "tool_calls": 1},
+        {"session": "profile_analyst", "tool_calls": 2},
+    ]
+
+
+@pytest.mark.parametrize(
+    ("make", "session"),
+    [
+        (agent.make_investigator, "investigator"),
+        (agent.make_profile_analyst, "profile_analyst"),
+        (agent.make_log_analyst, "log_analyst"),
+        (agent.make_spec_checker, "spec_checker"),
+        (agent.make_bug_investigator, "bug_investigator"),
+        (lambda: agent.make_duplicate_hunter(()), "duplicate_hunter"),
+        (agent.make_close_verifier, "close_verifier"),
+    ],
+)
+def test_each_subagent_takes_its_limit_from_the_limits_file(make, session):
+    assert make().maxTurns == agent.LIMITS.turn_limit(session)
+
+
+def test_the_run_limits_come_from_the_limits_file():
+    assert agent.LIMITS.turn_limit("main") == agent.DEFAULT_MAX_TURNS
+    assert agent.LIMITS.max_budget_usd == agent.DEFAULT_MAX_BUDGET_USD
