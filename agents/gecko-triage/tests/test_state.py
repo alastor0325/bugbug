@@ -127,7 +127,9 @@ def _changed_state(bug_new, comments_returning, history):
 def test_a_change_with_nothing_to_read_keeps_the_last_word(
     bug_new, comments_returning, fields
 ):
-    history = ({"when": AFTER, "who": PERSON, "fields": fields},)
+    history = (
+        {"when": AFTER, "who": PERSON, "changes": [{"field_name": f} for f in fields]},
+    )
     assert _changed_state(bug_new, comments_returning, history).bot_has_last_word
 
 
@@ -138,7 +140,9 @@ def test_a_change_with_nothing_to_read_keeps_the_last_word(
 def test_a_change_the_agent_reads_takes_the_last_word_away(
     bug_new, comments_returning, fields
 ):
-    history = ({"when": AFTER, "who": PERSON, "fields": fields},)
+    history = (
+        {"when": AFTER, "who": PERSON, "changes": [{"field_name": f} for f in fields]},
+    )
     assert not _changed_state(bug_new, comments_returning, history).bot_has_last_word
 
 
@@ -151,7 +155,7 @@ def test_a_change_the_agent_reads_takes_the_last_word_away(
     ],
 )
 def test_a_bot_change_keeps_the_last_word(bug_new, comments_returning, who):
-    history = ({"when": AFTER, "who": who, "fields": ["priority"]},)
+    history = ({"when": AFTER, "who": who, "changes": [{"field_name": "priority"}]},)
     s = TriageState(
         bug=quiet(bug_new, last_change_time_non_bot=AFTER),
         comments=comments_returning[:3],
@@ -166,8 +170,12 @@ def test_a_later_change_that_counts_takes_the_last_word_away(
     bug_new, comments_returning
 ):
     history = (
-        {"when": AFTER, "who": PERSON, "fields": ["cc"]},
-        {"when": "2026-10-13T09:40:00Z", "who": PERSON, "fields": ["priority"]},
+        {"when": AFTER, "who": PERSON, "changes": [{"field_name": "cc"}]},
+        {
+            "when": "2026-10-13T09:40:00Z",
+            "who": PERSON,
+            "changes": [{"field_name": "priority"}],
+        },
     )
     assert not _changed_state(bug_new, comments_returning, history).bot_has_last_word
 
@@ -175,8 +183,8 @@ def test_a_later_change_that_counts_takes_the_last_word_away(
 def test_an_empty_history_after_a_hidden_change_keeps_the_last_word(
     bug_new, comments_returning
 ):
-    # The broker drops a change that a logged-out reader cannot see, such as a
-    # private comment, so the agent has nothing new to read.
+    # A change with no history entry, for example a comment-free change that
+    # Bugzilla does not list, gives the agent nothing new to read.
     assert _changed_state(bug_new, comments_returning, ()).bot_has_last_word
 
 
@@ -184,19 +192,24 @@ def test_a_change_by_the_hackbot_account_takes_the_last_word_away(
     bug_new, comments_returning
 ):
     # Other Hackbot agents post as the same account.
-    history = ({"when": AFTER, "who": BOT_ACCOUNT, "fields": ["priority"]},)
+    history = (
+        {"when": AFTER, "who": BOT_ACCOUNT, "changes": [{"field_name": "priority"}]},
+    )
     assert not _changed_state(bug_new, comments_returning, history).bot_has_last_word
 
 
 def test_a_change_at_the_comment_time_is_part_of_the_bot_update(
     bug_new, comments_returning
 ):
-    history = ({"when": BOT_COMMENTED, "who": PERSON, "fields": ["priority"]},)
+    history = (
+        {"when": BOT_COMMENTED, "who": PERSON, "changes": [{"field_name": "priority"}]},
+    )
     assert _changed_state(bug_new, comments_returning, history).bot_has_last_word
 
 
 @pytest.mark.parametrize(
-    "history", [None, ({"when": None, "who": PERSON, "fields": ["cc"]},)]
+    "history",
+    [None, ({"when": None, "who": PERSON, "changes": [{"field_name": "cc"}]},)],
 )
 def test_an_unread_history_takes_the_last_word_away(
     bug_new, comments_returning, history
@@ -483,7 +496,7 @@ async def test_fetch_state_reads_the_bug_and_its_comments(monkeypatch):
 async def test_fetch_state_reads_the_history_after_a_change(monkeypatch):
     bug = quiet(load("bug_new.json")["bugs"][0], last_change_time_non_bot=AFTER)
     comments = load("comments_returning.json")["bugs"]["9000001"]["comments"][:3]
-    history = [{"when": AFTER, "who": PERSON, "fields": ["cc"]}]
+    history = [{"when": AFTER, "who": PERSON, "changes": [{"field_name": "cc"}]}]
     calls = fake_broker(
         monkeypatch,
         {

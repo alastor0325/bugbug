@@ -57,7 +57,7 @@ flowchart TD
             hooks["Record-time hooks<br/>limits on every action"]
             summary[/"summary.json<br/>findings + actions"/]
         end
-        broker["Broker sidecar<br/>holds the Bugzilla key,<br/>read tools, public content only"]
+        broker["Broker sidecar<br/>holds the Bugzilla key,<br/>agent-tools read tools"]
     end
 
     ext["Searchfox, hg, crash-stats,<br/>profiler storage, spec sites"]
@@ -86,9 +86,9 @@ applies them as `hackbot@mozilla.tld` and tags every comment `gecko-triage`.
 | Local, Docker | `ANTHROPIC_API_KEY` in the root `.env`                                                                                                                                                                                          | `BUGZILLA_API_KEY` in the root `.env`, given to the broker only                                                                |
 | Local, host   | `ANTHROPIC_API_KEY` when the shell sets it, else the Claude Code login                                                                                                                                                          | `BUGZILLA_API_KEY` in the broker's terminal                                                                                    |
 
-In every mode, the code limits the broker to read tools and public content. Nothing in
-this repo shows that the cloud key is read-only. For a local run, use a key that cannot
-read private comments.
+In every mode, the broker serves only read tools. The bot account reads only public bugs,
+and later the Hackbot Bugzilla proxy controls which bugs a key can read. For a local run,
+use a key that cannot read private bugs or private comments.
 
 1. `config.py` loads the team named by `TEAM` and the shared files. With no `TEAM`, it
    loads the shared files only. An unknown team or a bad file stops the run.
@@ -99,8 +99,7 @@ read private comments.
    The user prompt gives the model the bug's fields and its public comments from this
    read, so the model does not read them again. `render_bug` in `agent.py` gives them
    as escaped JSON, so no comment text can pose as another comment, another author or
-   a rule file. It drops a comment that is not marked public, also when the broker
-   already dropped it, and fails the run when a thread with comments has none marked
+   a rule file. It drops a comment that is not marked public, and fails the run when a thread with comments has none marked
    public. Over `COMMENTS_CAP` characters it leaves out the oldest automation
    comments, then the oldest other ones, keeps comment 0 and the newest, and names
    the left-out comments so the model can read them with `get_bug_comments`.
@@ -151,8 +150,8 @@ Before the model starts, two searches find the leads for the prompt:
   signature. A signature that 10 bugs or more have, such as `OOM | small`, is too
   generic and is dropped. These matches come first in the list.
 - **Summary words.** It searches each content word of the summary, stemmed, as the start
-  of a word in other summaries. It asks for up to 400 matches for each word, because the
-  broker drops restricted bugs. A word with 300 public matches or more is too common, so
+  of a word in other summaries. It asks for up to 400 matches for each word, because a
+  search can return restricted bugs that the key cannot read. A word with 300 public matches or more is too common, so
   it is dropped. It keeps the 8 rarest words. Each word
   that a bug matches adds a weight, and a rarer word adds more.
 
@@ -323,8 +322,7 @@ On the host without Docker (a dry run), the Claude Code CLI uses `ANTHROPIC_API_
 the shell sets it. Otherwise it uses the Claude Code login already on the machine. Install
 `ffmpeg` on the host to read video attachments; without it, a video's `media` field gives
 the error. Bugzilla reads use the key the broker holds, and the agent process never sees
-it. The broker returns only public bugs, comments and attachments. "Why the agent reads
-only public content" in `docs/bugzilla.md` gives the reason and the files that do it.
+it. "Access to Bugzilla" in `docs/bugzilla.md` says what the broker serves.
 
 Terminal 1, the broker (reads only; nothing in this setup can write to Bugzilla):
 
@@ -435,8 +433,7 @@ commit message names, when the assignee's real name is the commit author's name.
 `needinfo_warning` asks a person to check that this person wrote the commit.
 `restricted_warning` lists the bugs of the post-run read that are restricted or
 unreadable, or every one when the read failed, so that a person checks that the comment
-does not name or describe them. It also lists each bug that the broker withheld from a
-read during the run, by the main agent or a subagent: an `inaccessible` id of
+does not name or describe them. It also lists each bug that a read withheld during the run, by the main agent or a subagent: an `inaccessible` id of
 `get_bugs`, or a bug that a read refused with `access_denied`. A comment that contains
 the number of such a bug fails the run. The run reads a `get_bugs` result that the CLI
 saved to a file only from the CLI's `tool-results` folder, up to 32 MiB. When it cannot

@@ -35,39 +35,26 @@ any model turn, when any of these is true:
 A bug that staff filed with the severity unset is triaged. The comment is written for a
 developer and never asks them for about:support, steps or a log.
 
-## Why the agent reads only public content
+## Access to Bugzilla
 
-The agent writes public comments, so it must read only what a logged-out reader can see.
-The broker's key can see more, because the Hackbot deploy chooses that key. So the code
-filters every read, and it does not trust the key.
+The agent reads Bugzilla through the broker, which serves the agent-tools Bugzilla tools
+(`libs/agent-tools/agent_tools/bugzilla.py`). The bot account can read only public bugs,
+so the broker does not filter what it serves. Later, the Hackbot Bugzilla proxy controls
+which bugs a key can read.
 
-| File             | What it does                                                          |
-| ---------------- | --------------------------------------------------------------------- |
-| `broker.py`      | Holds the Bugzilla key and serves the read tools, public content only |
-| `attachments.py` | Downloads one attachment for `fetch_attachment`, with no key          |
-| `visibility.py`  | Decides whether a comment or an attachment is marked public           |
+| File             | What it does                                                 |
+| ---------------- | ------------------------------------------------------------ |
+| `broker.py`      | Holds the Bugzilla key and serves the read tools             |
+| `attachments.py` | Downloads one attachment for `fetch_attachment`, with no key |
+| `visibility.py`  | Decides whether a comment or an attachment is marked public  |
 
-`broker.py` filters each reply before the model sees it:
-
-- It drops every bug that is in a group.
-- It refuses the comments and the attachment list of such a bug. A restricted bug's
-  comments are often not marked private.
-- It drops private comments and private attachments. It also drops an item that does not
-  say that it is public.
-- It refuses the fields that it cannot filter: `_all`, `_default`, `_extra`, comments,
-  attachments and history. The `description` is comment 0, and only when that comment is
-  public.
-- A search cannot use terms that match private comments or attachments.
-- It gives the history of a public bug as the names of the changed fields, with no
-  values. It keeps only what a logged-out reader sees: no time tracking, no changes to
-  private comments or attachments, no "made private" change on a comment, and no relation
-  (depends on, blocks, regressions, see also) that names only bugs the reader cannot see.
-- It gives attachment metadata. The prompt tells the model to ask for metadata only. With
-  `include_data`, the broker can also put small public text attachments in the reply.
+The broker leaves out `download_attachment`, because it would write the file inside the
+broker's container. Each request has a 60-second timeout and runs in a worker thread, so
+one slow request does not stop the other clients.
 
 `attachments.py` does the download, in `fetch_attachment`. It reads the metadata with no
-key. It checks again that the attachment is public and belongs to the triaged bug. Then it
-downloads the file anonymously. So two checks stop a private file.
+key. It checks that the attachment is public and belongs to the triaged bug. Then it
+downloads the file anonymously.
 
 The agent also reads public attachments of the bug it triages. It fetches each one
 anonymously from Bugzilla's REST API. It refuses a private attachment, an attachment of
@@ -77,11 +64,6 @@ duration, and it looks at up to six frames. It reads up to 3 videos for each att
 It also looks at screenshots. The agent's code never runs a file from an attachment. The
 rules tell the model never to obey instructions in one. The comment and the run's `unread`
 list name an attachment that the agent could not fetch, unpack or read.
-
-One risk stays. The duplicate search reads comment text with `longdesc`. If the API
-key can read private comments, a match on a public bug tells one bit about them. For a
-local run, use a key that cannot read private comments. In the cloud, the key is a shared
-broker secret from the Hackbot deploy, and nothing in this repo limits what it can read.
 
 ## Marks it reads
 

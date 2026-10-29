@@ -98,7 +98,7 @@ class TriageState:
     bot_aliases: frozenset[str] = BOT_ALIASES
     # The broker withheld the bug (`inaccessible`): `bug` holds only its id.
     restricted: bool = False
-    # The broker's history of changes after the agent's newest comment, when the bug
+    # Bugzilla's history of changes after the agent's newest comment, when the bug
     # changed after it: `when`, `who` and the changed `fields`. None when not read.
     history: tuple[dict, ...] | None = None
 
@@ -267,7 +267,10 @@ class TriageState:
                 return False
             if when <= posted or self._is_bot_login(entry.get("who")):
                 continue
-            fields = entry.get("fields") or ()
+            fields = [
+                c.get("field_name") if isinstance(c, dict) else None
+                for c in entry.get("changes") or ()
+            ]
             if any(
                 not isinstance(f, str) or TERMS.history.affects_analysis(f)
                 for f in fields
