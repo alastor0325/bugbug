@@ -69,7 +69,7 @@ def test_restricted(bug_new, comments_new):
 def test_a_bug_the_broker_withholds_is_skipped_as_restricted():
     state = TriageState(bug={"id": 9000001}, now=NOW, restricted=True)
     assert require_state(state) is state
-    assert skip_reason(state) == "restricted bug (withheld by the broker)"
+    assert skip_reason(state) == "restricted bug (Bugzilla withheld it)"
 
 
 def test_a_public_security_bug_is_skipped(bug_new, comments_new):

@@ -1492,7 +1492,7 @@ async def test_a_comment_that_names_a_bug_the_session_met_withheld_fails(
     fake_client.script = _hooked_script(
         fake_client, recorder, "The change 1234567 caused this."
     )
-    with pytest.raises(AgentError, match="withheld from a read"):
+    with pytest.raises(AgentError, match="a read withheld"):
         await _run(tmp_path, new_state, recorder)
 
 

@@ -176,9 +176,8 @@ MAX_QUERY_WORDS = 12
 MAX_WORDS = 8
 # A word with this many summary matches is too common to weigh, so it is dropped.
 WORD_CAP = 300
-# The broker drops restricted bugs from an answer, so a word query asks for more than
-# WORD_CAP. A common word then still reaches WORD_CAP after the drop.
-WORD_QUERY_LIMIT = WORD_CAP + 100
+# A word query asks for one more than WORD_CAP, to see that a word reaches it.
+WORD_QUERY_LIMIT = WORD_CAP + 1
 WEIGHT_FLOOR = 5
 SEARCH_LIMIT = 50
 MAX_CANDIDATES = 10

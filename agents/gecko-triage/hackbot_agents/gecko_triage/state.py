@@ -96,10 +96,10 @@ class TriageState:
     now: dt.datetime = field(default_factory=_now)
     # Accounts that also count as the bot (the `BOT_ALIASES` env var).
     bot_aliases: frozenset[str] = BOT_ALIASES
-    # The broker withheld the bug (`inaccessible`): `bug` holds only its id.
+    # Bugzilla withheld the bug (`inaccessible`): `bug` holds only its id.
     restricted: bool = False
     # Bugzilla's history of changes after the agent's newest comment, when the bug
-    # changed after it: `when`, `who` and the changed `fields`. None when not read.
+    # changed after it: `when`, `who` and `changes`. None when not read.
     history: tuple[dict, ...] | None = None
 
     @property
@@ -209,7 +209,7 @@ class TriageState:
         update posts the comment and its field changes in one transaction, so a change
         at the comment's time is not after it. BMO counts `hackbot@mozilla.tld` as a
         person for `last_change_time_non_bot`, so any later change by a person moves
-        that time past the comment. Then the broker's history decides: a change to a
+        that time past the comment. Then the bug's history decides: a change to a
         field that gives nothing new to read, such as CC, keeps the last word.
         """
         posted = self._agent_comment_time

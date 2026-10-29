@@ -693,8 +693,7 @@ def render_bug(
 ) -> str:
     """The bug's fields and its public comments, as escaped data for the user prompt.
 
-    The broker already dropped the private comments; a comment not marked public is
-    dropped here too. A thread with comments but none marked public raises, so the run
+    A comment not marked public is dropped here. A thread with comments but none marked public raises, so the run
     never triages an empty thread. A thread over ``cap`` leaves out comments, as
     `fit_comments` says, and names them.
     """

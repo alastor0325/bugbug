@@ -4,8 +4,8 @@ The skips run in code rather than in a ruleset, because a ruleset is advisory an
 the model can outrank it. They run before the checkout, at zero turns and zero cost.
 
 A bug whose state could not be read fails the run (`require_state`): without it no check
-can run, and a failed run is retried by BugBot. A restricted bug is skipped: the broker
-withholds it and lists it as `inaccessible`, and `fetch_state` marks the state
+can run, and a failed run is retried by BugBot. A restricted bug is skipped: Bugzilla
+withholds it and `get_bugs` lists it as `inaccessible`, and `fetch_state` marks the state
 `restricted`. BugBot never sends one, since it filters security bugs.
 """
 
@@ -95,7 +95,7 @@ def reporter_audience(bug: dict) -> str:
 def skip_reason(state: TriageState) -> str | None:
     """Why this bug is skipped, or None to triage it."""
     if state.restricted:
-        return "restricted bug (withheld by the broker)"
+        return "restricted bug (Bugzilla withheld it)"
     bug = state.bug
 
     key = f"{bug.get('product') or ''} :: {bug.get('component') or ''}"

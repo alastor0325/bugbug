@@ -349,7 +349,9 @@ async def get_bugs(
         first, *rest = [b["id"] for b in bugs]
         cparams = {"ids": ",".join(str(i) for i in rest)} if rest else {}
         try:
-            cres = ctx.client.request(f"bug/{first}/comment", params=cparams)
+            cres = await asyncio.to_thread(
+                ctx.client.request, f"bug/{first}/comment", params=cparams
+            )
             comments_by_bug = {
                 int(bid): data["comments"] for bid, data in cres.get("bugs", {}).items()
             }

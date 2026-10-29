@@ -281,7 +281,7 @@ def test_a_team_run_skips_another_product_by_its_scope(other_bug):
 @pytest.mark.parametrize(
     ("fields", "restricted", "why"),
     [
-        ({}, True, "restricted bug (withheld"),
+        ({}, True, "restricted bug (Bugzilla withheld it)"),
         ({"groups": ["core-security"]}, False, "restricted bug (non-empty groups)"),
         ({"keywords": ["sec-high"]}, False, "security bug"),
         (

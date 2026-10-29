@@ -1,4 +1,4 @@
-"""Tests for the bugs that the broker withheld from the run's reads."""
+"""Tests for the bugs that a read withheld from the run."""
 
 import asyncio
 import json
@@ -121,6 +121,39 @@ def test_a_refusal_result_counts_its_bug():
     }
     note_withheld(store, post)
     assert store.ids == {HIDDEN}
+
+
+# The agent-tools refusal for Bugzilla code 102 names no bug.
+TOOLS_DENIED = {
+    "error": "access_denied",
+    "code": 102,
+    "message": "You are not authorized to access bug.",
+    "hint": "Your API key cannot access this bug. Skip it.",
+}
+
+
+def test_an_agent_tools_refusal_counts_the_bug_of_the_input():
+    store = WithheldBugs()
+    post = {
+        "tool_name": COMMENTS_TOOL,
+        "tool_input": {"bug_id": HIDDEN},
+        "tool_response": {"content": _blocks(TOOLS_DENIED), "is_error": True},
+    }
+    note_withheld(store, post)
+    assert store.ids == {HIDDEN}
+
+
+def test_a_comment_that_quotes_access_denied_counts_no_bug():
+    store = WithheldBugs()
+    post = {
+        "tool_name": COMMENTS_TOOL,
+        "tool_input": {"bug_id": 9000001},
+        "tool_response": {
+            "content": _blocks({"comments": [{"text": "I got access_denied"}]})
+        },
+    }
+    note_withheld(store, post)
+    assert store.ids == set()
 
 
 @pytest.mark.parametrize(

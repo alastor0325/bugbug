@@ -1,8 +1,8 @@
-"""The bugs that the broker withheld from the run's reads.
+"""The bugs that a read withheld from the run.
 
-The broker serves public bugs only. `get_bugs` lists each requested bug it withholds as
-`inaccessible`, and the other reads of one bug refuse a restricted bug with
-`access_denied`. The hooks collect those ids from the main agent's reads and the
+The bot account reads only public bugs. `get_bugs` lists each requested bug that
+Bugzilla does not return as `inaccessible`, and the other reads of one bug refuse a
+restricted bug with `access_denied`. The hooks collect those ids from the main agent's reads and the
 subagents' reads. The post-run check holds the run for a person when it met one, and
 refuses a comment that contains its number.
 
@@ -29,7 +29,7 @@ MAX_SPILL_BYTES = 32 * 1024 * 1024
 
 @dataclass
 class WithheldBugs:
-    """The ids the broker withheld, and why a read could not be checked."""
+    """The ids that a read withheld, and why a read could not be checked."""
 
     ids: set[int] = field(default_factory=set)
     unchecked: str | None = None
@@ -71,19 +71,20 @@ def inaccessible_ids(response: object) -> set[int] | None:
 
 
 def denied_bug_id(text: object, tool_input: object, failed: bool = False) -> int | None:
-    """The bug of an `access_denied` refusal: its payload `bug_id`.
+    """The bug of an `access_denied` refusal: its payload `bug_id`, else the input's.
 
-    A ``failed`` call's error text may not hold the payload: then the input's `bug_id`.
+    The agent-tools refusal has no `bug_id`, so the input's `bug_id` names the bug. A
+    ``failed`` call's error text may not hold the payload at all: then the input's
+    `bug_id` too.
     """
     if not isinstance(text, str) or ACCESS_DENIED not in text:
         return None
+    input_id = tool_input.get("bug_id") if isinstance(tool_input, dict) else None
     for payload in payloads(text):
-        if payload.get("error") == ACCESS_DENIED and is_bug_id(payload.get("bug_id")):
-            return payload["bug_id"]
-    bug_id = (
-        tool_input.get("bug_id") if failed and isinstance(tool_input, dict) else None
-    )
-    return bug_id if is_bug_id(bug_id) else None
+        if payload.get("error") == ACCESS_DENIED:
+            bug_id = payload.get("bug_id", input_id)
+            return bug_id if is_bug_id(bug_id) else None
+    return input_id if failed and is_bug_id(input_id) else None
 
 
 def _spilled_ids(response: object) -> set[int] | None:

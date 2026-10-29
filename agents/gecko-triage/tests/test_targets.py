@@ -445,7 +445,7 @@ def test_a_run_with_no_duplicate_has_no_dupe_target_warning():
 @pytest.mark.parametrize("text", ["The change 1234567 caused it.", "It is 1,234,567."])
 @pytest.mark.parametrize("found", [{}, {HIDDEN: _target(id=HIDDEN)}])
 def test_a_comment_with_a_withheld_bug_number_fails(text, found):
-    with pytest.raises(CommentNamesRestricted, match="withheld from a read"):
+    with pytest.raises(CommentNamesRestricted, match="a read withheld"):
         screen_comment(_commented(text), BUG, found, withheld={HIDDEN})
 
 

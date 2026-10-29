@@ -135,7 +135,7 @@ its landing version must not be later than the first version that shows the bug.
 
 When the regressor is a restricted bug that the agent cannot read, do not set
 `regressed_by`. Send the needinfo below also when only your evidence points at the
-change, because the author decides. The broker returns nothing for such a bug. Find the
+change, because the author decides. Bugzilla returns nothing for such a bug. Find the
 author of the regressing change from its commit: the `mozilla_vcs` tools, such as
 `file_history` and `get_commit_info`, give the commit author's email. Needinfo that
 author, and in the comment ask them to set the Regressed by field. The bug must have no

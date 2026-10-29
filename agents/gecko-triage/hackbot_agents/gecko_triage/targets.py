@@ -13,7 +13,7 @@ duplicate of a meta bug also fails the run: the hooks know only the team's meta 
 the meta bugs among the duplicate candidates. A comment that names an unreadable or
 restricted bug fails the run too, since the comment cannot be dropped in part and must
 not point at that bug. So does a comment that spells the number of a restricted bug
-that a commit message names, or of a bug that the broker withheld from a read during
+that a commit message names, or of a bug that a read withheld during
 the run (see `withheld`). A withheld bug also holds the run for a person. A duplicate of a
 bug that was closed with no fix waits for a person (see `dupe_target_warning`).
 """
@@ -115,7 +115,7 @@ def screen_comment(
     ``found`` holds the ``bugs_to_read`` bugs that were read, or is None when the read
     failed or has no broker. ``commit_bugs`` are the bugs the run's commit messages
     named; a restricted one, or any one when the read failed, is forbidden in every
-    spelling. ``withheld`` are the bugs the broker withheld during the run, each
+    spelling. ``withheld`` are the bugs that a read withheld during the run, each
     forbidden in every spelling.
     """
     named = comment_bug_ids(actions, bug)
@@ -142,7 +142,7 @@ def screen_comment(
         ]:
             raise CommentNamesRestricted(
                 f"bug {bug}: the comment contains the number of {_bug_list(spelled)}, "
-                "which the broker withheld from a read in this run"
+                "which a read withheld in this run"
             )
 
 

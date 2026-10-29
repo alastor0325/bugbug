@@ -92,17 +92,17 @@ use a key that cannot read private bugs or private comments.
 
 1. `config.py` loads the team named by `TEAM` and the shared files. With no `TEAM`, it
    loads the shared files only. An unknown team or a bad file stops the run.
-2. `state.py` reads the bug, all its comments and its open needinfos. A bug it cannot
-   read fails the run, so BugBot retries it. A bug read that does not end in 3 minutes
-   also fails the run. A history read that does not end in 2 minutes gives no history,
-   and the agent runs.
-   The user prompt gives the model the bug's fields and its public comments from this
-   read, so the model does not read them again. `render_bug` in `agent.py` gives them
-   as escaped JSON, so no comment text can pose as another comment, another author or
-   a rule file. It drops a comment that is not marked public, and fails the run when a thread with comments has none marked
-   public. Over `COMMENTS_CAP` characters it leaves out the oldest automation
-   comments, then the oldest other ones, keeps comment 0 and the newest, and names
-   the left-out comments so the model can read them with `get_bug_comments`.
+2. `state.py` reads the bug, all its comments and its open needinfos. A bug it cannot read
+   fails the run, so BugBot retries it. A bug read that does not end in 3 minutes also
+   fails the run. A history read that does not end in 2 minutes gives no history, and the
+   agent runs. The user prompt gives the model the bug's fields and its public comments
+   from this read, so the model does not read them again. `render_bug` in `agent.py` gives
+   them as escaped JSON, so no comment text can pose as another comment, another author or
+   a rule file. It drops a comment that is not marked public, and fails the run when a
+   thread with comments has none marked public. Over `COMMENTS_CAP` characters it leaves
+   out the oldest automation comments, then the oldest other ones, keeps comment 0 and the
+   newest, and names the left-out comments so the model can read them with
+   `get_bug_comments`.
 3. `preflight.py` ends the run, at zero cost, on the skips `docs/bugzilla.md` lists. A
    skipped run is `status: "ok"` with `num_turns: 0`, `decision: "skipped"` and the
    reason in `result`.
@@ -150,10 +150,9 @@ Before the model starts, two searches find the leads for the prompt:
   signature. A signature that 10 bugs or more have, such as `OOM | small`, is too
   generic and is dropped. These matches come first in the list.
 - **Summary words.** It searches each content word of the summary, stemmed, as the start
-  of a word in other summaries. It asks for up to 400 matches for each word, because a
-  search can return restricted bugs that the key cannot read. A word with 300 public matches or more is too common, so
-  it is dropped. It keeps the 8 rarest words. Each word
-  that a bug matches adds a weight, and a rarer word adds more.
+  of a word in other summaries. It asks for up to 301 matches for each word. A word with
+  300 matches or more is too common, so it is dropped. It keeps the 8 rarest words. Each
+  word that a bug matches adds a weight, and a rarer word adds more.
 
 `duplicate_hunter` then calls the `search_concepts` tool, an in-process MCP server bound
 to the triaged bug and its scope. The hunter gives 2 to 4 concepts. Each concept is a
@@ -428,19 +427,19 @@ vouches for unattended apply.
 as "Close verification" lists, and is null otherwise.
 
 `needinfo_warning` is set when the run asks a commit author, whose hg email may not be a
-Bugzilla login. The run may instead ask the @mozilla.com assignee of a bug that the
-commit message names, when the assignee's real name is the commit author's name. Then
+Bugzilla login. The run may instead ask the @mozilla.com assignee of a bug that the commit
+message names, when the assignee's real name is the commit author's name. Then
 `needinfo_warning` asks a person to check that this person wrote the commit.
 `restricted_warning` lists the bugs of the post-run read that are restricted or
 unreadable, or every one when the read failed, so that a person checks that the comment
-does not name or describe them. It also lists each bug that a read withheld during the run, by the main agent or a subagent: an `inaccessible` id of
-`get_bugs`, or a bug that a read refused with `access_denied`. A comment that contains
-the number of such a bug fails the run. The run reads a `get_bugs` result that the CLI
-saved to a file only from the CLI's `tool-results` folder, up to 32 MiB. When it cannot
-check that file, or a `get_bugs` result that is not an error has no `inaccessible` list,
-`restricted_warning` says so. The gate fails safe: a mistyped id in a read also holds
-the run, and the number check can match an unrelated number, such as a timestamp. Either
-warning sets `auto_apply` to false.
+does not name or describe them. It also lists each bug that a read withheld during the
+run, by the main agent or a subagent: an `inaccessible` id of `get_bugs`, or a bug that a
+read refused with `access_denied`. A comment that contains the number of such a bug fails
+the run. The run reads a `get_bugs` result that the CLI saved to a file only from the
+CLI's `tool-results` folder, up to 32 MiB. When it cannot check that file, or a `get_bugs`
+result that is not an error has no `inaccessible` list, `restricted_warning` says so. The
+gate fails safe: a mistyped id in a read also holds the run, and the number check can
+match an unrelated number, such as a timestamp. Either warning sets `auto_apply` to false.
 
 `agent_version` names the code that made the run, on every run that returns findings,
 skipped runs included. A failed run raises and carries no `agent_version`. A local run
