@@ -153,6 +153,10 @@ def test_the_run_inputs_default_to_the_limits_and_the_env_overrides_them(
     monkeypatch.setenv("MAX_BUDGET_USD", "2.5")
     inputs = AgentInputs()
     assert (inputs.max_turns, inputs.max_budget_usd) == (20, 2.5)
+    monkeypatch.setenv("MAX_TURNS", "0")
+    monkeypatch.setenv("MAX_BUDGET_USD", "0")
+    inputs = AgentInputs()
+    assert (inputs.max_turns, inputs.max_budget_usd) == (None, None)
 
 
 @pytest.mark.parametrize(
@@ -1817,8 +1821,3 @@ async def test_the_session_counts_the_tool_calls_of_each_session():
 )
 def test_each_subagent_takes_its_limit_from_the_limits_file(make, session):
     assert make().maxTurns == agent.LIMITS.turn_limit(session)
-
-
-def test_the_run_limits_come_from_the_limits_file():
-    assert agent.LIMITS.turn_limit("main") == agent.DEFAULT_MAX_TURNS
-    assert agent.LIMITS.max_budget_usd == agent.DEFAULT_MAX_BUDGET_USD

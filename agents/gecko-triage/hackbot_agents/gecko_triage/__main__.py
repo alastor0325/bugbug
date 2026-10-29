@@ -1,9 +1,11 @@
 import asyncio
 import sys
 from pathlib import Path
+from typing import Annotated
 
 from hackbot_runtime import HackbotContext, run_async
 from hackbot_runtime.searchfox import resolve_index_revision
+from pydantic import AfterValidator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import (
@@ -29,12 +31,19 @@ DEFAULT_MODEL = "claude-opus-5-5"
 DEFAULT_EFFORT = "high"
 
 
+def _zero_is_none(value):
+    return value or None
+
+
 class AgentInputs(BaseSettings):
     bug_id: int
     broker_url: str
     model: str = DEFAULT_MODEL
-    max_turns: int | None = DEFAULT_MAX_TURNS
-    max_budget_usd: float | None = DEFAULT_MAX_BUDGET_USD
+    # 0 means no limit, as in `limits.toml`.
+    max_turns: Annotated[int | None, AfterValidator(_zero_is_none)] = DEFAULT_MAX_TURNS
+    max_budget_usd: Annotated[float | None, AfterValidator(_zero_is_none)] = (
+        DEFAULT_MAX_BUDGET_USD
+    )
     effort: str = DEFAULT_EFFORT
     fx_bug_toolkit_dir: Path = Path(DEFAULT_TOOLKIT_DIR)
 

@@ -302,7 +302,10 @@ and of each subagent, and the cost limit of a run. A limit stops a session that 
 0 means no limit. `TURN_LIMITS_FILE` names another file in place of this one, for
 example a local file with every limit at 0. Each run records the tool calls of each
 session in `findings.steps`, and each subagent that stopped at its limit in
-`findings.limit_hits`. These numbers show what limits a deploy needs.
+`findings.limit_hits`. A tool call count is an estimate of the turns: parallel tool calls
+in one reply are one turn, and the last reply has no tool call. `limit_hits` is the true
+record of a session that stopped at its limit. Together they show what limits a deploy
+needs.
 
 ## Running it
 
@@ -357,8 +360,9 @@ must be on `PATH` for profile and spec reading.
 | `FX_BUG_TOOLKIT_DIR` | no       | The fx-bug-toolkit plugin checkout; the image sets `/opt/fx-bug-toolkit`             |
 | `BOT_ALIASES`        | no       | Pilot only: comma-separated logins that count as the bot, like `hackbot@mozilla.tld` |
 | `MODEL`, `EFFORT`    | no       | Model controls; the defaults are in `__main__.py`                                    |
-| `MAX_TURNS`          | no       | Turn limit for one run; the default is in `agent.py`                                 |
-| `MAX_BUDGET_USD`     | no       | Cost limit for one run, subagents included; the default is in `agent.py`             |
+| `MAX_TURNS`          | no       | Turn limit of the main agent; the default is in `shared/limits.toml`; 0 is no limit  |
+| `MAX_BUDGET_USD`     | no       | Cost limit for one run; the default is in `shared/limits.toml`; 0 is no limit        |
+| `TURN_LIMITS_FILE`   | no       | Another limits file in place of `shared/limits.toml`                                 |
 
 The bot accounts are `hackbot@mozilla.tld` and the logins in `BOT_ALIASES`. The agent
 never sends a needinfo to a bot account. When the agent wrote the newest comment and
@@ -378,7 +382,7 @@ a close, a move or `stalled` with no action fails the run, unless it planned a
 close that `close_verifier` refuted, which makes it `watching`), `asked`, `unread`, `severity`, `priority`, `needinfo`, `meta_bug`,
 `duplicate_of`, `issue_type`, `issue_type_note`, `issue_type_warning`,
 `close_verification`, `close_warning`, `needinfo_warning`, `restricted_warning`,
-`fix_tags`, `auto_apply` and `agent_version`. `actions` carries the recorded comment and field
+`fix_tags`, `auto_apply`, `agent_version`, `steps` and `limit_hits`. `actions` carries the recorded comment and field
 changes. After the session, the run reads the `dupe_of` bug, the `regressed_by` and
 `see_also` bugs, the bugs the comment names and the commit message bugs through the
 broker. The run drops a change on any other bug. It also drops
