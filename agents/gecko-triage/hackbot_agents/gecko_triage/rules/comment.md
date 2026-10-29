@@ -25,8 +25,8 @@ concrete "what to capture".
 keep a test. Do not say what to work on first, when to land a fix or how to split the
 patch. These are the developer's decisions. Give the facts, the cause, the fix direction
 and the debugging steps. Where the fix belongs is a fact, for example upstream first and
-then vendored, so keep it. "An expert leads the analysis" in `workflow.md` gives the one
-exception: there, give no fix direction.
+then vendored, so keep this fact. "An expert leads the analysis" in `workflow.md` gives
+the one exception: there, give confirmed facts in place of a cause and a fix direction.
 
 **Never link a local file or an internal document.** Cite bugs, Searchfox permalinks and
 pages on the allowed link hosts that the system prompt lists. The recorder refuses a link

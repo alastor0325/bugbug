@@ -220,6 +220,14 @@ KEY_PHRASES = (
     ("workflow.md", "The run fails when the comment names a restricted bug."),
     ("comment.md", "Never tell a developer how to plan their work."),
     ("comment.md", "Do not say whether to skip, disable or keep a test."),
+    (
+        "comment.md",
+        "Do not say what to work on first, when to land a fix or how to split the patch.",
+    ),
+    (
+        "comment.md",
+        "there, give confirmed facts in place of a cause and a fix direction.",
+    ),
     ("comment.md", "Where the fix belongs is a fact, for example upstream first and"),
     ("comment.md", "Never name a bug that the agent cannot read."),
     # Close verification.
