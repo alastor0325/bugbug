@@ -290,7 +290,12 @@ that need a local machine. The skills' wiki steps are switched off. The session 
 write its investigation file, and the write guard allows writes only under `/tmp`. A
 PreToolUse hook refuses Write and Edit on any other path. The job container discards the
 file. On the host, it stays in /tmp. The image also has Node 24,
-`@firefox-devtools/profiler-cli@0.11.0`, a static `webspec-index` and Debian's `ffmpeg`.
+`@firefox-devtools/profiler-cli@0.12.0`, a static `webspec-index` and Debian's `ffmpeg`.
+
+`profiler-cli` refuses a profile in a newer processed format than it knows, and it has
+no option to read the parts that it knows. A new Firefox Profiler release can change the
+format. Then the agent cannot read new profiles until the pin above is updated. Check for
+a new `profiler-cli` release when the agent says that a profile format is not supported.
 
 ## Running it
 

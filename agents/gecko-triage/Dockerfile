@@ -29,14 +29,14 @@ ENV PATH="/opt/venv/bin:$PATH"
 FROM base AS agent
 
 # Node and profiler-cli, so the agent can read the Firefox Profiler captures
-# reporters attach. profiler-cli 0.11.0 requires Node >= 24.
+# reporters attach. profiler-cli 0.12.0 requires Node >= 24.
 # Node comes from the official image rather than a distro package because
 # bookworm ships Node 18.
 COPY --from=node:24-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 COPY --from=node:24-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
-    && npm install -g @firefox-devtools/profiler-cli@0.11.0 \
+    && npm install -g @firefox-devtools/profiler-cli@0.12.0 \
     && npm cache clean --force
 
 # A static webspec-index, so spec-check can read web specs by section. Release
