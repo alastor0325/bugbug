@@ -2,7 +2,8 @@
 
 The triage knowledge of the gecko-triage agent. `render_rules` in `agent.py` puts every
 file here but this one into the system prompt, `workflow.md` first, then the team's
-files. Each file is in a `rule_file` block with its set and its name.
+files, then the team's in-tree docs from `tree_docs`. Each file is in a `rule_file`
+block with its set and its name.
 
 The general rules here apply to every team: `workflow.md` (the decision flow),
 `diagnostics.md`, `comment.md` and `severity-priority.md`. Each team adds its own in

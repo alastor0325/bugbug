@@ -16,18 +16,15 @@ At most one, from this table:
 ## When to ask for the capture block
 
 For audio, video and performance bugs, the media-log capture is the most useful
-diagnostic. Make it the first item in "Next steps". The only exception: when
-`diagnostics.md` found high-risk `media.*` prefs, the pref reset and restart come first,
-and the capture follows, introduced by "If the problem continues after the reset:".
-
-The capture is not a `.moz_log` file, and the reporter does not start it from
-profiler.firefox.com.
+diagnostic. Make it the first item in "Next steps". The only exception: when the team's
+`diagnostics.md` makes a pref reset the primary ask, the pref reset and restart come
+first, and the capture follows, introduced by "If the problem continues after the
+reset:".
 
 Never put the video link of the team's capture block in a reference-style footnote.
 
-Use the **Graphics** preset (same flow) instead of or in addition to **Media playback**
-when the issue is in the GPU, compositor or overlay path rather than playback. Say so in
-one sentence before the block; do not edit step 2 of the capture block.
+When the in-tree page says to use another preset, such as **Graphics**, say so in one
+sentence before the block; do not edit step 2 of the capture block.
 
-For an Android bug, add one sentence after the block: on Android, about:logging itself
-offers to upload the profile and then shows a share URL.
+For an Android bug, add one sentence after the block on the Android upload, as the
+in-tree page says.

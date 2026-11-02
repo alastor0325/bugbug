@@ -36,6 +36,7 @@ vouches for unattended apply, so a person always applies its actions.
 | `teams/<team>/rules/`                | The team's rules: bug types, diagnostics, comment, S/P, meta bugs |
 | `shared/bugzilla.toml`               | Bugzilla keywords and fields, and the agent's whiteboard tags     |
 | `shared/people.toml`                 | How to tell Mozilla staff and QA apart                            |
+| `shared/limits.toml`                 | The step limit of each session and the cost limit of a run        |
 
 Paths under `teams/` and `shared/` are relative to `hackbot_agents/gecko_triage/`.
 
@@ -112,7 +113,8 @@ use a key that cannot read private bugs or private comments.
    source checkout runs at the same time as this search.
 5. The model triages the bug with the general rules and the team rules, and records its
    actions. With no team, it uses the general rules only. The system prompt carries
-   every rule file, so it is the same for each run of a team and can be cached; the
+   every rule file and the team's in-tree docs, so it is the same for each run of a team
+   on one Firefox tree and can be cached; the
    user prompt carries what differs per bug. The hooks in `hooks.py` check
    each action as it is recorded; their docstring lists the limits. A refusal reaches
    the model as a tool error it can correct in the same run, and nothing lands in
@@ -127,8 +129,9 @@ use a key that cannot read private bugs or private comments.
    removed its actions and ends with no comment fails, unless its decision is
    `watching`, so BugBot runs it again.
 6. `may_apply_unattended` in `agent.py` sets `findings.auto_apply` when the run has a
-   team, the run recorded a comment and the final message carries a decision. A close
-   also needs its confirm, as "Close verification" says. The
+   team, the run recorded a comment and the final message carries a decision. A dropped
+   write, a security group, a `needinfo_warning` or a `restricted_warning` sets it to
+   false. A close also needs its confirm, as "Close verification" says. The
    hackbot-api entry has `auto_apply_requires_consent=True`; with
    `auto_apply_actions=False` every run waits for a person, and with `True` such runs
    apply with nobody in between.
@@ -172,8 +175,8 @@ records the comment of a close, it spawns `close_verifier` with the bug id, the
 resolution, `dupe_of` for a duplicate, its reasons and the draft comment. The verifier
 starts with a fresh context and reads the bug, every comment, the cited code and the
 duplicate target. It has the Bugzilla read tools except `get_bug_attachments`, and the
-Searchfox and VCS tools. It has no Read, Grep, Glob or Bash, no attachment tool and no
-write or action tool, and it never runs Firefox, a test or an attachment. When only a run can
+Searchfox and VCS tools. It has Read only for its own saved tool results, as below. It has no Grep, Glob or Bash,
+no attachment tool and no write or action tool, and it never runs Firefox, a test or an attachment. When only a run can
 confirm the close, it refutes with "needs a runtime check".
 
 The bundled Claude Code CLI saves an MCP tool result that is too large, such as the

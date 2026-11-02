@@ -34,6 +34,7 @@ BUGZILLA_READ_TOOLS = [
     "mcp__bugzilla__search_bugs",
     "mcp__bugzilla__get_bugs",
     "mcp__bugzilla__get_bug_comments",
+    "mcp__bugzilla__get_bug_history",
     "mcp__bugzilla__get_bug_attachments",
 ]
 

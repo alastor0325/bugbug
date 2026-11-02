@@ -90,7 +90,8 @@ attachment is unread.
 
 **Triage scope limit.** Do not read source files, trace call stacks or reason about fix
 approaches yourself; `bug_investigator` does that, before "Analyzed" and before an ask.
-One exception: you may read a `moz.build` file to find the component that owns a file.
+Two exceptions: you may read a `moz.build` file to find the component that owns a file,
+and a pref file to confirm the default of a pref.
 The flow is: artifact analysis identifies the symptom pattern; the team's
 `diagnostics.md` and `meta-bugs.md` say whether the pattern is known. If it is known,
 the bug is analyzed. If the pattern is clear but the cause is not, the bug is analyzed

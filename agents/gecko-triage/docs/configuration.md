@@ -11,6 +11,7 @@ says what each holds, how manual or automatic mode is set, and how a team joins.
 | `rules/`                 | The general rules every team follows                          | a PR and a deploy |
 | `shared/bugzilla.toml`   | Bugzilla keywords and fields, and the agent's whiteboard tags | a PR and a deploy |
 | `shared/people.toml`     | How to tell Mozilla staff and QA apart                        | a PR and a deploy |
+| `shared/limits.toml`     | The step limit of each session and the cost limit of a run    | a PR and a deploy |
 
 All paths are under `hackbot_agents/gecko_triage/`. The files are read when the run
 starts. A team name that is not a lower-case name of a directory in `teams/`, a missing
@@ -55,7 +56,10 @@ A run with no `team` input reads `rules/` and `shared/` only.
 
 ## The rules
 
-The model reads two rule sets. Where a team rule is more specific, it wins.
+The model reads the general rules, the team rules and the team's in-tree docs
+(`tree_docs`, in blocks with `set="tree"`). Where a team rule is more specific than a
+general rule, it wins. Where an in-tree doc differs from the rules, the rules win. A
+`tree_docs` file that is not in the Firefox checkout fails the run.
 
 | General, in `rules/`   | Team, in `teams/<team>/rules/`                                                       |
 | ---------------------- | ------------------------------------------------------------------------------------ |
@@ -69,6 +73,9 @@ The general rules must not name a team's components or label; `test_rules.py` ch
 this for every team.
 
 ## The shared files
+
+`shared/limits.toml`: `[turns]` sets the step limit of each session, and `[budget]` the
+cost limit of a run. 0 means no limit. `TURN_LIMITS_FILE` names another file.
 
 `shared/people.toml`: `employee_domain` (the login domain of Mozilla staff),
 `qa_name_markers` (words in a real name that mark a QA account) and `qa_accounts` (QA
