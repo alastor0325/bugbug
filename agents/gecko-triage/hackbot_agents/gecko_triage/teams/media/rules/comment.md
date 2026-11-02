@@ -28,3 +28,6 @@ Never put the video link of the team's capture block in a reference-style footno
 Use the **Graphics** preset (same flow) instead of or in addition to **Media playback**
 when the issue is in the GPU, compositor or overlay path rather than playback. Say so in
 one sentence before the block; do not edit step 2 of the capture block.
+
+For an Android bug, add one sentence after the block: on Android, about:logging itself
+offers to upload the profile and then shows a share URL.

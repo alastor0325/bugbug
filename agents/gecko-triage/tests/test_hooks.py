@@ -127,7 +127,7 @@ def test_the_full_hook_chain_rewrites_the_comment_in_order(tmp_path):
 
 
 CAPTURE_LABELS = (
-    "Logging presets",
+    "Log module selection",
     "Logging output",
     "Logging to the Firefox Profiler",
     "Start Logging",
@@ -135,7 +135,7 @@ CAPTURE_LABELS = (
     "Upload Local Profile",
 )
 RETYPED_STEPS = (
-    "Open the Logging presets tab and choose Media playback. Then click Start "
+    "Under Log module selection, choose Media playback. Then click Start "
     "Logging, do the steps, and click Stop Logging."
 )
 GRAPHICS_PRESET = (
@@ -169,7 +169,7 @@ def test_the_block_plus_retyped_steps_is_refused():
     _refused_capture(f"{CAPTURE_PLACEHOLDER}\n\n{RETYPED_STEPS}")
     # Two labels in a sentence beside the block are retyped steps too.
     _refused_capture(
-        "On the **Logging presets** tab, choose **Graphics** and then **Start "
+        "Under **Log module selection**, choose **Graphics** and then **Start "
         f"Logging** as below.\n\n{CAPTURE_PLACEHOLDER}"
     )
 

@@ -24,10 +24,10 @@ Firefox Profiler links (`share.firefox.dev/*`, `profiler.firefox.com/public/*`) 
 by the `profile_analyst` subagent, which follows fx-bug-toolkit's `analyze-profile` skill.
 Never use WebFetch on them. Spawn the analyst for every profiler link on the bug,
 including links in reporter replies. Never skip it because the reporter says that the
-problem went away. Give it the profile URL, the symptom and the capture
-rule from the team's `diagnostics.md` (what a useful profile for the team's area must
-show). Start from the report's `Analyzed:` answer; the team's rules may still
-rule the profile out.
+problem went away. Give it the profile URL, the symptom and the team's capture rule (what
+a useful profile for the team's area must show), from the team's `diagnostics.md` or its
+in-tree docs. Start from the report's `Analyzed:` answer; the team's rules may still rule
+the profile out.
 
 **A capture that reproduces on the good version cannot isolate a regression.** A safe-mode
 capture forces software compositing and software decode and looks pathological on every

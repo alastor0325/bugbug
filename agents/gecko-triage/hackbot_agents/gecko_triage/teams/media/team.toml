@@ -19,7 +19,7 @@ capture_marker = "about:logging"
 capture_block = """Please capture a profile:
 
 1. Open `about:logging`.
-2. On the **Logging presets** tab, choose the **"Media playback"** preset.
+2. Under **Log module selection**, choose **"Media playback"** in the **Logging preset:** drop-down.
 3. Under **Logging output**, select **"Logging to the Firefox Profiler"**.
 4. Click **Start Logging**.
 5. Reload the page. Then do the steps that show the problem.
@@ -31,7 +31,7 @@ The [instruction video](https://www.loom.com/share/24ea3a8e3a054c478de94643a0ea8
 # The block's UI labels. Two of them outside the block mean the steps were retyped. The
 # preset names are not here: `rules/comment.md` asks for a sentence that names them.
 capture_labels = [
-  "Logging presets",
+  "Log module selection",
   "Logging output",
   "Logging to the Firefox Profiler",
   "Start Logging",

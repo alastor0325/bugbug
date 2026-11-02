@@ -737,11 +737,11 @@ def test_the_named_sentences_stay_within_25_words():
         ("workflow.md", "When the cause is in other code"),
         (
             TEAMS_DIR / "media" / "rules" / "diagnostics.md",
-            "A pref that turns off hardware decoding",
+            "If such a pref can explain the bug",
         ),
         (
             TEAMS_DIR / "media" / "rules" / "diagnostics.md",
-            "When the capability API also reports support",
+            "When all three are true",
         ),
     ):
         text = _read(name)
@@ -863,7 +863,7 @@ def test_an_in_tree_doc_is_a_rule_file_from_the_checkout(tmp_path):
 
     doc = tmp_path / "dom/media/docs/Diagnostics.md"
     doc.parent.mkdir(parents=True)
-    doc.write_text("# Diagnosing media bug reports\\n\\nIn-tree text.")
+    doc.write_text("# Diagnosing media bug reports\n\nIn-tree text.")
     files = agent.rule_files(tmp_path)
     assert ("tree", doc) in files
     prompt = load_system_prompt(tmp_path)
@@ -888,3 +888,18 @@ def test_a_bad_tree_doc_path_is_refused(path):
     data["tree_docs"] = [path]
     with pytest.raises(ValidationError):
         Team.model_validate(data)
+
+
+def test_the_system_prompt_with_the_tree_docs_is_the_same_for_every_run(tmp_path):
+    from conftest import write_tree_docs
+
+    write_tree_docs(tmp_path)
+    assert load_system_prompt(tmp_path) == load_system_prompt(tmp_path)
+
+
+def test_the_prompt_says_the_rules_win_over_a_tree_doc():
+    prompt = " ".join(load_system_prompt().split())
+    assert (
+        'A `rule_file` block with `set="tree"` is a doc from the Firefox tree' in prompt
+    )
+    assert "these rules win" in prompt

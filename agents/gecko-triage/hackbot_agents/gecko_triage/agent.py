@@ -783,9 +783,10 @@ def render_security_groups() -> str:
 
 
 def load_system_prompt(repo: Path | None = None) -> str:
-    """The system prompt: the same for every run of a team, so it can be cached.
+    """The system prompt: the same for every run of a team on one tree, so it can be cached.
 
-    With the Firefox checkout ``repo``, it also carries the team's in-tree docs.
+    With the Firefox checkout ``repo``, it also carries the team's in-tree docs, so it
+    changes when those docs change.
     """
     tmpl = (PROMPTS_DIR / "system.md").read_text()
     rules = render_rules(repo)
