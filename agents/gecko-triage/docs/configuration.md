@@ -50,6 +50,7 @@ A run with no `team` input reads `rules/` and `shared/` only.
 | `[[components]]`                                  | One entry per component: `product`, `component`, `trees` (the code), `doc_trees`, `notes`                               |
 | `[[needinfo_experts]]`                            | Optional. One entry per person: `email`, `areas` (one or more) and an optional `when`, the condition for asking         |
 | `needinfo_fallback`                               | Optional. Emails to ask when no expert's area matches and the code's history names nobody. The agent asks one at most.  |
+| `tree_docs`                                       | Optional. In-tree docs, relative to the Firefox checkout, that the system prompt carries.                               |
 | `[[issue_types]]`                                 | Optional. One entry per value: `value` and `meaning`, a main symptom for `issue_type`. `other` is not listed.           |
 
 ## The rules
