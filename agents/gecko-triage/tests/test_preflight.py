@@ -276,14 +276,14 @@ def test_a_needinfo_on_a_bot_alias_counts(bug_new, comments_new):
         now=NOW,
         bot_aliases=frozenset({"pilot@example.com"}),
     )
-    assert state.asked_by == (ASKER,)
+    assert [n.setter for n in state.asking_needinfos] == [ASKER]
     assert skip_reason(state) is None
 
 
 def test_a_needinfo_on_someone_else_does_not_bypass(bug_new, comments_new):
     bug = _asked(dict(bug_new, assigned_to="dev@example.com"), "other@example.com")
     state = _state(bug, comments_new)
-    assert state.asked_by == ()
+    assert state.asking_needinfos == ()
     assert "assigned to" in skip_reason(state)
 
 

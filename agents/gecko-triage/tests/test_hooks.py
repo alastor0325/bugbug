@@ -2110,15 +2110,13 @@ ASKER = "person@example.com"
 
 
 def _asked_state(bug_new, comments_new, setter=ASKER):
-    ask = {
-        "id": ASK_ID,
-        "name": "needinfo",
-        "status": "?",
-        "requestee": BOT_ACCOUNT,
-        "setter": setter,
-        "creation_date": "2026-10-14T09:00:00Z",
-    }
-    bug = dict(bug_new, flags=[*bug_new["flags"], ask], cc=["watcher@example.com"])
+    bug = with_needinfo(
+        dict(bug_new, cc=["watcher@example.com"]),
+        BOT_ACCOUNT,
+        "2026-10-14T09:00:00Z",
+        setter,
+        flag_id=ASK_ID,
+    )
     return TriageState(bug=bug, comments=comments_new, now=NOW)
 
 
@@ -2138,7 +2136,13 @@ def test_the_agent_may_clear_no_other_flag(bug_new, comments_new):
     rec = _recorder(state)
     _comment(rec)
     other = next(f["id"] for f in bug_new["flags"] if f.get("id"))
-    for flags in ([_clear(other)], [_clear(123)], [{"id": ASK_ID, "status": "-"}]):
+    for flags in (
+        [_clear(other)],
+        [_clear(123)],
+        [_clear([ASK_ID])],
+        [_clear(str(ASK_ID))],
+        [{"id": ASK_ID, "status": "-"}],
+    ):
         with pytest.raises(ToolError):
             _update(rec, {"flags": flags})
     assert len(rec.actions) == 1
@@ -2157,7 +2161,7 @@ def test_an_answered_ask_is_cleared_in_the_runs_update(bug_new, comments_new):
     rec = _recorder(state)
     _comment(rec)
     _update(rec, {"priority": "P3"})
-    hooks.clear_answered_asks(rec, BUG, state)
+    assert hooks.answer_asks(rec, BUG, state) is None
     changes = [a for a in rec.actions if a["type"] == "bugzilla.update_bug"]
     assert len(changes) == 1
     assert changes[0]["params"]["changes"]["flags"] == [_clear()]
@@ -2169,16 +2173,18 @@ def test_an_answered_ask_gets_its_own_update_when_the_run_has_none(
     state = _asked_state(bug_new, comments_new)
     rec = _recorder(state)
     _comment(rec)
-    hooks.clear_answered_asks(rec, BUG, state)
+    assert hooks.answer_asks(rec, BUG, state) is None
     updates = [a for a in rec.actions if a["type"] == "bugzilla.update_bug"]
     assert [u["params"]["changes"] for u in updates] == [{"flags": [_clear()]}]
 
 
-def test_an_ask_with_no_comment_stays_open(bug_new, comments_new):
+def test_an_ask_with_no_comment_fails_the_run_and_stays_open(bug_new, comments_new):
     state = _asked_state(bug_new, comments_new)
     rec = _recorder(state)
-    hooks.clear_answered_asks(rec, BUG, state)
+    assert ASKER in hooks.answer_asks(rec, BUG, state)
     assert rec.actions == []
+    plain = TriageState(bug=bug_new, comments=comments_new, now=NOW)
+    assert hooks.answer_asks(_recorder(plain), BUG, plain) is None
 
 
 def test_a_needinfo_that_a_bot_set_is_no_ask(bug_new, comments_new):
@@ -2191,27 +2197,8 @@ def test_a_clear_the_run_recorded_is_not_added_twice(bug_new, comments_new):
     rec = _recorder(state)
     _comment(rec)
     _update(rec, {"flags": [_clear()]})
-    hooks.clear_answered_asks(rec, BUG, state)
+    assert hooks.answer_asks(rec, BUG, state) is None
     assert rec.actions[-1]["params"]["changes"]["flags"] == [_clear()]
-
-
-def test_a_clear_needs_an_integer_flag_id(bug_new, comments_new):
-    rec = _recorder(_asked_state(bug_new, comments_new))
-    _comment(rec)
-    for flag_id in ([ASK_ID], str(ASK_ID)):
-        with pytest.raises(ToolError):
-            _update(rec, {"flags": [_clear(flag_id)]})
-    assert len(rec.actions) == 1
-
-
-def test_an_ask_with_no_comment_fails_the_run(bug_new, comments_new):
-    state = _asked_state(bug_new, comments_new)
-    rec = _recorder(state)
-    assert ASKER in hooks.unanswered_ask_refusal(rec, BUG, state)
-    _comment(rec)
-    assert hooks.unanswered_ask_refusal(rec, BUG, state) is None
-    plain = TriageState(bug=bug_new, comments=comments_new, now=NOW)
-    assert hooks.unanswered_ask_refusal(_recorder(plain), BUG, plain) is None
 
 
 def test_a_needinfo_with_no_setter_is_no_ask(bug_new, comments_new):

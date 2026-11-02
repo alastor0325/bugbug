@@ -74,10 +74,9 @@ from .config import (
 )
 from .docs import DocRef, docs_for, registrations
 from .hooks import (
+    answer_asks,
     author_needinfos,
-    clear_answered_asks,
     install_hooks,
-    unanswered_ask_refusal,
 )
 from .investigations import INVESTIGATOR, Investigations, spawn_counter
 from .preflight import reporter_audience
@@ -1445,10 +1444,9 @@ async def run_gecko_triage(
         sorted({*to_read, *withheld.ids} - {bug}), found, withheld.unchecked
     )
     drop_writes(actions_recorder, dropped + tag_drops)
-    if reason := unanswered_ask_refusal(actions_recorder, bug, state):
+    if reason := answer_asks(actions_recorder, bug, state):
         # Failing gets the run retried; an ok run would leave the ask unanswered.
         raise AgentError(f"bug {bug}: {reason}")
-    clear_answered_asks(actions_recorder, bug, state)
     actions = actions_recorder.actions
     refuted = close_verdicts.refuted()
     if reason := empty_run_refusal(plan, actions, refuted):

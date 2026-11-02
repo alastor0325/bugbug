@@ -463,7 +463,7 @@ def test_the_description_names_only_the_needinfo_that_asks(bug_new, comments_ret
         now=NOW,
         bot_aliases=frozenset({"pilot@example.com"}),
     )
-    assert state.asked_by == ("dev@example.org",)
+    assert [n.setter for n in state.asking_needinfos] == ["dev@example.org"]
     assert state.describe().count("asked for this run") == 1
 
 

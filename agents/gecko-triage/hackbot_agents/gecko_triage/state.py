@@ -157,7 +157,7 @@ class TriageState:
         """The open needinfos that ask the agent for a run.
 
         Each is on the agent's account or a bot alias, and a person set it. The run
-        that answers one clears it (`hooks.clear_answered_asks`).
+        that answers one clears it (`hooks.answer_asks`).
         """
         return tuple(
             n
@@ -165,13 +165,14 @@ class TriageState:
             if n.requestee in self.bot_logins
             and n.setter
             and n.setter not in self.bot_logins
-            and not self._is_bot_login(n.setter)
+            and not n.setter.endswith(AUTOMATION_SUFFIXES)
         )
 
-    @property
-    def asked_by(self) -> tuple[str, ...]:
-        """Who asked the agent for a run, lowercased: the setters of `asking_needinfos`."""
-        return tuple(n.setter for n in self.asking_needinfos)
+    @cached_property
+    def ask_flag_ids(self) -> frozenset[int]:
+        return frozenset(
+            n.flag_id for n in self.asking_needinfos if n.flag_id is not None
+        )
 
     @cached_property
     def oldest_needinfo(self) -> dt.datetime | None:
@@ -351,11 +352,7 @@ class TriageState:
                 f"{n.setter or 'an unknown account'}, for {age_text}."
             )
             if n in self.asking_needinfos:
-                lines.append(
-                    f"{n.setter} asked for this run with that needinfo. "
-                    "Triage the bug even if a developer owns it, and answer them by "
-                    "name in the comment."
-                )
+                lines.append(f"{n.setter} asked for this run with that needinfo.")
         if not self.open_needinfos:
             lines.append("The bug has no open needinfo.")
         if self.incomplete_allowed:

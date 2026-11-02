@@ -52,6 +52,11 @@ def comment_texts(actions: list[dict]) -> list[str]:
     return [t for t in texts if isinstance(t, str)]
 
 
+def is_clear(flag: object) -> bool:
+    """Whether ``flag`` clears a needinfo that asks the agent: `{"id": N, "status": "X"}`."""
+    return isinstance(flag, dict) and set(flag) == {"id", "status"}
+
+
 def needinfo_requestees(changes: dict) -> list[object]:
     """The requestee of each needinfo request in one update's ``changes``.
 
@@ -59,5 +64,5 @@ def needinfo_requestees(changes: dict) -> list[object]:
     """
     flags = changes.get("flags") or ()
     return [
-        f.get("requestee", "") for f in flags if isinstance(f, dict) and "id" not in f
+        f.get("requestee", "") for f in flags if isinstance(f, dict) and not is_clear(f)
     ]

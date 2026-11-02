@@ -62,10 +62,15 @@ BOT_COMMENTED = "2026-10-13T09:00:00Z"
 
 
 def with_needinfo(
-    bug: dict, requestee: str, since: str = BOT_COMMENTED, setter: str = BOT_ACCOUNT
+    bug: dict,
+    requestee: str,
+    since: str = BOT_COMMENTED,
+    setter: str = BOT_ACCOUNT,
+    flag_id: int | None = None,
 ) -> dict:
     """``bug`` with one more open needinfo."""
     flag = {
+        **({"id": flag_id} if flag_id is not None else {}),
         "name": "needinfo",
         "status": "?",
         "requestee": requestee,
