@@ -458,7 +458,17 @@ def _record_verdict(stores, resolution, dupe_of=None, verdict="confirm"):
     )
 
 
+def write_tree_docs(repo):
+    """Stub copies of the team's in-tree docs, as a Firefox checkout has them."""
+    for doc in config.TEAM.tree_docs if config.TEAM else ():
+        path = repo / doc
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists():
+            path.write_text(f"# {doc}\n\nIn-tree text of {doc}.\n")
+
+
 async def _run(tmp_path, state, recorder=None, searchfox_rev=None, **kwargs):
+    write_tree_docs(tmp_path)
     return await agent.run_gecko_triage(
         task="t",
         bugzilla_mcp_server={"type": "http", "url": ""},

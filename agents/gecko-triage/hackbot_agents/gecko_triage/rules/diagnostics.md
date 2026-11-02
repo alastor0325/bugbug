@@ -10,7 +10,8 @@ Preferences"), read these sections. The findings feed steps 3 to 5.
 ### Important Modified Preferences
 
 Find non-default prefs in the team's area and flag any that could explain the issue. The
-team's `diagnostics.md` lists the high-risk prefs and the reset to ask for.
+team's in-tree docs and its `diagnostics.md` say which prefs matter and the reset to ask
+for.
 
 ### Graphics
 
@@ -123,8 +124,8 @@ Firefox normally again after the test.
 | Crash      | crash-stats URL or crash id, about:support, steps to reproduce    |
 | Regression | last good and first bad build (mozregression), steps to reproduce |
 
-The team's `diagnostics.md` adds the team's bug types and the decision rule between
-"Needs info" and "Analyzed".
+The team's in-tree docs and its `diagnostics.md` add the team's bug types and the
+decision rule between "Needs info" and "Analyzed".
 
 ## Specs
 

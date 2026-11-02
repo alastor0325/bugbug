@@ -127,7 +127,7 @@ def test_a_run_reads_no_rule_file_from_disk(fake_client, tmp_path, new_state):
     asyncio.run(_run(tmp_path, new_state))
     options = fake_client.options
     assert options.add_dirs == []
-    assert options.system_prompt == load_system_prompt()
+    assert options.system_prompt == load_system_prompt(tmp_path)
     assert "read them before deciding" not in fake_client.prompt.lower()
     assert fake_client.prompt == render_user_prompt(BUG, "t", new_state, ())
 
@@ -737,11 +737,11 @@ def test_the_named_sentences_stay_within_25_words():
         ("workflow.md", "When the cause is in other code"),
         (
             TEAMS_DIR / "media" / "rules" / "diagnostics.md",
-            "If you find high-risk prefs",
+            "A pref that turns off hardware decoding",
         ),
         (
             TEAMS_DIR / "media" / "rules" / "diagnostics.md",
-            "When all three are present",
+            "When the capability API also reports support",
         ),
     ):
         text = _read(name)
@@ -849,3 +849,42 @@ def test_every_no_team_product_has_a_security_group():
 
 def test_the_first_run_rule_names_the_agent_comment_tag():
     assert f"`tags` field holds `{AGENT_TAG}`" in _read("workflow.md")
+
+
+def test_the_media_team_reads_the_in_tree_diagnostics_page():
+    assert (
+        "dom/media/docs/Diagnostics.md"
+        in load_team(team_dir(TEAMS_DIR, "media") / "team.toml").tree_docs
+    )
+
+
+def test_an_in_tree_doc_is_a_rule_file_from_the_checkout(tmp_path):
+    from hackbot_agents.gecko_triage import agent
+
+    doc = tmp_path / "dom/media/docs/Diagnostics.md"
+    doc.parent.mkdir(parents=True)
+    doc.write_text("# Diagnosing media bug reports\\n\\nIn-tree text.")
+    files = agent.rule_files(tmp_path)
+    assert ("tree", doc) in files
+    prompt = load_system_prompt(tmp_path)
+    assert '<rule_file set="tree" name="dom/media/docs/Diagnostics.md">' in prompt
+    assert "In-tree text." in prompt
+    assert "In-tree text." not in load_system_prompt()
+
+
+def test_a_missing_in_tree_doc_fails_the_run(tmp_path):
+    with pytest.raises(FileNotFoundError, match="Diagnostics.md"):
+        load_system_prompt(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "path", ["/abs/doc.md", "dom/../etc/doc.md", "dom/media/docs/Diagnostics.txt"]
+)
+def test_a_bad_tree_doc_path_is_refused(path):
+    from hackbot_agents.gecko_triage.teamconfig import Team
+    from pydantic import ValidationError
+
+    data = load_team(team_dir(TEAMS_DIR, "media") / "team.toml").model_dump()
+    data["tree_docs"] = [path]
+    with pytest.raises(ValidationError):
+        Team.model_validate(data)

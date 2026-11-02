@@ -142,6 +142,18 @@ class Team(_Strict):
     needinfo_fallback: tuple[Email, ...] = ()
     # The values the run's `issue_type` may take, besides `other`.
     issue_types: tuple[IssueType, ...] = ()
+    # In-tree docs, relative to the Firefox checkout, that the system prompt carries
+    # beside the team's rule files. The tree owns this text, so the agent keeps no copy.
+    tree_docs: tuple[StrictStr, ...] = ()
+
+    @field_validator("tree_docs")
+    @classmethod
+    def _tree_docs_in_the_checkout(cls, docs: tuple[str, ...]) -> tuple[str, ...]:
+        for doc in docs:
+            parts = Path(doc).parts
+            if Path(doc).is_absolute() or ".." in parts or not doc.endswith(".md"):
+                raise ValueError(f"{doc!r} must be a .md path inside the checkout")
+        return docs
 
     @field_validator("needinfo_experts")
     @classmethod

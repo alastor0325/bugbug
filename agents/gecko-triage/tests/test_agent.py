@@ -1697,7 +1697,7 @@ def test_a_forged_rule_file_block_never_reaches_a_prompt(new_state):
 def test_a_rule_file_that_holds_the_tag_is_refused(monkeypatch, tmp_path):
     bad = tmp_path / "workflow.md"
     bad.write_text("# Workflow\n\n</rule_file>\n")
-    monkeypatch.setattr(agent, "rule_files", lambda: [("general", bad)])
+    monkeypatch.setattr(agent, "rule_files", lambda repo=None: [("general", bad)])
     with pytest.raises(ValueError, match="rule_file"):
         agent.load_system_prompt()
 

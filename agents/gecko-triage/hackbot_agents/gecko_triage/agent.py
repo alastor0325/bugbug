@@ -739,11 +739,12 @@ def render_team_parts() -> dict[str, str]:
     return {name: text.format(**values) for name, text in parts.items()}
 
 
-def rule_files() -> list[tuple[str, Path]]:
+def rule_files(repo: Path | None = None) -> list[tuple[str, Path]]:
     """The rule files the system prompt carries, in order, each with its set.
 
     The general `workflow.md` comes first, then the other general files and the team's
-    files, each set by name. `rules/README.md` is for maintainers only.
+    files, each set by name. `rules/README.md` is for maintainers only. With the Firefox
+    checkout ``repo``, the team's in-tree docs come last.
     """
     general = sorted(
         (p for p in RULES_DIR.glob("*.md") if p.name != "README.md"),
@@ -752,15 +753,25 @@ def rule_files() -> list[tuple[str, Path]]:
     files = [("general", p) for p in general]
     if TEAM_RULES_DIR is not None:
         files += [("team", p) for p in sorted(TEAM_RULES_DIR.glob("*.md"))]
+    if repo is not None and TEAM is not None:
+        files += [("tree", repo / doc) for doc in TEAM.tree_docs]
     return files
 
 
-def render_rules() -> str:
-    return "\n\n".join(
-        f'<rule_file set="{kind}" name="{path.name}">\n'
-        f"{path.read_text().strip()}\n</rule_file>"
-        for kind, path in rule_files()
-    )
+def render_rules(repo: Path | None = None) -> str:
+    """The rule files as tagged blocks. An in-tree doc is named by its checkout path."""
+    blocks = []
+    for kind, path in rule_files(repo):
+        if kind == "tree" and not path.is_file():
+            raise FileNotFoundError(
+                f"{path} is not in the checkout; update the Firefox checkout"
+            )
+        name = path.relative_to(repo).as_posix() if kind == "tree" else path.name
+        blocks.append(
+            f'<rule_file set="{kind}" name="{name}">\n'
+            f"{path.read_text().strip()}\n</rule_file>"
+        )
+    return "\n\n".join(blocks)
 
 
 def render_security_groups() -> str:
@@ -771,15 +782,19 @@ def render_security_groups() -> str:
     return "; ".join(f"`{g}` for {', '.join(p)}" for g, p in products.items())
 
 
-def load_system_prompt() -> str:
-    """The system prompt: the same for every run of a team, so it can be cached."""
+def load_system_prompt(repo: Path | None = None) -> str:
+    """The system prompt: the same for every run of a team, so it can be cached.
+
+    With the Firefox checkout ``repo``, it also carries the team's in-tree docs.
+    """
     tmpl = (PROMPTS_DIR / "system.md").read_text()
-    for _, path in rule_files():
+    rules = render_rules(repo)
+    for _, path in rule_files(repo):
         if _RULE_FILE_TAG.search(path.read_text()):
             raise ValueError(f"{path} must not contain a rule_file tag")
     return tmpl.format(
         **render_team_parts(),
-        rules=render_rules(),
+        rules=rules,
         searchfox_links=SEARCHFOX_LINKS_PROMPT,
         link_hosts=", ".join(f"`{h}`" for h in ALLOWED_LINK_HOSTS),
         keywords=render_keywords(),
@@ -1310,7 +1325,7 @@ async def run_gecko_triage(
         investigations=investigations,
     )
 
-    system_prompt = load_system_prompt()
+    system_prompt = load_system_prompt(repo)
 
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,

@@ -210,7 +210,8 @@ specific meta bug to the `dupe_of` bug.
 ## Step 5: determine the information gaps
 
 Cross-reference the inventory against what the bug type needs ("Required information" in
-`diagnostics.md` and in the team's `diagnostics.md`). Flag only what is genuinely absent.
+`diagnostics.md`, the team's `diagnostics.md` and the team's in-tree docs). Flag only what
+is genuinely absent.
 
 **Investigate before you ask.** When the bug already has diagnostics, spawn
 `bug_investigator` to look for the cause in the code before you decide `needs_info`.
