@@ -678,6 +678,7 @@ def test_the_close_verifier_only_reads():
         "Agent",
         "Skill",
         "mcp__bugzilla__get_bug_attachments",
+        "mcp__bugzilla__get_bug_history",
         attachments.FETCH_ATTACHMENT_TOOL,
         dupes.SEARCH_CONCEPTS_TOOL,
     ):
@@ -686,7 +687,6 @@ def test_the_close_verifier_only_reads():
     for tool in (
         "mcp__bugzilla__get_bugs",
         "mcp__bugzilla__get_bug_comments",
-        "mcp__bugzilla__get_bug_history",
         *agent.SEARCHFOX_TOOLS,
         *agent.MOZILLA_VCS_TOOLS,
     ):

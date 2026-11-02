@@ -175,6 +175,10 @@ def _type_not_allowed_error(
     )
 
 
+# Connections kept per host: the most worker threads that `asyncio.to_thread` runs.
+POOL_SIZE = 32
+
+
 @dataclass
 class BugzillaContext:
     """Holds the live bugsy client.
@@ -189,16 +193,15 @@ class BugzillaContext:
     timeout: float | None = None
 
     def __post_init__(self) -> None:
-        if self.timeout is not None:
-            adapter = _TimeoutAdapter(self.timeout)
-            self.client.session.mount("https://", adapter)
-            self.client.session.mount("http://", adapter)
+        adapter = _BugzillaAdapter(self.timeout, pool_maxsize=POOL_SIZE)
+        self.client.session.mount("https://", adapter)
+        self.client.session.mount("http://", adapter)
 
 
-class _TimeoutAdapter(HTTPAdapter):
-    """An adapter that sets a timeout on every request that has none."""
+class _BugzillaAdapter(HTTPAdapter):
+    """A pool for every worker thread, and a timeout for each request with none."""
 
-    def __init__(self, timeout: float, **kwargs):
+    def __init__(self, timeout: float | None, **kwargs):
         self.timeout = timeout
         super().__init__(**kwargs)
 

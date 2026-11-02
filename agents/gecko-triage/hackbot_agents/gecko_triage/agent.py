@@ -766,10 +766,12 @@ def render_rules(repo: Path | None = None) -> str:
             raise FileNotFoundError(
                 f"{path} is not in the checkout; update the Firefox checkout"
             )
+        text = path.read_text()
+        if _RULE_FILE_TAG.search(text):
+            raise ValueError(f"{path} must not contain a rule_file tag")
         name = path.relative_to(repo).as_posix() if kind == "tree" else path.name
         blocks.append(
-            f'<rule_file set="{kind}" name="{name}">\n'
-            f"{path.read_text().strip()}\n</rule_file>"
+            f'<rule_file set="{kind}" name="{name}">\n{text.strip()}\n</rule_file>'
         )
     return "\n\n".join(blocks)
 
@@ -789,13 +791,9 @@ def load_system_prompt(repo: Path | None = None) -> str:
     changes when those docs change.
     """
     tmpl = (PROMPTS_DIR / "system.md").read_text()
-    rules = render_rules(repo)
-    for _, path in rule_files(repo):
-        if _RULE_FILE_TAG.search(path.read_text()):
-            raise ValueError(f"{path} must not contain a rule_file tag")
     return tmpl.format(
         **render_team_parts(),
-        rules=rules,
+        rules=render_rules(repo),
         searchfox_links=SEARCHFOX_LINKS_PROMPT,
         link_hosts=", ".join(f"`{h}`" for h in ALLOWED_LINK_HOSTS),
         keywords=render_keywords(),
@@ -1009,8 +1007,11 @@ def make_duplicate_hunter(scope: tuple[Component, ...]) -> AgentDefinition:
 _CLOSE_VERIFIER_PROMPT = _prompt("close_verifier")
 
 
-# The read tools that reach an attachment; the verifier never reads one.
-ATTACHMENT_READ_TOOLS = frozenset({"mcp__bugzilla__get_bug_attachments"})
+# Read tools the verifier lacks: it never reads an attachment, and a long history saved
+# to a file would block a confirm until it reads all of it.
+VERIFIER_LEFT_OUT_TOOLS = frozenset(
+    {"mcp__bugzilla__get_bug_attachments", "mcp__bugzilla__get_bug_history"}
+)
 
 
 def make_close_verifier() -> AgentDefinition:
@@ -1025,7 +1026,7 @@ def make_close_verifier() -> AgentDefinition:
         # Read opens only the files its tool results were saved to; see `closing`.
         tools=[
             "Read",
-            *(t for t in BUGZILLA_READ_TOOLS if t not in ATTACHMENT_READ_TOOLS),
+            *(t for t in BUGZILLA_READ_TOOLS if t not in VERIFIER_LEFT_OUT_TOOLS),
             *SEARCHFOX_TOOLS,
             *MOZILLA_VCS_TOOLS,
             closing.RECORD_CLOSE_VERDICT_TOOL,

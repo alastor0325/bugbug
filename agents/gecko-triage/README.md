@@ -131,10 +131,10 @@ use a key that cannot read private bugs or private comments.
 6. `may_apply_unattended` in `agent.py` sets `findings.auto_apply` when the run has a
    team, the run recorded a comment and the final message carries a decision. A dropped
    write, a security group, a `needinfo_warning` or a `restricted_warning` sets it to
-   false. A close also needs its confirm, as "Close verification" says. The
-   hackbot-api entry has `auto_apply_requires_consent=True`; with
-   `auto_apply_actions=False` every run waits for a person, and with `True` such runs
-   apply with nobody in between.
+   false. A fix tag dropped from a run that is not `analyzed` does not. A close also
+   needs its confirm, as "Close verification" says. The hackbot-api entry has
+   `auto_apply_requires_consent=True`; with `auto_apply_actions=False` every run waits
+   for a person, and with `True` such runs apply with nobody in between.
 
 A comment carries no memory line. Its last line is the runtime's reaction footer, and
 the style limits skip that footer.
@@ -174,7 +174,7 @@ A wrong close is costly, so every close gets an independent check. Before the ma
 records the comment of a close, it spawns `close_verifier` with the bug id, the
 resolution, `dupe_of` for a duplicate, its reasons and the draft comment. The verifier
 starts with a fresh context and reads the bug, every comment, the cited code and the
-duplicate target. It has the Bugzilla read tools except `get_bug_attachments`, and the
+duplicate target. It has the Bugzilla read tools except `get_bug_attachments` and `get_bug_history`, and the
 Searchfox and VCS tools. It has Read only for its own saved tool results, as below. It has no Grep, Glob or Bash,
 no attachment tool and no write or action tool, and it never runs Firefox, a test or an attachment. When only a run can
 confirm the close, it refutes with "needs a runtime check".
@@ -366,6 +366,10 @@ must be on `PATH` for profile and spec reading.
 | `MAX_TURNS`          | no       | Turn limit of the main agent; the default is in `shared/limits.toml`; 0 is no limit  |
 | `MAX_BUDGET_USD`     | no       | Cost limit for one run; the default is in `shared/limits.toml`; 0 is no limit        |
 | `TURN_LIMITS_FILE`   | no       | Another limits file in place of `shared/limits.toml`                                 |
+
+A run that hackbot-api starts cannot turn a limit off: `GeckoTriageInputs` in
+`services/hackbot-api/app/schemas.py` refuses 0. Only `limits.toml` or `TURN_LIMITS_FILE`
+can do that.
 
 The bot accounts are `hackbot@mozilla.tld` and the logins in `BOT_ALIASES`. The agent
 never sends a needinfo to a bot account. When the agent wrote the newest comment and

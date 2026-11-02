@@ -485,7 +485,14 @@ def test_the_context_sets_no_timeout_by_default():
     client = bugsy.Bugsy(api_key="k", bugzilla_url="https://bugzilla.example.com/rest")
     BugzillaContext(client=client)
     adapter = client.session.get_adapter("https://bugzilla.example.com/rest/bug")
-    assert not hasattr(adapter, "timeout")
+    assert adapter.timeout is None
+
+
+def test_the_pool_keeps_a_connection_for_each_worker_thread():
+    client = bugsy.Bugsy(api_key="k", bugzilla_url="https://bugzilla.example.com/rest")
+    BugzillaContext(client=client)
+    adapter = client.session.get_adapter("https://bugzilla.example.com/rest/bug")
+    assert adapter._pool_maxsize == bugzilla.POOL_SIZE
 
 
 def test_the_timeout_adapter_keeps_a_timeout_that_the_caller_gives(monkeypatch):
@@ -495,7 +502,7 @@ def test_the_timeout_adapter_keeps_a_timeout_that_the_caller_gives(monkeypatch):
     monkeypatch.setattr(
         HTTPAdapter, "send", lambda self, req, **kw: seen.update(kw) or "sent"
     )
-    adapter = bugzilla._TimeoutAdapter(timeout=7)
+    adapter = bugzilla._BugzillaAdapter(timeout=7)
     adapter.send(None)
     assert seen["timeout"] == 7
     adapter.send(None, timeout=3)

@@ -3,7 +3,13 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
-import { AGENTS, type AgentValue } from "@/lib/agents";
+import {
+  AGENTS,
+  type AgentValue,
+  GECKO_TRIAGE_TEAMS,
+  type GeckoTriageTeam,
+  parseGeckoTriageTeam,
+} from "@/lib/agents";
 import { parseBugId } from "@/lib/bugzilla";
 import { saveRun } from "@/lib/store";
 import type { RunRef } from "@/lib/types";
@@ -29,6 +35,9 @@ export function TriggerForm() {
   const [failureTasks, setFailureTasks] = useState(
     () => params.get("failure_tasks") ?? ""
   );
+  const [parentRunId, setParentRunId] = useState(
+    () => params.get("parent_run_id") ?? ""
+  );
   const [runTryPush, setRunTryPush] = useState(
     () => params.get("run_try_push") === "true"
   );
@@ -47,6 +56,9 @@ export function TriggerForm() {
   const [upliftSources, setUpliftSources] = useState(
     () => params.get("sources") ?? ""
   );
+  const [team, setTeam] = useState(() =>
+    parseGeckoTriageTeam(params.get("team"))
+  );
   const [model, setModel] = useState(() => params.get("model") ?? "");
   const [maxTurns, setMaxTurns] = useState(() => params.get("max_turns") ?? "");
   const [effort, setEffort] = useState(() => params.get("effort") ?? "");
@@ -56,8 +68,10 @@ export function TriggerForm() {
   const isWebcompatAgent = agent.startsWith("autowebcompat-");
   const isBuildRepairAgent = agent === "build-repair";
   const isTestRepairAgent = agent === "test-repair";
+  const isTestRepairFixAgent = agent === "test-repair-fix";
   const isTestPlanAgent = agent === "test-plan-generator";
   const isUpliftAgent = agent === "uplift-resolve";
+  const isGeckoTriageAgent = agent === "gecko-triage";
   const needsFailureTasks = isBuildRepairAgent || isTestRepairAgent;
 
   async function onSubmit(e: React.FormEvent) {
@@ -70,7 +84,13 @@ export function TriggerForm() {
     const hasBugId = parsedBugId !== null;
     const hasBugData = isWebcompatAgent && bugData.trim().length > 0;
 
-    if (needsFailureTasks) {
+    if (isTestRepairFixAgent) {
+      if (!parentRunId.trim()) {
+        setError("Enter the test-repair run to continue from.");
+        return;
+      }
+      inputs.parent_run_id = parentRunId.trim();
+    } else if (needsFailureTasks) {
       if (isBuildRepairAgent) {
         if (hasBugId) inputs.bug_id = parsedBugId;
         if (!gitCommit.trim()) {
@@ -139,6 +159,7 @@ export function TriggerForm() {
         return;
       }
       inputs.bug_id = parsedBugId;
+      if (isGeckoTriageAgent && team) inputs.team = team;
     } else {
       if (!hasBugId && !hasBugData) {
         setError(
@@ -155,7 +176,8 @@ export function TriggerForm() {
       const n = Number.parseInt(maxTurns, 10);
       if (Number.isInteger(n) && n > 0) inputs.max_turns = n;
     }
-    if (!needsFailureTasks && effort.trim()) inputs.effort = effort.trim();
+    if (!needsFailureTasks && !isTestRepairFixAgent && effort.trim())
+      inputs.effort = effort.trim();
 
     setSubmitting(true);
     try {
@@ -174,13 +196,15 @@ export function TriggerForm() {
         : isTestRepairAgent
           ? Object.keys(inputs.failure_tasks as Record<string, string>)[0] ??
             "test failure"
-          : isTestPlanAgent
-            ? featureName.trim()
-            : isUpliftAgent
-              ? `uplift to ${targetBranch.trim()}`
-              : hasBugId
-                ? `bug ${parsedBugId}`
-                : "inline report";
+          : isTestRepairFixAgent
+            ? `fix for run ${parentRunId.trim().slice(0, 8)}`
+            : isTestPlanAgent
+              ? featureName.trim()
+              : isUpliftAgent
+                ? `uplift to ${targetBranch.trim()}`
+                : hasBugId
+                  ? `bug ${parsedBugId}`
+                  : "inline report";
       saveRun({
         run_id: run.run_id,
         agent: run.agent,
@@ -217,20 +241,54 @@ export function TriggerForm() {
         </select>
       </div>
 
-      {!needsFailureTasks && !isTestPlanAgent && !isUpliftAgent && (
+      {isTestRepairFixAgent && (
         <div className="field">
-          <label htmlFor="bugId">
-            {isWebcompatAgent
-              ? "Bugzilla bug ID or URL (optional if report text provided)"
-              : "Bugzilla bug ID or URL *"}
-          </label>
+          <label htmlFor="parentRunId">test-repair run ID *</label>
           <input
-            id="bugId"
-            placeholder="e.g. 1846789 or https://bugzilla.mozilla.org/show_bug.cgi?id=1846789"
-            value={bugId}
-            onChange={(e) => setBugId(e.target.value)}
-            required={!isWebcompatAgent}
+            id="parentRunId"
+            placeholder="e.g. 3f1c2b4a-..."
+            value={parentRunId}
+            onChange={(e) => setParentRunId(e.target.value)}
+            required
           />
+        </div>
+      )}
+
+      {!needsFailureTasks &&
+        !isTestRepairFixAgent &&
+        !isTestPlanAgent &&
+        !isUpliftAgent && (
+          <div className="field">
+            <label htmlFor="bugId">
+              {isWebcompatAgent
+                ? "Bugzilla bug ID or URL (optional if report text provided)"
+                : "Bugzilla bug ID or URL *"}
+            </label>
+            <input
+              id="bugId"
+              placeholder="e.g. 1846789 or https://bugzilla.mozilla.org/show_bug.cgi?id=1846789"
+              value={bugId}
+              onChange={(e) => setBugId(e.target.value)}
+              required={!isWebcompatAgent}
+            />
+          </div>
+        )}
+
+      {isGeckoTriageAgent && (
+        <div className="field">
+          <label htmlFor="team">Team</label>
+          <select
+            id="team"
+            value={team}
+            onChange={(e) => setTeam(e.target.value as GeckoTriageTeam)}
+          >
+            {GECKO_TRIAGE_TEAMS.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+            <option value="">no team (shared rules only)</option>
+          </select>
         </div>
       )}
 
@@ -408,7 +466,7 @@ export function TriggerForm() {
             onChange={(e) => setMaxTurns(e.target.value)}
           />
         </div>
-        {!needsFailureTasks && (
+        {!needsFailureTasks && !isTestRepairFixAgent && (
           <div className="field">
             <label htmlFor="effort">Effort (optional)</label>
             <input
