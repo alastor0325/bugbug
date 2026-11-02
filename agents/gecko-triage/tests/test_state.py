@@ -452,6 +452,21 @@ def test_the_description_says_who_asked_the_agent(bug_new, comments_returning):
     )
 
 
+def test_the_description_names_only_the_needinfo_that_asks(bug_new, comments_returning):
+    bug = with_needinfo(
+        bug_new, "pilot@example.com", "2026-10-12T09:00:00Z", "dev@example.org"
+    )
+    bug = with_needinfo(bug, BOT_ACCOUNT, "2026-10-14T09:00:00Z", "dev@example.org")
+    state = TriageState(
+        bug=bug,
+        comments=comments_returning[:3],
+        now=NOW,
+        bot_aliases=frozenset({"pilot@example.com"}),
+    )
+    assert state.asked_by == ("dev@example.org",)
+    assert state.describe().count("asked for this run") == 1
+
+
 async def test_a_broker_failure_yields_no_state(monkeypatch):
     assert await fetch_state({}, 1) is None
     assert await fetch_state({"type": "http"}, 1) is None

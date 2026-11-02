@@ -151,20 +151,24 @@ class TriageState:
         return frozenset({_lower(BOT_ACCOUNT), *map(_lower, self.bot_aliases)})
 
     @cached_property
-    def asked_by(self) -> tuple[str, ...]:
-        """Who asked the agent for a run, lowercased.
+    def asking_needinfos(self) -> tuple[Needinfo, ...]:
+        """The open needinfos that ask the agent for a run.
 
-        Each setter of an open needinfo on the agent's account or a bot alias that is
-        newer than the agent's newest comment. After the agent answers, a flag that
-        stays open asks for nothing more.
+        Each is on the agent's account or a bot alias and newer than the agent's newest
+        comment. After the agent answers, a flag that stays open asks for nothing more.
         """
         answered = self._agent_newest_comment_time
         return tuple(
-            n.setter
+            n
             for n in self.open_needinfos
             if n.requestee in self.bot_logins
             and (answered is None or (n.since is not None and n.since > answered))
         )
+
+    @property
+    def asked_by(self) -> tuple[str, ...]:
+        """Who asked the agent for a run, lowercased: the setters of `asking_needinfos`."""
+        return tuple(n.setter for n in self.asking_needinfos)
 
     @cached_property
     def _agent_newest_comment_time(self) -> dt.datetime | None:
@@ -352,7 +356,7 @@ class TriageState:
                 f"An open needinfo is on {n.requestee} ({role}), set by "
                 f"{n.setter or 'an unknown account'}, for {age_text}."
             )
-            if n.requestee in self.bot_logins and n.setter in self.asked_by:
+            if n in self.asking_needinfos:
                 lines.append(
                     f"{n.setter or 'A person'} asked for this run with that needinfo. "
                     "Triage the bug even if a developer owns it, and answer them by "

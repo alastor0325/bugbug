@@ -116,7 +116,7 @@ def skip_reason(state: TriageState) -> str | None:
     if TERMS.whiteboard.skip in state.whiteboard:
         return f"whiteboard carries {TERMS.whiteboard.skip}"
     # A needinfo on the agent asks for a run, so whoever owns the bug, it runs.
-    if state.asked_by:
+    if state.asking_needinfos:
         return None
     # Staff file their own bugs, but an untriaged one still needs severity and
     # priority, so only a bug that already has a severity is left to them.
