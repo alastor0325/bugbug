@@ -454,7 +454,7 @@ def test_the_description_says_who_asked_the_agent(bug_new, comments_returning):
 
 def test_the_description_names_only_the_needinfo_that_asks(bug_new, comments_returning):
     bug = with_needinfo(
-        bug_new, "pilot@example.com", "2026-10-12T09:00:00Z", "dev@example.org"
+        bug_new, "other@example.org", "2026-10-12T09:00:00Z", "dev@example.org"
     )
     bug = with_needinfo(bug, BOT_ACCOUNT, "2026-10-14T09:00:00Z", "dev@example.org")
     state = TriageState(

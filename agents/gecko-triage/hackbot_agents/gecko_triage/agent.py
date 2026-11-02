@@ -73,7 +73,7 @@ from .config import (
     TRIAGE_RESOLUTIONS,
 )
 from .docs import DocRef, docs_for, registrations
-from .hooks import author_needinfos, install_hooks
+from .hooks import author_needinfos, clear_answered_asks, install_hooks
 from .investigations import INVESTIGATOR, Investigations, spawn_counter
 from .preflight import reporter_audience
 from .state import AUTOMATION_SUFFIXES, TriageState
@@ -1440,6 +1440,7 @@ async def run_gecko_triage(
         sorted({*to_read, *withheld.ids} - {bug}), found, withheld.unchecked
     )
     drop_writes(actions_recorder, dropped + tag_drops)
+    clear_answered_asks(actions_recorder, bug, state)
     actions = actions_recorder.actions
     refuted = close_verdicts.refuted()
     if reason := empty_run_refusal(plan, actions, refuted):

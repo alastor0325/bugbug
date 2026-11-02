@@ -53,9 +53,11 @@ def comment_texts(actions: list[dict]) -> list[str]:
 
 
 def needinfo_requestees(changes: dict) -> list[object]:
-    """The requestee of each flag in one update's ``changes``.
+    """The requestee of each needinfo request in one update's ``changes``.
 
-    The hooks let a run set needinfo flags only.
+    The hooks let a run set needinfo requests, and clear a needinfo that asks it.
     """
     flags = changes.get("flags") or ()
-    return [f.get("requestee", "") for f in flags if isinstance(f, dict)]
+    return [
+        f.get("requestee", "") for f in flags if isinstance(f, dict) and "id" not in f
+    ]

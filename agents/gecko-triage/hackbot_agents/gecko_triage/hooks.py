@@ -27,7 +27,8 @@ What they enforce:
   no `bug_investigator` ran before it, and a second attempt passes (see
   `investigations.py`);
 - each needinfo carries only name, status and requestee, and the hook adds
-  `"new": true` (see docs/bugzilla.md);
+  `"new": true` (see docs/bugzilla.md); the only flag a run may clear is a needinfo
+  that asks the agent, as `{"id": <flag id>, "status": "X"}`;
 - `blocks` only adds one or two meta bugs from the team's `meta-bugs.md`;
 - `keywords` only adds one of the keywords `shared/bugzilla.toml` allows;
 - `regressed_by` only adds another bug's id;
@@ -534,6 +535,7 @@ def _check_priority(value: object, current: object) -> str:
 
 
 _FLAG_KEYS = frozenset({"name", "status", "requestee"})
+_CLEAR_KEYS = frozenset({"id", "status"})
 
 
 def _check_flags(
@@ -553,6 +555,15 @@ def _check_flags(
     flags = changes["flags"]
     if not isinstance(flags, list) or not flags:
         raise ToolError("flags must be a non-empty list of needinfo requests")
+    asks = {n.flag_id for n in state.asking_needinfos if n.flag_id is not None}
+    clears = [f for f in flags if isinstance(f, dict) and set(f) == _CLEAR_KEYS]
+    for flag in clears:
+        if flag["status"] != "X" or flag["id"] not in asks:
+            raise ToolError(
+                "the only flag this agent may clear is a needinfo that asks it: "
+                '{"id": <flag id>, "status": "X"}'
+            )
+    flags = [f for f in flags if f not in clears]
     if len(flags) > MAX_NEEDINFOS:
         raise ToolError(
             f"ask at most {MAX_NEEDINFOS} people per run; pick the ones who can answer"
@@ -985,7 +996,8 @@ def update_bug_hook(
         if "flags" in changes:
             _check_reporter_ask(changes, state, investigations)
         for flag in changes.get("flags", ()):
-            flag["new"] = True
+            if "id" not in flag:
+                flag["new"] = True
 
     return hook
 
@@ -1031,4 +1043,35 @@ def install_hooks(
             commit_authors,
             investigations,
         ),
+    )
+
+
+def clear_answered_asks(
+    recorder: ActionsRecorder, bug: int, state: TriageState
+) -> None:
+    """Clear each needinfo that asks the agent, when the run recorded a comment.
+
+    The clear goes in the run's first update of the bug, or in a new one. Hackbot
+    merges the updates of a bug with later fields winning, so a second `flags` list
+    would replace the run's needinfo requests.
+    """
+    commented = any(
+        action_params(a).get("bug_id") == bug
+        for a in _recorded(recorder, "bugzilla.add_comment")
+    )
+    clears = [
+        {"id": n.flag_id, "status": "X"}
+        for n in state.asking_needinfos
+        if n.flag_id is not None
+    ]
+    if not commented or not clears:
+        return
+    if found := updates(recorder.actions, bug):
+        changes = found[0].changes
+        changes["flags"] = [*(changes.get("flags") or ()), *clears]
+        return
+    recorder.record(
+        "bugzilla.update_bug",
+        {"bug_id": bug, "changes": {"flags": clears}},
+        reasoning="Clears the needinfo that asked the agent; the comment answers it.",
     )

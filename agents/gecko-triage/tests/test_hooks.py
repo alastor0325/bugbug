@@ -2103,3 +2103,84 @@ def test_every_other_group_change_is_refused(
     assert len(rec.actions) == 1
     _update(rec, {"severity": "S3"})
     assert rec.actions[-1]["params"]["changes"] == {"severity": "S3"}
+
+
+ASK_ID = 900010
+ASKER = "person@example.com"
+
+
+def _asked_state(bug_new, comments_new, setter=ASKER):
+    ask = {
+        "id": ASK_ID,
+        "name": "needinfo",
+        "status": "?",
+        "requestee": BOT_ACCOUNT,
+        "setter": setter,
+        "creation_date": "2026-10-14T09:00:00Z",
+    }
+    bug = dict(bug_new, flags=[*bug_new["flags"], ask], cc=["watcher@example.com"])
+    return TriageState(bug=bug, comments=comments_new, now=NOW)
+
+
+def _clear(flag_id=ASK_ID):
+    return {"id": flag_id, "status": "X"}
+
+
+def test_the_agent_may_clear_a_needinfo_that_asks_it(bug_new, comments_new):
+    rec = _recorder(_asked_state(bug_new, comments_new))
+    _comment(rec)
+    _update(rec, {"flags": [_clear()]})
+    assert len(rec.actions) == 2
+
+
+def test_the_agent_may_clear_no_other_flag(bug_new, comments_new):
+    state = _asked_state(bug_new, comments_new)
+    rec = _recorder(state)
+    _comment(rec)
+    other = next(f["id"] for f in bug_new["flags"] if f.get("id"))
+    for flags in ([_clear(other)], [_clear(123)], [{"id": ASK_ID, "status": "-"}]):
+        with pytest.raises(ToolError):
+            _update(rec, {"flags": flags})
+    assert len(rec.actions) == 1
+
+
+def test_a_clear_goes_with_a_new_needinfo(bug_new, comments_new):
+    state = _asked_state(bug_new, comments_new)
+    rec = _recorder(state)
+    _comment(rec)
+    _update(rec, {"flags": [_clear(), *_ni("watcher@example.com")["flags"]]})
+    assert len(rec.actions) == 2
+
+
+def test_an_answered_ask_is_cleared_in_the_runs_update(bug_new, comments_new):
+    state = _asked_state(bug_new, comments_new)
+    rec = _recorder(state)
+    _comment(rec)
+    _update(rec, {"priority": "P3"})
+    hooks.clear_answered_asks(rec, BUG, state)
+    changes = [a for a in rec.actions if a["type"] == "bugzilla.update_bug"]
+    assert len(changes) == 1
+    assert changes[0]["params"]["changes"]["flags"] == [_clear()]
+
+
+def test_an_answered_ask_gets_its_own_update_when_the_run_has_none(
+    bug_new, comments_new
+):
+    state = _asked_state(bug_new, comments_new)
+    rec = _recorder(state)
+    _comment(rec)
+    hooks.clear_answered_asks(rec, BUG, state)
+    updates = [a for a in rec.actions if a["type"] == "bugzilla.update_bug"]
+    assert [u["params"]["changes"] for u in updates] == [{"flags": [_clear()]}]
+
+
+def test_an_ask_with_no_comment_stays_open(bug_new, comments_new):
+    state = _asked_state(bug_new, comments_new)
+    rec = _recorder(state)
+    hooks.clear_answered_asks(rec, BUG, state)
+    assert rec.actions == []
+
+
+def test_a_needinfo_that_a_bot_set_is_no_ask(bug_new, comments_new):
+    state = _asked_state(bug_new, comments_new, setter="treeherder@mozilla.bugs")
+    assert state.asking_needinfos == ()

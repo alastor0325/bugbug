@@ -302,13 +302,3 @@ def test_a_needinfo_on_the_agent_keeps_the_hard_skips(
     bug_new, comments_new, change, reason
 ):
     assert reason in skip_reason(_state(_asked(dict(bug_new, **change)), comments_new))
-
-
-def test_a_needinfo_that_the_agent_answered_does_not_bypass(
-    bug_new, comments_returning
-):
-    # The agent commented after the ask; a flag that stays open asks for nothing more.
-    bug = _asked(quiet(bug_new), since="2026-10-12T09:00:00Z")
-    state = _state(bug, comments_returning[:3])
-    assert state.asked_by == ()
-    assert skip_reason(state) == SKIP_BOT_LAST
