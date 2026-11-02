@@ -163,6 +163,7 @@ class TriageState:
             n
             for n in self.open_needinfos
             if n.requestee in self.bot_logins
+            and n.setter
             and n.setter not in self.bot_logins
             and not self._is_bot_login(n.setter)
         )
@@ -351,7 +352,7 @@ class TriageState:
             )
             if n in self.asking_needinfos:
                 lines.append(
-                    f"{n.setter or 'A person'} asked for this run with that needinfo. "
+                    f"{n.setter} asked for this run with that needinfo. "
                     "Triage the bug even if a developer owns it, and answer them by "
                     "name in the comment."
                 )

@@ -558,7 +558,11 @@ def _check_flags(
     asks = {n.flag_id for n in state.asking_needinfos if n.flag_id is not None}
     clears = [f for f in flags if isinstance(f, dict) and set(f) == _CLEAR_KEYS]
     for flag in clears:
-        if flag["status"] != "X" or flag["id"] not in asks:
+        if (
+            flag["status"] != "X"
+            or not isinstance(flag["id"], int)
+            or flag["id"] not in asks
+        ):
             raise ToolError(
                 "the only flag this agent may clear is a needinfo that asks it: "
                 '{"id": <flag id>, "status": "X"}'
@@ -1046,6 +1050,26 @@ def install_hooks(
     )
 
 
+def _commented(recorder: ActionsRecorder, bug: int) -> bool:
+    return any(
+        action_params(a).get("bug_id") == bug
+        for a in _recorded(recorder, "bugzilla.add_comment")
+    )
+
+
+def unanswered_ask_refusal(
+    recorder: ActionsRecorder, bug: int, state: TriageState
+) -> str | None:
+    """Why the run fails: a person asked for it and it recorded no comment.
+
+    The ask would stay open with no answer.
+    """
+    if not state.asking_needinfos or _commented(recorder, bug):
+        return None
+    who = ", ".join(state.asked_by)
+    return f"{who} asked for this run with a needinfo, but the run recorded no comment"
+
+
 def clear_answered_asks(
     recorder: ActionsRecorder, bug: int, state: TriageState
 ) -> None:
@@ -1055,20 +1079,18 @@ def clear_answered_asks(
     merges the updates of a bug with later fields winning, so a second `flags` list
     would replace the run's needinfo requests.
     """
-    commented = any(
-        action_params(a).get("bug_id") == bug
-        for a in _recorded(recorder, "bugzilla.add_comment")
-    )
     clears = [
         {"id": n.flag_id, "status": "X"}
         for n in state.asking_needinfos
         if n.flag_id is not None
     ]
-    if not commented or not clears:
+    if not _commented(recorder, bug) or not clears:
         return
     if found := updates(recorder.actions, bug):
         changes = found[0].changes
-        changes["flags"] = [*(changes.get("flags") or ()), *clears]
+        flags = list(changes.get("flags") or ())
+        flags += [c for c in clears if c not in flags]
+        changes["flags"] = flags
         return
     recorder.record(
         "bugzilla.update_bug",

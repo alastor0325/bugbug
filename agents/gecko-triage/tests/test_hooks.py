@@ -2184,3 +2184,35 @@ def test_an_ask_with_no_comment_stays_open(bug_new, comments_new):
 def test_a_needinfo_that_a_bot_set_is_no_ask(bug_new, comments_new):
     state = _asked_state(bug_new, comments_new, setter="treeherder@mozilla.bugs")
     assert state.asking_needinfos == ()
+
+
+def test_a_clear_the_run_recorded_is_not_added_twice(bug_new, comments_new):
+    state = _asked_state(bug_new, comments_new)
+    rec = _recorder(state)
+    _comment(rec)
+    _update(rec, {"flags": [_clear()]})
+    hooks.clear_answered_asks(rec, BUG, state)
+    assert rec.actions[-1]["params"]["changes"]["flags"] == [_clear()]
+
+
+def test_a_clear_needs_an_integer_flag_id(bug_new, comments_new):
+    rec = _recorder(_asked_state(bug_new, comments_new))
+    _comment(rec)
+    for flag_id in ([ASK_ID], str(ASK_ID)):
+        with pytest.raises(ToolError):
+            _update(rec, {"flags": [_clear(flag_id)]})
+    assert len(rec.actions) == 1
+
+
+def test_an_ask_with_no_comment_fails_the_run(bug_new, comments_new):
+    state = _asked_state(bug_new, comments_new)
+    rec = _recorder(state)
+    assert ASKER in hooks.unanswered_ask_refusal(rec, BUG, state)
+    _comment(rec)
+    assert hooks.unanswered_ask_refusal(rec, BUG, state) is None
+    plain = TriageState(bug=bug_new, comments=comments_new, now=NOW)
+    assert hooks.unanswered_ask_refusal(_recorder(plain), BUG, plain) is None
+
+
+def test_a_needinfo_with_no_setter_is_no_ask(bug_new, comments_new):
+    assert _asked_state(bug_new, comments_new, setter="").asking_needinfos == ()

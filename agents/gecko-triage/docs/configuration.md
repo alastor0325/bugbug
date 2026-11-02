@@ -101,11 +101,13 @@ no list, so it adds no meta bug.
 ## Bot accounts
 
 The bot accounts are `hackbot@mozilla.tld`, which posts every comment, and the logins in
-the `BOT_ALIASES` env var. They decide two things:
+the `BOT_ALIASES` env var. They decide three things:
 
 - the preflight skips a bug when the agent wrote the newest comment and nothing that
   changes the analysis happened after it (`docs/bugzilla.md`);
-- the agent never sends a needinfo to a bot account.
+- the agent never sends a needinfo to a bot account;
+- a needinfo that a person set on one of them asks the agent for a run
+  (`docs/bugzilla.md`).
 
 Every Hackbot agent posts as `hackbot@mozilla.tld`. Hackbot tags each comment with the
 agent's name, so a comment from that account counts as this agent's only with the

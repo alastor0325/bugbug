@@ -38,7 +38,8 @@ pick always includes such a bug, and the last three skips above do not apply: th
 triages the bug even when staff filed it, a person owns it or the agent had the last
 word. The other skips still apply. The comment answers the person who asked, and the
 update with that comment clears the needinfo, so an open needinfo on the agent is always
-an ask that waits for an answer. A needinfo that a bot set is not an ask.
+an ask that waits for an answer. A run that records no comment on such a bug fails, so
+it is retried. A needinfo that a bot set is not an ask.
 
 A bug that staff filed with the severity unset is triaged. The comment is written for a
 developer and never asks them for about:support, steps or a log.
