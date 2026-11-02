@@ -439,6 +439,19 @@ def test_the_description_lists_every_open_needinfo(bug_new, comments_returning):
     assert "no open needinfo" in TriageState(bug=no_flags).describe()
 
 
+def test_the_description_says_who_asked_the_agent(bug_new, comments_returning):
+    bug = with_needinfo(bug_new, BOT_ACCOUNT, "2026-10-14T09:00:00Z", "dev@example.org")
+    text = TriageState(bug=bug, comments=comments_returning[:3], now=NOW).describe()
+    assert f"{BOT_ACCOUNT} (you, the agent), set by dev@example.org" in text
+    assert "dev@example.org asked for this run with that needinfo." in text
+    assert (
+        "asked for this run"
+        not in TriageState(
+            bug=bug_new, comments=comments_returning[:3], now=NOW
+        ).describe()
+    )
+
+
 async def test_a_broker_failure_yields_no_state(monkeypatch):
     assert await fetch_state({}, 1) is None
     assert await fetch_state({"type": "http"}, 1) is None

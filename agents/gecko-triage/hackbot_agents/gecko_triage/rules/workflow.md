@@ -26,6 +26,10 @@ also waits for the earlier ask, and name it. If the reporter already has an open
 keep it and set no second one. **A stale needinfo** below still applies on a first run.
 When closing is permitted, the INCOMPLETE case comes before the rest of the flow.
 
+**A needinfo on you.** When "Where this bug stands" says that a person asked for this
+run, triage the bug even if a developer owns it, and record a comment that answers that
+person. Never report `watching` with no comment on such a run.
+
 When the bug has an earlier agent comment, decide:
 
 - **Non-substantive.** The change does not advance the bug. Examples are a second ask for

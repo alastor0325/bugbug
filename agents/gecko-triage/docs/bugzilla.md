@@ -33,6 +33,12 @@ any model turn, when any of these is true:
   does not count. A change at the same time as the comment is the agent's own update. The
   bug still runs when it became closable as INCOMPLETE after that comment.
 
+**Ask the agent with a needinfo.** A needinfo on the agent's account asks for a run. The
+pick always includes such a bug, and the last three skips above do not apply: the agent
+triages the bug even when staff filed it, a person owns it or the agent had the last
+word. The other skips still apply. The ask counts until the agent comments after it, and
+the comment answers the person who asked.
+
 A bug that staff filed with the severity unset is triaged. The comment is written for a
 developer and never asks them for about:support, steps or a log.
 
@@ -71,15 +77,15 @@ list name an attachment that the agent could not fetch, unpack or read.
 The agent keeps no memory of its own. Each run reads the whole bug and every public
 comment. Who asked for what does not matter.
 
-| Mark                                | Where                        | Meaning                                                                                              |
-| ----------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `[gecko-triage:skip]`               | the bug's whiteboard         | Keep the agent off this bug. Anyone can add it.                                                      |
-| `[gecko-triage:easy-fix]`           | the bug's whiteboard         | The agent added it: the fix looks small. Search for it to find candidates.                           |
-| `[gecko-triage:gfb-candidate]`      | the bug's whiteboard         | The agent added it: a new contributor can possibly do the fix. A person decides on `good-first-bug`. |
-| comment tag `gecko-triage`          | each comment the agent posts | Hackbot adds it. It tells the agent's comments from other Hackbot agents' comments.                  |
-| open needinfo flags                 | flags                        | Whom the bug waits for, whoever set the flag. After 14 days with no answer, the needinfo is stale.   |
-| `last_change_time_non_bot`          | the bug                      | Whether a person changed the bug after the newest comment                                            |
-| the newest comment's author and tag | the comments                 | Whether the agent had the last word                                                                  |
+| Mark                                | Where                        | Meaning                                                                                                                                    |
+| ----------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `[gecko-triage:skip]`               | the bug's whiteboard         | Keep the agent off this bug. Anyone can add it.                                                                                            |
+| `[gecko-triage:easy-fix]`           | the bug's whiteboard         | The agent added it: the fix looks small. Search for it to find candidates.                                                                 |
+| `[gecko-triage:gfb-candidate]`      | the bug's whiteboard         | The agent added it: a new contributor can possibly do the fix. A person decides on `good-first-bug`.                                       |
+| comment tag `gecko-triage`          | each comment the agent posts | Hackbot adds it. It tells the agent's comments from other Hackbot agents' comments.                                                        |
+| open needinfo flags                 | flags                        | Whom the bug waits for, whoever set the flag. After 14 days with no answer, the needinfo is stale. A needinfo on the agent asks for a run. |
+| `last_change_time_non_bot`          | the bug                      | Whether a person changed the bug after the newest comment                                                                                  |
+| the newest comment's author and tag | the comments                 | Whether the agent had the last word                                                                                                        |
 
 ## Changes it can make
 

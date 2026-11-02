@@ -4,6 +4,7 @@ import pytest
 from conftest import LATER, NOW, quiet, with_needinfo
 from hackbot_agents.gecko_triage import preflight
 from hackbot_agents.gecko_triage.config import (
+    BOT_ACCOUNT,
     PEOPLE,
     TERMS,
 )
@@ -236,3 +237,78 @@ def test_an_unreadable_bug_fails_the_run_so_it_is_retried(new_state):
     with pytest.raises(BugUnreadable):
         require_state(None)
     assert require_state(new_state) is new_state
+
+
+ASKER = "person@example.com"
+# After the bot's comment in `comments_returning`, before NOW.
+ASKED = "2026-10-14T09:00:00Z"
+
+
+def _asked(bug: dict, requestee: str = BOT_ACCOUNT, since: str = ASKED) -> dict:
+    return with_needinfo(bug, requestee, since=since, setter=ASKER)
+
+
+def test_a_needinfo_on_the_agent_triages_a_bug_that_staff_own(bug_new, comments_new):
+    bug = dict(bug_new, creator=EMPLOYEE, severity="S3")
+    bug["creator_detail"] = dict(bug_new["creator_detail"], real_name="Dev Eloper")
+    assert "not QA" in skip_reason(_state(bug, comments_new))
+    assert skip_reason(_state(_asked(bug), comments_new)) is None
+
+
+def test_a_needinfo_on_the_agent_triages_an_assigned_bug(bug_new, comments_new):
+    bug = dict(bug_new, assigned_to="dev@example.com")
+    assert skip_reason(_state(_asked(bug), comments_new)) is None
+
+
+def test_a_needinfo_on_the_agent_triages_after_its_last_word(
+    bug_new, comments_returning
+):
+    bug = quiet(bug_new)
+    assert skip_reason(_state(bug, comments_returning[:3])) == SKIP_BOT_LAST
+    assert skip_reason(_state(_asked(bug), comments_returning[:3])) is None
+
+
+def test_a_needinfo_on_a_bot_alias_counts(bug_new, comments_new):
+    bug = _asked(dict(bug_new, assigned_to="dev@example.com"), "Pilot@Example.com")
+    state = TriageState(
+        bug=bug,
+        comments=comments_new,
+        now=NOW,
+        bot_aliases=frozenset({"pilot@example.com"}),
+    )
+    assert state.asked_by == (ASKER,)
+    assert skip_reason(state) is None
+
+
+def test_a_needinfo_on_someone_else_does_not_bypass(bug_new, comments_new):
+    bug = _asked(dict(bug_new, assigned_to="dev@example.com"), "other@example.com")
+    state = _state(bug, comments_new)
+    assert state.asked_by == ()
+    assert "assigned to" in skip_reason(state)
+
+
+@pytest.mark.parametrize(
+    ("change", "reason"),
+    [
+        ({"component": "Graphics"}, "out of scope"),
+        ({"keywords": ["meta"]}, "meta"),
+        ({"status": "RESOLVED", "resolution": "FIXED"}, "already RESOLVED"),
+        ({"groups": ["core-security"]}, "restricted"),
+        ({"keywords": ["sec-high"]}, "security bug"),
+        ({"whiteboard": TERMS.whiteboard.skip}, TERMS.whiteboard.skip),
+    ],
+)
+def test_a_needinfo_on_the_agent_keeps_the_hard_skips(
+    bug_new, comments_new, change, reason
+):
+    assert reason in skip_reason(_state(_asked(dict(bug_new, **change)), comments_new))
+
+
+def test_a_needinfo_that_the_agent_answered_does_not_bypass(
+    bug_new, comments_returning
+):
+    # The agent commented after the ask; a flag that stays open asks for nothing more.
+    bug = _asked(quiet(bug_new), since="2026-10-12T09:00:00Z")
+    state = _state(bug, comments_returning[:3])
+    assert state.asked_by == ()
+    assert skip_reason(state) == SKIP_BOT_LAST

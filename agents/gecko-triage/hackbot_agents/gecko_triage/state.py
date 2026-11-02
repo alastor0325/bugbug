@@ -151,6 +151,31 @@ class TriageState:
         return frozenset({_lower(BOT_ACCOUNT), *map(_lower, self.bot_aliases)})
 
     @cached_property
+    def asked_by(self) -> tuple[str, ...]:
+        """Who asked the agent for a run, lowercased.
+
+        Each setter of an open needinfo on the agent's account or a bot alias that is
+        newer than the agent's newest comment. After the agent answers, a flag that
+        stays open asks for nothing more.
+        """
+        answered = self._agent_newest_comment_time
+        return tuple(
+            n.setter
+            for n in self.open_needinfos
+            if n.requestee in self.bot_logins
+            and (answered is None or (n.since is not None and n.since > answered))
+        )
+
+    @cached_property
+    def _agent_newest_comment_time(self) -> dt.datetime | None:
+        times = (
+            parse_time(c.get("creation_time"))
+            for c in self.comments
+            if isinstance(c, dict) and self._from_the_agent(c)
+        )
+        return max((t for t in times if t is not None), default=None)
+
+    @cached_property
     def oldest_needinfo(self) -> dt.datetime | None:
         """When the oldest open needinfo was set, whoever set it."""
         return min((n.since for n in self.open_needinfos if n.since), default=None)
@@ -317,13 +342,22 @@ class TriageState:
         for n in self.open_needinfos:
             age = n.age_days(self.now)
             age_text = f"{age:.0f} days" if age is not None else "an unknown time"
-            role = (
-                "the reporter" if n.requestee == self.reporter else "not the reporter"
-            )
+            if n.requestee in self.bot_logins:
+                role = "you, the agent"
+            elif n.requestee == self.reporter:
+                role = "the reporter"
+            else:
+                role = "not the reporter"
             lines.append(
                 f"An open needinfo is on {n.requestee} ({role}), set by "
                 f"{n.setter or 'an unknown account'}, for {age_text}."
             )
+            if n.requestee in self.bot_logins and n.setter in self.asked_by:
+                lines.append(
+                    f"{n.setter or 'A person'} asked for this run with that needinfo. "
+                    "Triage the bug even if a developer owns it, and answer them by "
+                    "name in the comment."
+                )
         if not self.open_needinfos:
             lines.append("The bug has no open needinfo.")
         if self.incomplete_allowed:

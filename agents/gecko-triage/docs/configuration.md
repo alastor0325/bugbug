@@ -85,7 +85,7 @@ logins the markers miss). They decide who filed a bug, and so who the comment is
 | ----------------------------------- | ----------- | ------------------------------------------------------------------ |
 | a QA account                        | `qa`        | Triaged like any reporter's bug                                    |
 | staff, not QA, severity unset       | `developer` | Triaged. The comment never asks for about:support, steps or a log. |
-| staff, not QA, severity already set | none        | Skipped: the developer owns it                                     |
+| staff, not QA, severity already set | none        | Skipped: the developer owns it, unless a needinfo asks the agent   |
 | anyone else                         | `reporter`  | Triaged                                                            |
 
 `shared/bugzilla.toml`: `keywords.meta` marks a meta bug, `keywords.add` lists the
