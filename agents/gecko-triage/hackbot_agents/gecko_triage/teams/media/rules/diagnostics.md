@@ -2,10 +2,10 @@
 
 Applies with the general `diagnostics.md`, in `workflow.md` steps 2a, 2b and 5. The
 in-tree page `dom/media/docs/Diagnostics.md` has the media facts, and the system prompt
-carries it. It covers the about:support sections, the media log signals, the media
-profile threads, the hardware decode failure pattern, what a useful report has and the
-capture steps. This file adds the triage decisions and a few facts that the page does
-not have.
+carries it. It covers the about:support sections, the media log signals and the media
+profile threads. It also covers the hardware decode failure pattern, what a useful report
+has and the capture steps. This file adds the triage decisions and a few facts that the
+page does not have.
 
 ## Prefs
 
