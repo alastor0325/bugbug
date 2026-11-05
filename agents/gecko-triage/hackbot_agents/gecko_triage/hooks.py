@@ -462,11 +462,15 @@ _NAMED = re.compile(r"^(?::[\w.-]+|[A-Z][\w'.-]*(?:\s+[A-Z][\w'.-]*){0,3}),\s")
 
 
 def addressee_hook(action: dict) -> None:
-    """A comment names the person; "you" only follows the name that opens a request."""
+    """A comment names the person; "you" only follows the name that opens a request.
+
+    The steps of a list stay imperative under the request, so a list item may say "you".
+    """
     body = _comment_body(action)
     if body is None:
         return
-    for sentence in sentences(prose(body)):
+    lines = [ln for ln in prose(body).splitlines() if not _LIST_MARKER.match(ln)]
+    for sentence in sentences("\n".join(lines)):
         if _YOU.search(_THANK_YOU.sub("", sentence)) and not _NAMED.match(sentence):
             raise ToolError(
                 'your comment says "you" without a name. Use the person\'s name in '
