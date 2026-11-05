@@ -6,12 +6,12 @@ Applies with the general `comment.md`.
 
 At most one, from this table:
 
-| Question                                                       | When                                                  |
-| -------------------------------------------------------------- | ----------------------------------------------------- |
-| Does this happen in Private Browsing mode?                     | Any playback or recording issue; rules out extensions |
-| Does this happen on all videos, or only certain ones?          | Playback failures                                     |
-| Does this happen with one codec only (H.264, H.265, AV1, VP9)? | Playback failures with a codec hint                   |
-| Could you please share a public link that shows the problem?   | The reported URL needs a login                        |
+| Question                                                             | When                                                  |
+| -------------------------------------------------------------------- | ----------------------------------------------------- |
+| Does this happen in Private Browsing mode?                           | Any playback or recording issue; rules out extensions |
+| Does this happen on all videos, or only certain ones?                | Playback failures                                     |
+| Does this happen with one codec only (H.264, H.265, AV1, VP9)?       | Playback failures with a codec hint                   |
+| <name>, could you please share a public link that shows the problem? | The reported URL needs a login                        |
 
 ## When to ask for the capture block
 

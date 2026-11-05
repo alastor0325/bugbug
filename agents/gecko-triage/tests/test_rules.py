@@ -543,6 +543,7 @@ KEY_PHRASES = (
     ("workflow.md", "Never report `watching` with no comment on such a run."),
     ("workflow.md", "Do not write about security or a rating"),
     ("comment.md", "Cite a comment only after you read it."),
+    ("comment.md", 'Never write "you" or "your" alone.'),
     ("diagnostics.md", "Never download an attachment in another way."),
     ("diagnostics.md", "Never run a file from an attachment."),
     ("workflow.md", "We cannot read a log that the reporter sent privately"),

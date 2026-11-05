@@ -18,6 +18,7 @@ What they enforce:
 - links outside code only as http or https to the hosts in `ALLOWED_LINK_HOSTS`, in
   every markdown form, and no raw HTML link;
 - no security rating in the comment, such as "denial of service" or "sec-low";
+- no "you" or "your" unless the sentence starts with the person's name and a comma;
 - a cited comment of another bug is one the run read, and a sentence about a patch or
   an attachment cites the comment that adds it (`citations.py`);
 - severity and priority only when the current value is `--`, never S1, P4 or P5;
@@ -451,6 +452,26 @@ def security_wording_hook(action: dict) -> None:
             "comment, and say in the final message that the security team can rate "
             "the bug"
         )
+
+
+_YOU = re.compile(r"\byou(?:r|rs|rself)?\b", re.IGNORECASE)
+_THANK_YOU = re.compile(r"\bthank you\b", re.IGNORECASE)
+# A sentence that opens with a name and a comma, as in "Louis-Philippe, could you ...".
+_NAMED = re.compile(r"^[A-Z][\w'.-]*(?:\s+[A-Z][\w'.-]*){0,3},\s")
+
+
+def addressee_hook(action: dict) -> None:
+    """A comment names the person; "you" only follows the name that opens a request."""
+    body = _comment_body(action)
+    if body is None:
+        return
+    for sentence in sentences(prose(body)):
+        if _YOU.search(_THANK_YOU.sub("", sentence)) and not _NAMED.match(sentence):
+            raise ToolError(
+                'your comment says "you" without a name. Use the person\'s name in '
+                'place of "you" or "your". In a request, put the name first: '
+                f'"<name>, could you please ...?" (sentence: {sentence[:80]!r})'
+            )
 
 
 def citation_hook(bug_id: int, read_comments: ReadComments) -> ActionHook:
@@ -1088,6 +1109,7 @@ def install_hooks(
     recorder.add_hook("bugzilla.add_comment", link_hook)
     recorder.add_hook("bugzilla.add_comment", comment_style_hook)
     recorder.add_hook("bugzilla.add_comment", security_wording_hook)
+    recorder.add_hook("bugzilla.add_comment", addressee_hook)
     read_comments = ReadComments() if read_comments is None else read_comments
     note_comments(read_comments, bug_id, state.comments)
     recorder.add_hook("bugzilla.add_comment", citation_hook(bug_id, read_comments))

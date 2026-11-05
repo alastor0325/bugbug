@@ -224,14 +224,14 @@ def test_a_request_that_names_the_capture_marker_without_the_block_is_refused(te
 
 
 CAPTURE_CITATIONS = (
-    "The attached profile came from `about:logging` and shows the stall. Could you "
-    "please attach about:support?",
-    "The attached profile came from `about:logging` and shows\nthe stall. Could you "
-    "please attach about:support?",
+    "The attached profile came from `about:logging` and shows the stall. Dana, could "
+    "you please attach about:support?",
+    "The attached profile came from `about:logging` and shows\nthe stall. Dana, could "
+    "you please attach about:support?",
     "Thanks for the about:logging profile in comment 4, please also attach "
     "about:support.",
-    "The attached `about:logging` profile shows the stall, so could you please attach "
-    "about:support?",
+    "The attached `about:logging` profile shows the stall. Dana, could you please "
+    "attach about:support?",
     "Thanks for the profile from\nabout:logging. Please attach about:support.",
     "> Please help, about:logging does not work.\n\nThanks.",
     "> I pressed Start Logging and Stop Logging but nothing uploaded.\n\nThanks.",
@@ -2248,7 +2248,7 @@ def test_a_cited_comment_in_a_link_is_checked(bug_new, comments_new):
     rec = _recorder(state, read_comments=store)
     url = "https://bugzilla.mozilla.org/show_bug.cgi?id=9000002#c4"
     with pytest.raises(ToolError) as e:
-        _comment(rec, _text(f"Your [WIP patch]({url}) has some of them."))
+        _comment(rec, _text(f"Dana's [WIP patch]({url}) has some of them."))
     assert "adds no attachment" in str(e.value)
     assert rec.actions == []
 
@@ -2260,8 +2260,43 @@ def test_a_comment_cites_only_a_comment_the_run_read(bug_new, comments_new):
     rec = _recorder(state, read_comments=store)
     with pytest.raises(ToolError) as e:
         _comment(
-            rec, _text("Your WIP patch on bug 9000002 (comment 4) has some of them.")
+            rec, _text("Dana's WIP patch on bug 9000002 (comment 4) has some of them.")
         )
     assert "adds no attachment" in str(e.value)
-    _comment(rec, _text("Your WIP patch on bug 9000002 (comment 3) has some of them."))
+    _comment(
+        rec, _text("Dana's WIP patch on bug 9000002 (comment 3) has some of them.")
+    )
+    assert len(rec.actions) == 1
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Your WIP patch on bug 2089034 (comment 3) already has some of these checks.",
+        "You already work on these checks.",
+        "The patch helps, and you can test it in Nightly.",
+        "Could you please attach about:support?",
+    ],
+)
+def test_a_comment_names_the_person_and_not_only_you(body):
+    rec = _recorder()
+    with pytest.raises(ToolError) as e:
+        _comment(rec, _text(body))
+    assert "name" in str(e.value)
+    assert rec.actions == []
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Louis-Philippe, could you please attach about:support?",
+        "Louis-Philippe Manette, your WIP patch already has some of these checks.",
+        "Thank you for the report.",
+        "The WIP patch by Louis-Philippe Manette already has some of these checks.",
+        "Run `you --help` to see the options.",
+    ],
+)
+def test_a_request_may_say_you_after_the_name(body):
+    rec = _recorder()
+    _comment(rec, _text(body))
     assert len(rec.actions) == 1

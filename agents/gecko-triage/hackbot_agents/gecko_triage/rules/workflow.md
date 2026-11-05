@@ -248,9 +248,9 @@ an item in `asked`, and BugBot runs it again.
 A needinfo on a reporter who is not a developer asks for data, so the decision is
 `needs_info`.
 
-A needinfo that hands the bug to a developer is not a request for data. "Could you please
-look at this bug?" is a hand-off. It does not make the run `needs_info`. Do not put a
-hand-off in `asked`.
+A needinfo that hands the bug to a developer is not a request for data. "<name>, could
+you please look at this bug?" is a hand-off. It does not make the run `needs_info`. Do
+not put a hand-off in `asked`.
 
 The decision does not control severity and priority. In Mozilla triage, a triaged bug is a
 bug with severity and priority set, so set them as `severity-priority.md` says.
