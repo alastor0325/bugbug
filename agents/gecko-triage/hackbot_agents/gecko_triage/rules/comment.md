@@ -34,7 +34,8 @@ to any other host.
 
 **Cite a comment only after you read it.** Before you cite a comment of another bug, read
 it with `get_bug_comments`. For a patch or a file, cite the comment that adds it: its text
-starts with "Created attachment". The recorder refuses a citation that does not match.
+starts with "Created attachment". For a patch that landed, you can also cite the comment
+that lands it. The recorder refuses a citation that does not match.
 
 **Never ask a reporter to send data by email.** The agent cannot read email, so the data
 does not reach the triage. Ask the reporter to attach the file to the bug or to add a

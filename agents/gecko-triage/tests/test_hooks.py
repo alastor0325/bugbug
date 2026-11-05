@@ -26,8 +26,8 @@ from conftest import (
     with_needinfo,
 )
 from hackbot_agents.gecko_triage import hooks
-from hackbot_agents.gecko_triage.citations import ReadComments, note_comments
 from hackbot_agents.gecko_triage import state as state_module
+from hackbot_agents.gecko_triage.citations import ReadComments, note_comments
 from hackbot_agents.gecko_triage.closing import CloseVerdict, CloseVerdicts
 from hackbot_agents.gecko_triage.config import (
     BOT_ACCOUNT,
@@ -2213,6 +2213,8 @@ def test_a_needinfo_with_no_setter_is_no_ask(bug_new, comments_new):
         "This is a DoS that web content can cause.",
         "The ratings call it sec-low.",
         "Its security rating is low.",
+        "Its security-severity is low.",
+        "The security team can rate the bug.",
     ],
 )
 def test_a_comment_does_not_rate_security(body):
@@ -2223,10 +2225,32 @@ def test_a_comment_does_not_rate_security(body):
     assert rec.actions == []
 
 
-def test_the_security_team_may_be_named_without_a_rating():
+@pytest.mark.parametrize(
+    "body",
+    [
+        "The security team now looks at the bug.",
+        "The crash is benign in release, so we rate it as minor.",
+        "The frame rate it reports drops to 10 fps.",
+        "Two to-dos remain in the patch.",
+        "It also fails under MS-DOS emulation.",
+    ],
+)
+def test_a_comment_with_no_security_rating_passes(body):
     rec = _recorder()
-    _comment(rec, _text("The security team now looks at the bug."))
+    _comment(rec, _text(body))
     assert len(rec.actions) == 1
+
+
+def test_a_cited_comment_in_a_link_is_checked(bug_new, comments_new):
+    store = ReadComments()
+    note_comments(store, 9000002, [{"count": 3, "attachment_id": 777}, {"count": 4}])
+    state = TriageState(bug=bug_new, comments=comments_new, now=NOW)
+    rec = _recorder(state, read_comments=store)
+    url = "https://bugzilla.mozilla.org/show_bug.cgi?id=9000002#c4"
+    with pytest.raises(ToolError) as e:
+        _comment(rec, _text(f"Your [WIP patch]({url}) has some of them."))
+    assert "adds no attachment" in str(e.value)
+    assert rec.actions == []
 
 
 def test_a_comment_cites_only_a_comment_the_run_read(bug_new, comments_new):
@@ -2235,7 +2259,9 @@ def test_a_comment_cites_only_a_comment_the_run_read(bug_new, comments_new):
     state = TriageState(bug=bug_new, comments=comments_new, now=NOW)
     rec = _recorder(state, read_comments=store)
     with pytest.raises(ToolError) as e:
-        _comment(rec, _text("Your WIP patch on bug 9000002 (comment 4) has some of them."))
+        _comment(
+            rec, _text("Your WIP patch on bug 9000002 (comment 4) has some of them.")
+        )
     assert "adds no attachment" in str(e.value)
     _comment(rec, _text("Your WIP patch on bug 9000002 (comment 3) has some of them."))
     assert len(rec.actions) == 1

@@ -7,6 +7,7 @@ import pytest
 from hackbot_agents.gecko_triage.citations import (
     COMMENTS_TOOL,
     ReadComments,
+    citable_text,
     citation_refusal,
     note_comments,
     note_read,
@@ -18,8 +19,8 @@ BUG = 9000001
 OTHER = 9000002
 
 
-def _comment(count, attachment_id=None):
-    return {"count": count, "attachment_id": attachment_id, "text": "x"}
+def _comment(count, attachment_id=None, text="x"):
+    return {"count": count, "attachment_id": attachment_id, "text": text}
 
 
 def _read(*comments, bug=OTHER):
@@ -61,7 +62,9 @@ def test_the_read_hook_notes_the_result():
     payload = {"bug_id": OTHER, "comments": [_comment(1)]}
     hook = read_hook(store)
     result = asyncio.run(
-        hook({"tool_name": COMMENTS_TOOL, "tool_response": _blocks(payload)}, None, None)
+        hook(
+            {"tool_name": COMMENTS_TOOL, "tool_response": _blocks(payload)}, None, None
+        )
     )
     assert result == {} and (OTHER, 1) in store.seen
 
@@ -104,3 +107,85 @@ def test_a_comment_of_the_triaged_bug_is_checked_too():
 
 def test_a_comment_with_no_citation_passes():
     assert citation_refusal("The patch fixes it.", BUG, ReadComments()) is None
+
+
+def _spill(path):
+    return (
+        "Error: result (912,334 characters) exceeds maximum allowed tokens. Output has "
+        f"been saved to {path}.\n"
+    )
+
+
+def test_a_result_saved_to_a_file_is_noted(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "config"))
+    folder = tmp_path / "config" / "projects" / "-r" / "s" / "tool-results"
+    folder.mkdir(parents=True)
+    path = folder / "mcp-bugzilla-get_bug_comments-1.txt"
+    payload = {"bug_id": OTHER, "comments": [_comment(3, 777)]}
+    path.write_text(json.dumps(_blocks(payload)))
+    store = ReadComments()
+    note_read(store, {"tool_name": COMMENTS_TOOL, "tool_response": _spill(path)})
+    assert store.seen == {(OTHER, 3): True}
+
+
+def test_a_comment_that_lands_a_change_may_be_cited_for_the_patch():
+    pushed = "Pushed by dev@example.com:\nhttps://hg.mozilla.org/integration/autoland/rev/abc"
+    merged = "https://github.com/mozilla-firefox/firefox/commit/abc"
+    store = _read(_comment(12, text=pushed), _comment(13, text=merged))
+    assert store.seen[(OTHER, 12)] and store.seen[(OTHER, 13)]
+    text = f"The patch landed in bug {OTHER} (comment 12)."
+    assert citation_refusal(text, BUG, store) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"The WIP patch is in comment 4 of bug {OTHER}.",
+        f"The WIP patch in bug {OTHER}'s comment 4 has them.",
+        f"The WIP patch in bug {OTHER} comment #4 has them.",
+        f"The WIP patch (bug {OTHER}#c4) has them.",
+    ],
+)
+def test_every_form_of_a_cited_comment_of_another_bug_is_checked(text):
+    store = _read(_comment(3, 777), _comment(4))
+    reason = citation_refusal(text, BUG, store)
+    assert f"comment 4 of bug {OTHER}" in reason and "adds no attachment" in reason
+
+
+def test_a_patch_is_checked_against_the_nearest_citation_only():
+    store = _read(_comment(3, 777), _comment(5))
+    text = (
+        f"The patch in bug {OTHER} comment 3 fixes what bug {OTHER} comment 5 reports."
+    )
+    assert citation_refusal(text, BUG, store) is None
+    assert (
+        citation_refusal("The attachment in comment 1 shows comment 0.", BUG, store)
+        is None
+    )
+
+
+def test_a_word_that_only_starts_with_patch_is_no_patch():
+    store = _read(_comment(5))
+    text = f"The reporter patched it locally (bug {OTHER} comment 5)."
+    assert citation_refusal(text, BUG, store) is None
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        (
+            f"the [WIP patch](https://bugzilla.mozilla.org/show_bug.cgi?id={OTHER}#c4)",
+            f"the WIP patch (bug {OTHER} comment 4)",
+        ),
+        (
+            f"on [bug {OTHER}](https://bugzilla.mozilla.org/show_bug.cgi?id={OTHER}) (comment 4)",
+            f"on bug {OTHER} (comment 4)",
+        ),
+        (
+            f"see https://bugzilla.mozilla.org/show_bug.cgi?id={OTHER}#c4 now",
+            f"see bug {OTHER} comment 4 now",
+        ),
+    ],
+)
+def test_a_citation_in_a_link_is_kept_for_the_check(body, expected):
+    assert citable_text(body) == expected

@@ -79,7 +79,7 @@ from .actions_view import (
     needinfo_requestees,
     updates,
 )
-from .citations import ReadComments, citation_refusal, note_comments
+from .citations import ReadComments, citable_text, citation_refusal, note_comments
 from .closing import (
     CloseVerdicts,
     close_verdict_refusal,
@@ -426,8 +426,10 @@ def capture_block_hook(action: dict) -> None:
 
 
 _SECURITY_RATING = re.compile(
-    r"\bdenial[- ]of[- ]service\b|\bDoS\b|\bsec-(?:low|moderate|high|critical|other)\b"
-    r"|\bsecurity (?:rating|severity)\b|\brate it\b",
+    r"\bdenial[- ]of[- ]service\b|(?-i:\bDoS\b)"
+    r"|\bsec-(?:low|moderate|high|critical|other)\b"
+    r"|\bsec(?:urity)?[- ](?:rating|severity)\b"
+    r"|\bsecurity team\b[^.!?\n]*\b(?:can|could|should|will|may|must|to)\s+rate\b",
     re.IGNORECASE,
 )
 
@@ -452,7 +454,7 @@ def citation_hook(bug_id: int, read_comments: ReadComments) -> ActionHook:
         text = action_params(action).get("text")
         if not isinstance(text, str):
             return
-        body = prose(split_runtime_footer(text)[0])
+        body = prose(citable_text(split_runtime_footer(text)[0]))
         if reason := citation_refusal(body, bug_id, read_comments):
             raise ToolError(reason)
 

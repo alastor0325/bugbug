@@ -89,17 +89,22 @@ def denied_bug_id(text: object, tool_input: object, failed: bool = False) -> int
     return input_id if failed and is_bug_id(input_id) else None
 
 
-def _spilled_ids(response: object) -> set[int] | None:
+def spilled_text(response: object) -> str | None:
+    """The text of the file a spill notice names, or None when it cannot be read."""
     path = spill_file(response)
     if path is None:
         return None
     try:
         if path.stat().st_size > MAX_SPILL_BYTES:
             return None
-        text = path.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8")
     except OSError, UnicodeDecodeError:
         return None
-    return inaccessible_ids(text)
+
+
+def _spilled_ids(response: object) -> set[int] | None:
+    text = spilled_text(response)
+    return None if text is None else inaccessible_ids(text)
 
 
 def _is_error(response: object) -> bool:
