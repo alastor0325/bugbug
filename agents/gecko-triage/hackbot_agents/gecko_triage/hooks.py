@@ -328,6 +328,11 @@ def sentences(text: str) -> list[str]:
     return found
 
 
+def prose_sentences(text: str) -> list[str]:
+    """The sentences of ``text`` with wrapped lines joined and list items left out."""
+    return sentences("\n".join(paragraphs(text)))
+
+
 def paragraphs(text: str) -> list[str]:
     """Runs of prose lines between blank lines.
 
@@ -416,7 +421,7 @@ def capture_block_hook(action: dict) -> None:
             raise _capture_refusal(f"names {marker} in a list item", fix)
     if has_block:
         return
-    for sentence in sentences("\n".join(paragraphs(rest))):
+    for sentence in prose_sentences(rest):
         if (
             marker in sentence.lower()
             and _REQUEST.search(sentence)
@@ -455,8 +460,7 @@ def security_wording_hook(action: dict) -> None:
         )
 
 
-_YOU = re.compile(r"\byou(?:r|rs|rself|rselves)?\b", re.IGNORECASE)
-_THANK_YOU = re.compile(r"\bthank you\b", re.IGNORECASE)
+_YOU = re.compile(r"(?<!\bthank )\byou(?:r|rs|rself|rselves)?\b", re.IGNORECASE)
 _QUOTED_TEXT = re.compile(r'"[^"\n]*"|“[^”\n]*”')
 _CODE_NICK = re.compile(r"`(:[\w.-]+)`")
 # A sentence that opens with a name or a Bugzilla nick and a comma, as in
@@ -464,7 +468,7 @@ _CODE_NICK = re.compile(r"`(:[\w.-]+)`")
 _NAMED = re.compile(
     r"^(?::[\w.-]+|(?P<name>[^\W\d_][\w'’.-]*(?:\s+[^\W\d_][\w'’.-]*){0,5})),\s"
 )
-_GREETINGS = frozenset({"hi", "hello", "hey", "dear", "thanks"})
+_GREETINGS = frozenset(["hi", "hello", "hey", "dear", "thanks"])
 _NAME_PARTICLES = frozenset(
     [
         "and",
@@ -552,11 +556,9 @@ def addressee_hook(action: dict) -> None:
     body = _comment_body(action)
     if body is None:
         return
-    text = _QUOTED_TEXT.sub(
-        "quote", "\n".join(paragraphs(prose(_CODE_NICK.sub(r"\1", body))))
-    )
-    for sentence in sentences(text):
-        if _YOU.search(_THANK_YOU.sub("", sentence)) and not opens_with_name(sentence):
+    text = _QUOTED_TEXT.sub("quote", prose(_CODE_NICK.sub(r"\1", body)))
+    for sentence in prose_sentences(text):
+        if _YOU.search(sentence) and not opens_with_name(sentence):
             raise ToolError(
                 'your comment says "you" without a name. Use the person\'s name in '
                 'place of "you" or "your". In a request, put the name first: '

@@ -60,14 +60,13 @@ and clear for readers whose first language is not English.
   product names, and bug numbers.
 - **Instructions** (steps the reader follows): imperative, one instruction per sentence,
   20 words maximum.
-- **Requests to a named person:** polite, with the name first: "<name>, could you please
-  …?" One request per sentence. The numbered steps under it stay imperative.
 - **Name the person.** Never write "you" or "your" alone. Use the person's name, for
-  example "the patch by <name>". In a request, put the name first. The recorder refuses a
-  "you" that does not follow the name at the start of the sentence. When the person has
-  no real name in Bugzilla, open the request with the nick, as `:nick`, and set a needinfo
-  on the person. This is the only place for a `:nick`. The steps of a list under a request
-  and a message in double quotes may say "you".
+  example "the patch by <name>". A request is polite and puts the name first: "<name>,
+  could you please …?" One request per sentence. The recorder refuses a "you" that does
+  not follow the name at the start of the sentence. When the person has no real name in
+  Bugzilla, open the request with the nick, as `:nick`, and set a needinfo on the person.
+  This is the only place for a `:nick`. The numbered steps under a request stay
+  imperative and may say "you", and so may a message in double quotes.
 - **Descriptive sentences:** 25 words maximum. A sentence over the limit is two sentences.
 - **Paragraphs:** one topic each, 6 sentences maximum.
 - **Active voice and simple tenses.** "The decoder rejects the stream", not "The stream
