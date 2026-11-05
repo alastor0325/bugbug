@@ -270,6 +270,7 @@ def _recorder(
     close_verdicts=None,
     commit_authors=frozenset(),
     investigations=None,
+    read_comments=None,
 ):
     """A recorder with the run's hooks installed.
 
@@ -291,6 +292,7 @@ def _recorder(
         investigations=(
             Investigations(spawns=1) if investigations is None else investigations
         ),
+        read_comments=read_comments,
     )
     return rec
 

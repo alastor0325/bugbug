@@ -17,6 +17,9 @@ What they enforce:
   and indented lines, link text, and the capture and mozregression blocks;
 - links outside code only as http or https to the hosts in `ALLOWED_LINK_HOSTS`, in
   every markdown form, and no raw HTML link;
+- no security rating in the comment, such as "denial of service" or "sec-low";
+- a cited comment of another bug is one the run read, and a sentence about a patch or
+  an attachment cites the comment that adds it (`citations.py`);
 - severity and priority only when the current value is `--`, never S1, P4 or P5;
 - at most three needinfos, each on one full email address, never the bot, never twice,
   not on someone with one open, and only on someone on the bug, a listed expert of the
@@ -76,6 +79,7 @@ from .actions_view import (
     needinfo_requestees,
     updates,
 )
+from .citations import ReadComments, citation_refusal, note_comments
 from .closing import (
     CloseVerdicts,
     close_verdict_refusal,
@@ -419,6 +423,40 @@ def capture_block_hook(action: dict) -> None:
             raise _capture_refusal(
                 f"asks for {marker} without the capture block", f"{expand}."
             )
+
+
+_SECURITY_RATING = re.compile(
+    r"\bdenial[- ]of[- ]service\b|\bDoS\b|\bsec-(?:low|moderate|high|critical|other)\b"
+    r"|\bsecurity (?:rating|severity)\b|\brate it\b",
+    re.IGNORECASE,
+)
+
+
+def security_wording_hook(action: dict) -> None:
+    """A comment rates no security; the final message says the security team can."""
+    text = action_params(action).get("text")
+    if not isinstance(text, str):
+        return
+    if found := _SECURITY_RATING.search(prose(split_runtime_footer(text)[0])):
+        raise ToolError(
+            f"your comment rates security ({found.group(0)!r}). Remove it from the "
+            "comment, and say in the final message that the security team can rate "
+            "the bug"
+        )
+
+
+def citation_hook(bug_id: int, read_comments: ReadComments) -> ActionHook:
+    """A cited comment is one the run read, and a patch is cited where it was added."""
+
+    def hook(action: dict) -> None:
+        text = action_params(action).get("text")
+        if not isinstance(text, str):
+            return
+        body = prose(split_runtime_footer(text)[0])
+        if reason := citation_refusal(body, bug_id, read_comments):
+            raise ToolError(reason)
+
+    return hook
 
 
 def comment_style_hook(action: dict) -> None:
@@ -1024,8 +1062,12 @@ def install_hooks(
     commit_authors: Set[str],
     investigations: Investigations,
     meta_candidates: Set[int] = frozenset(),
+    read_comments: ReadComments | None = None,
 ) -> None:
     """Register every hook on ``recorder``, in the order they must run.
+
+    ``read_comments`` is what `citations.read_hook` collects, read at each check. With
+    none, it holds only the triaged bug's comments.
 
     The comment hook refuses first. The placeholder hook then expands the blocks the
     style hook exempts, and the capture hook checks the capture steps. The link and
@@ -1038,6 +1080,11 @@ def install_hooks(
     recorder.add_hook("bugzilla.add_comment", capture_block_hook)
     recorder.add_hook("bugzilla.add_comment", link_hook)
     recorder.add_hook("bugzilla.add_comment", comment_style_hook)
+    recorder.add_hook("bugzilla.add_comment", security_wording_hook)
+    if read_comments is None:
+        read_comments = ReadComments()
+        note_comments(read_comments, bug_id, state.comments)
+    recorder.add_hook("bugzilla.add_comment", citation_hook(bug_id, read_comments))
     recorder.add_hook("bugzilla.add_comment", refuted_close_hook(close_verdicts))
     recorder.add_hook(
         "bugzilla.add_comment", permalink_hook(permalink_prefix(searchfox_rev), repo)

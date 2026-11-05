@@ -26,6 +26,7 @@ from conftest import (
     with_needinfo,
 )
 from hackbot_agents.gecko_triage import hooks
+from hackbot_agents.gecko_triage.citations import ReadComments, note_comments
 from hackbot_agents.gecko_triage import state as state_module
 from hackbot_agents.gecko_triage.closing import CloseVerdict, CloseVerdicts
 from hackbot_agents.gecko_triage.config import (
@@ -2203,3 +2204,38 @@ def test_a_clear_the_run_recorded_is_not_added_twice(bug_new, comments_new):
 
 def test_a_needinfo_with_no_setter_is_no_ask(bug_new, comments_new):
     assert _asked_state(bug_new, comments_new, setter="").asking_needinfos == ()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "The security team can rate it as a denial of service.",
+        "This is a DoS that web content can cause.",
+        "The ratings call it sec-low.",
+        "Its security rating is low.",
+    ],
+)
+def test_a_comment_does_not_rate_security(body):
+    rec = _recorder()
+    with pytest.raises(ToolError) as e:
+        _comment(rec, _text(body))
+    assert "final message" in str(e.value)
+    assert rec.actions == []
+
+
+def test_the_security_team_may_be_named_without_a_rating():
+    rec = _recorder()
+    _comment(rec, _text("The security team now looks at the bug."))
+    assert len(rec.actions) == 1
+
+
+def test_a_comment_cites_only_a_comment_the_run_read(bug_new, comments_new):
+    store = ReadComments()
+    note_comments(store, 9000002, [{"count": 3, "attachment_id": 777}, {"count": 4}])
+    state = TriageState(bug=bug_new, comments=comments_new, now=NOW)
+    rec = _recorder(state, read_comments=store)
+    with pytest.raises(ToolError) as e:
+        _comment(rec, _text("Your WIP patch on bug 9000002 (comment 4) has some of them."))
+    assert "adds no attachment" in str(e.value)
+    _comment(rec, _text("Your WIP patch on bug 9000002 (comment 3) has some of them."))
+    assert len(rec.actions) == 1

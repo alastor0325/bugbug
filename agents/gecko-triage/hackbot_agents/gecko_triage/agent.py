@@ -52,6 +52,7 @@ from pydantic import BaseModel, BeforeValidator, Field, model_validator
 from searchfox import AsyncSearchfoxClient
 
 from . import attachments, authors, ci_logs, closing, dupes, rerecord
+from .citations import ReadComments, note_comments, read_hook
 from .actions_view import needinfo_requestees, updates
 from .config import (
     ALLOWED_LINK_HOSTS,
@@ -1160,6 +1161,7 @@ def session_options(
     investigations: Investigations,
     withheld: WithheldBugs | None = None,
     steps: Steps | None = None,
+    read_comments: ReadComments | None = None,
 ) -> dict:
     """The tool set and environment every run's Claude Code session gets.
 
@@ -1170,13 +1172,16 @@ def session_options(
     @mozilla.com assignees of those bugs from `get_bugs`, and
     ``investigations`` counts the `bug_investigator` spawns. ``withheld`` collects the
     bugs that a read withheld. ``steps`` counts the tool calls of each
-    session and notes a subagent that stopped at its step limit.
+    session and notes a subagent that stopped at its step limit. ``read_comments``
+    collects the comments that a read returned, for the citation check.
     """
     withheld = WithheldBugs() if withheld is None else withheld
     steps = Steps() if steps is None else steps
+    read_comments = ReadComments() if read_comments is None else read_comments
     on_any_tool = HookMatcher(matcher=None, hooks=[call_counter(steps)])
     on_broker = HookMatcher(
-        matcher=BROKER_TOOLS_MATCHER, hooks=[withheld_hook(withheld)]
+        matcher=BROKER_TOOLS_MATCHER,
+        hooks=[withheld_hook(withheld), read_hook(read_comments)],
     )
     return {
         "tools": list(BASE_TOOLS),
@@ -1252,10 +1257,13 @@ def combined_options(
     investigations: Investigations,
     withheld: WithheldBugs | None = None,
     steps: Steps | None = None,
+    read_comments: ReadComments | None = None,
 ) -> dict:
     """The plugin options and the session options, with their environments merged."""
     toolkit = toolkit_options(toolkit_dir)
-    session = session_options(close_verdicts, commits, investigations, withheld, steps)
+    session = session_options(
+        close_verdicts, commits, investigations, withheld, steps, read_comments
+    )
     return {**toolkit, **session, "env": {**toolkit["env"], **session["env"]}}
 
 
@@ -1318,6 +1326,9 @@ async def run_gecko_triage(
     withheld = WithheldBugs()
     # The step hooks count each session's tool calls, for the step limits.
     steps = Steps()
+    # The read hook adds each comment a read returned; the citation check reads them.
+    read_comments = ReadComments()
+    note_comments(read_comments, bug, state.comments)
     removals = rerecord.Removals(actions_recorder)
     install_hooks(
         actions_recorder,
@@ -1329,6 +1340,7 @@ async def run_gecko_triage(
         close_verdicts=close_verdicts,
         commit_authors=commits.authors,
         investigations=investigations,
+        read_comments=read_comments,
     )
 
     system_prompt = load_system_prompt(repo)
@@ -1377,7 +1389,13 @@ async def run_gecko_triage(
         **({"effort": effort} if effort else {}),
         setting_sources=[],
         **combined_options(
-            toolkit_dir, close_verdicts, commits, investigations, withheld, steps
+            toolkit_dir,
+            close_verdicts,
+            commits,
+            investigations,
+            withheld,
+            steps,
+            read_comments,
         ),
     )
 

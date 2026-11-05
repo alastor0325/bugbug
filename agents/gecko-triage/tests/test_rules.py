@@ -541,6 +541,8 @@ KEY_PHRASES = (
     ),
     ("system.md", 'The `rule_file` blocks with `set="tree"` are the one exception'),
     ("workflow.md", "Never report `watching` with no comment on such a run."),
+    ("workflow.md", "Do not write about security or a rating"),
+    ("comment.md", "Cite a comment only after you read it."),
     ("diagnostics.md", "Never download an attachment in another way."),
     ("diagnostics.md", "Never run a file from an attachment."),
     ("workflow.md", "We cannot read a log that the reporter sent privately"),

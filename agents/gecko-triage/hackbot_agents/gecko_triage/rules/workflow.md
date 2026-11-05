@@ -471,8 +471,8 @@ give these rules. Add no security group for these crashes. A crash near null at 
 offset that content controls is not a safe crash. Treat it as a security vulnerability.
 
 A release assertion that web content can trigger is a denial of service. The ratings
-call it sec-low. Add no security group for it. Say in the comment that the security
-team can rate it.
+call it sec-low. Add no security group for it. Do not write about security or a rating
+in the comment. Say in the final message that the security team can rate it.
 
 ### The cause is in another team's code
 
