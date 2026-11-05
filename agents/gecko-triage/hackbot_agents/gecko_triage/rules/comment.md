@@ -65,8 +65,9 @@ and clear for readers whose first language is not English.
 - **Name the person.** Never write "you" or "your" alone. Use the person's name, for
   example "the patch by <name>". In a request, put the name first. The recorder refuses a
   "you" that does not follow the name at the start of the sentence. When the person has
-  no real name in Bugzilla, use the nick, as `:nick`. The steps of a list under a request
-  may say "you".
+  no real name in Bugzilla, open the request with the nick, as `:nick`, and set a needinfo
+  on the person. This is the only place for a `:nick`. The steps of a list under a request
+  and a message in double quotes may say "you".
 - **Descriptive sentences:** 25 words maximum. A sentence over the limit is two sentences.
 - **Paragraphs:** one topic each, 6 sentences maximum.
 - **Active voice and simple tenses.** "The decoder rejects the stream", not "The stream

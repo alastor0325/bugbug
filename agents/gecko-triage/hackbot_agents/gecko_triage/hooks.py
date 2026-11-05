@@ -18,7 +18,8 @@ What they enforce:
 - links outside code only as http or https to the hosts in `ALLOWED_LINK_HOSTS`, in
   every markdown form, and no raw HTML link;
 - no security rating in the comment, such as "denial of service" or "sec-low";
-- no "you" or "your" unless the sentence starts with the person's name and a comma;
+- no "you" or "your" unless the sentence starts with the person's name and a comma,
+  outside list items and text in double quotes;
 - a cited comment of another bug is one the run read, and a sentence about a patch or
   an attachment cites the comment that adds it (`citations.py`);
 - severity and priority only when the current value is `--`, never S1, P4 or P5;
@@ -454,24 +455,108 @@ def security_wording_hook(action: dict) -> None:
         )
 
 
-_YOU = re.compile(r"\byou(?:r|rs|rself)?\b", re.IGNORECASE)
+_YOU = re.compile(r"\byou(?:r|rs|rself|rselves)?\b", re.IGNORECASE)
 _THANK_YOU = re.compile(r"\bthank you\b", re.IGNORECASE)
+_QUOTED_TEXT = re.compile(r'"[^"\n]*"|“[^”\n]*”')
+_CODE_NICK = re.compile(r"`(:[\w.-]+)`")
 # A sentence that opens with a name or a Bugzilla nick and a comma, as in
 # "Louis-Philippe, could you ..." or ":nick, could you ...".
-_NAMED = re.compile(r"^(?::[\w.-]+|[A-Z][\w'.-]*(?:\s+[A-Z][\w'.-]*){0,3}),\s")
+_NAMED = re.compile(
+    r"^(?::[\w.-]+|(?P<name>[^\W\d_][\w'’.-]*(?:\s+[^\W\d_][\w'’.-]*){0,5})),\s"
+)
+_GREETINGS = frozenset({"hi", "hello", "hey", "dear", "thanks"})
+_NAME_PARTICLES = frozenset(
+    [
+        "and",
+        "van",
+        "von",
+        "der",
+        "den",
+        "de",
+        "del",
+        "da",
+        "di",
+        "du",
+        "la",
+        "le",
+        "bin",
+    ]
+)
+# Capitalized words that open a sentence before a comma and are not a name.
+_OPENERS = frozenset(
+    [
+        "also",
+        "additionally",
+        "after",
+        "alternatively",
+        "as",
+        "before",
+        "besides",
+        "finally",
+        "first",
+        "for",
+        "however",
+        "if",
+        "in",
+        "instead",
+        "meanwhile",
+        "next",
+        "no",
+        "note",
+        "now",
+        "ok",
+        "okay",
+        "on",
+        "once",
+        "otherwise",
+        "please",
+        "second",
+        "since",
+        "so",
+        "sorry",
+        "still",
+        "then",
+        "therefore",
+        "third",
+        "unfortunately",
+        "until",
+        "when",
+        "while",
+        "with",
+        "yes",
+    ]
+)
+
+
+def opens_with_name(sentence: str) -> bool:
+    """Whether ``sentence`` opens with a person's name or a ``:nick`` and a comma."""
+    match = _NAMED.match(sentence)
+    if match is None:
+        return False
+    if match["name"] is None:
+        return True
+    names = match["name"].split()
+    if names[0].lower() in _GREETINGS:
+        names = names[1:]
+    if not names or names[0].lower() in _OPENERS:
+        return False
+    return all(not n[0].islower() or n in _NAME_PARTICLES for n in names)
 
 
 def addressee_hook(action: dict) -> None:
     """A comment names the person; "you" only follows the name that opens a request.
 
     The steps of a list stay imperative under the request, so a list item may say "you".
+    Text in double quotes, such as a page's message, is not the agent's words.
     """
     body = _comment_body(action)
     if body is None:
         return
-    lines = [ln for ln in prose(body).splitlines() if not _LIST_MARKER.match(ln)]
-    for sentence in sentences("\n".join(lines)):
-        if _YOU.search(_THANK_YOU.sub("", sentence)) and not _NAMED.match(sentence):
+    text = _QUOTED_TEXT.sub(
+        "quote", "\n".join(paragraphs(prose(_CODE_NICK.sub(r"\1", body))))
+    )
+    for sentence in sentences(text):
+        if _YOU.search(_THANK_YOU.sub("", sentence)) and not opens_with_name(sentence):
             raise ToolError(
                 'your comment says "you" without a name. Use the person\'s name in '
                 'place of "you" or "your". In a request, put the name first: '

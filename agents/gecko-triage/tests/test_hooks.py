@@ -2276,6 +2276,12 @@ def test_a_comment_cites_only_a_comment_the_run_read(bug_new, comments_new):
         "You already work on these checks.",
         "The patch helps, and you can test it in Nightly.",
         "Could you please attach about:support?",
+        "However, you can test it in Nightly.",
+        "Please, could you attach about:support?",
+        "Also, your profile shows the stall.",
+        "In Nightly, you can turn the pref off.",
+        "Thanks, could you also attach about:support?",
+        "The fix helps all of yourselves.",
     ],
 )
 def test_a_comment_names_the_person_and_not_only_you(body):
@@ -2296,6 +2302,16 @@ def test_a_comment_names_the_person_and_not_only_you(body):
         "The WIP patch by Louis-Philippe Manette already has some of these checks.",
         "Run `you --help` to see the options.",
         "Dana, could you please do this test?\n\n1. Tell us if you hear the old sound.",
+        "Émilie, could you please attach about:support?",
+        "Jan van der Berg, could you please attach about:support?",
+        "Dana and Paul, could you please test Nightly?",
+        "王小明, could you please attach about:support?",
+        "Sean O’Brien, could you please test Nightly?",
+        "Hi Dana, could you please attach about:support?",
+        "`:sonickydon`, could you please do this test?",
+        "The profile shows the stall. Dana, could\nyou please attach about:support?",
+        'The page shows "Your browser does not support this video".',
+        "The page shows “Your browser does not support this video”.",
     ],
 )
 def test_a_request_may_say_you_after_the_name(body):
