@@ -2290,6 +2290,7 @@ def test_a_comment_names_the_person_and_not_only_you(body):
     "body",
     [
         "Louis-Philippe, could you please attach about:support?",
+        ":sonickydon, could you please do this test?",
         "Louis-Philippe Manette, your WIP patch already has some of these checks.",
         "Thank you for the report.",
         "The WIP patch by Louis-Philippe Manette already has some of these checks.",

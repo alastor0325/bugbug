@@ -456,8 +456,9 @@ def security_wording_hook(action: dict) -> None:
 
 _YOU = re.compile(r"\byou(?:r|rs|rself)?\b", re.IGNORECASE)
 _THANK_YOU = re.compile(r"\bthank you\b", re.IGNORECASE)
-# A sentence that opens with a name and a comma, as in "Louis-Philippe, could you ...".
-_NAMED = re.compile(r"^[A-Z][\w'.-]*(?:\s+[A-Z][\w'.-]*){0,3},\s")
+# A sentence that opens with a name or a Bugzilla nick and a comma, as in
+# "Louis-Philippe, could you ..." or ":nick, could you ...".
+_NAMED = re.compile(r"^(?::[\w.-]+|[A-Z][\w'.-]*(?:\s+[A-Z][\w'.-]*){0,3}),\s")
 
 
 def addressee_hook(action: dict) -> None:
