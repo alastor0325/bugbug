@@ -52,8 +52,8 @@ from pydantic import BaseModel, BeforeValidator, Field, model_validator
 from searchfox import AsyncSearchfoxClient
 
 from . import attachments, authors, ci_logs, closing, dupes, rerecord
-from .citations import ReadComments, read_hook
 from .actions_view import needinfo_requestees, updates
+from .citations import ReadComments, read_hook
 from .config import (
     ALLOWED_LINK_HOSTS,
     BOT_ACCOUNT,
