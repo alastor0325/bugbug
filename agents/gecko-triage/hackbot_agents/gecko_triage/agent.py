@@ -52,7 +52,7 @@ from pydantic import BaseModel, BeforeValidator, Field, model_validator
 from searchfox import AsyncSearchfoxClient
 
 from . import attachments, authors, ci_logs, closing, dupes, rerecord
-from .citations import ReadComments, note_comments, read_hook
+from .citations import ReadComments, read_hook
 from .actions_view import needinfo_requestees, updates
 from .config import (
     ALLOWED_LINK_HOSTS,
@@ -1328,7 +1328,6 @@ async def run_gecko_triage(
     steps = Steps()
     # The read hook adds each comment a read returned; the citation check reads them.
     read_comments = ReadComments()
-    note_comments(read_comments, bug, state.comments)
     removals = rerecord.Removals(actions_recorder)
     install_hooks(
         actions_recorder,

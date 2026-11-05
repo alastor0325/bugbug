@@ -125,12 +125,13 @@ def citation_refusal(text: str, bug: int, store: ReadComments) -> str | None:
     in "the patch on bug N (comment 4)". A citation before the word, as in "comment 5
     says that the patch works", is not checked for an attachment.
     """
+    own_known = any(b == bug for b, _ in store.seen)
     for sentence in _SENTENCE_END.split(text):
         cited = _citations(sentence, bug)
         for cited_bug, count, _ in cited:
             if (cited_bug, count) in store.seen:
                 continue
-            if cited_bug == bug and not any(b == bug for b, _ in store.seen):
+            if cited_bug == bug and not own_known:
                 continue
             return (
                 f"your comment cites comment {count} of bug {cited_bug}, which this run "

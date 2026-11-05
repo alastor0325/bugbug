@@ -434,12 +434,18 @@ _SECURITY_RATING = re.compile(
 )
 
 
+def _comment_body(action: dict) -> str | None:
+    """The model's text of a recorded comment, without the runtime's footer."""
+    text = action_params(action).get("text")
+    return split_runtime_footer(text)[0] if isinstance(text, str) else None
+
+
 def security_wording_hook(action: dict) -> None:
     """A comment rates no security; the final message says the security team can."""
-    text = action_params(action).get("text")
-    if not isinstance(text, str):
+    body = _comment_body(action)
+    if body is None:
         return
-    if found := _SECURITY_RATING.search(prose(split_runtime_footer(text)[0])):
+    if found := _SECURITY_RATING.search(prose(body)):
         raise ToolError(
             f"your comment rates security ({found.group(0)!r}). Remove it from the "
             "comment, and say in the final message that the security team can rate "
@@ -451,11 +457,10 @@ def citation_hook(bug_id: int, read_comments: ReadComments) -> ActionHook:
     """A cited comment is one the run read, and a patch is cited where it was added."""
 
     def hook(action: dict) -> None:
-        text = action_params(action).get("text")
-        if not isinstance(text, str):
+        body = _comment_body(action)
+        if body is None:
             return
-        body = prose(citable_text(split_runtime_footer(text)[0]))
-        if reason := citation_refusal(body, bug_id, read_comments):
+        if reason := citation_refusal(prose(citable_text(body)), bug_id, read_comments):
             raise ToolError(reason)
 
     return hook
@@ -1068,8 +1073,8 @@ def install_hooks(
 ) -> None:
     """Register every hook on ``recorder``, in the order they must run.
 
-    ``read_comments`` is what `citations.read_hook` collects, read at each check. With
-    none, it holds only the triaged bug's comments.
+    ``read_comments`` is what `citations.read_hook` collects, read at each check. The
+    triaged bug's comments are added to it here.
 
     The comment hook refuses first. The placeholder hook then expands the blocks the
     style hook exempts, and the capture hook checks the capture steps. The link and
@@ -1083,9 +1088,8 @@ def install_hooks(
     recorder.add_hook("bugzilla.add_comment", link_hook)
     recorder.add_hook("bugzilla.add_comment", comment_style_hook)
     recorder.add_hook("bugzilla.add_comment", security_wording_hook)
-    if read_comments is None:
-        read_comments = ReadComments()
-        note_comments(read_comments, bug_id, state.comments)
+    read_comments = ReadComments() if read_comments is None else read_comments
+    note_comments(read_comments, bug_id, state.comments)
     recorder.add_hook("bugzilla.add_comment", citation_hook(bug_id, read_comments))
     recorder.add_hook("bugzilla.add_comment", refuted_close_hook(close_verdicts))
     recorder.add_hook(
