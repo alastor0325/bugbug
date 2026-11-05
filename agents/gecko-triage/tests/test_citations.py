@@ -189,3 +189,9 @@ def test_a_word_that_only_starts_with_patch_is_no_patch():
 )
 def test_a_citation_in_a_link_is_kept_for_the_check(body, expected):
     assert citable_text(body) == expected
+
+
+def test_a_citation_before_the_patch_word_is_not_checked_for_an_attachment():
+    store = _read(_comment(5))
+    text = f"The reporter confirmed in bug {OTHER} comment 5 that the patch fixes it."
+    assert citation_refusal(text, BUG, store) is None

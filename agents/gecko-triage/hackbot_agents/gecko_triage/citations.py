@@ -121,7 +121,9 @@ def _citations(sentence: str, bug: int) -> list[tuple[int, int, int]]:
 def citation_refusal(text: str, bug: int, store: ReadComments) -> str | None:
     """Why the comment cites a comment wrongly, or None.
 
-    A patch or an attachment is checked against the citation nearest to its word.
+    A patch or an attachment is checked against the nearest citation after its word, as
+    in "the patch on bug N (comment 4)". A citation before the word, as in "comment 5
+    says that the patch works", is not checked for an attachment.
     """
     for sentence in _SENTENCE_END.split(text):
         cited = _citations(sentence, bug)
@@ -138,7 +140,10 @@ def citation_refusal(text: str, bug: int, store: ReadComments) -> str | None:
         if not cited:
             continue
         for patch in _PATCH.finditer(sentence):
-            cited_bug, count, _ = min(cited, key=lambda c: abs(c[2] - patch.start()))
+            after = [c for c in cited if c[2] > patch.start()]
+            if not after:
+                continue
+            cited_bug, count, _ = min(after, key=lambda c: c[2])
             if store.seen.get((cited_bug, count), True):
                 continue
             return (
