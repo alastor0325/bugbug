@@ -8,8 +8,9 @@ before appending, so raising here aborts the recording.
 
 What they enforce:
 
-- one public comment per run, on the triaged bug; `rerecord.py` lets the main agent
-  remove every recorded action and record them again, and every hook then runs again;
+- one public comment per run, on the triaged bug; the main agent may remove its recorded
+  actions one by one with hackbot-runtime's `remove_action` and record them again,
+  within the limits in `removals.py`, and every hook then runs again;
 - no retyped capture steps, no list item that names the capture marker, and no request
   that names the marker without the verbatim capture block;
 - the ASD-STE100 limits on the prose: 25 words per sentence, 6 sentences per paragraph,
@@ -112,7 +113,7 @@ from .config import (
     UNSET_FIELD_VALUE,
 )
 from .investigations import Investigations, early_ask_refusal
-from .rerecord import REMOVE_RECORDED_ACTIONS_TOOL
+from .removals import LIST_ACTIONS_TOOL, REMOVE_ACTION_TOOL
 from .state import TriageState
 from .teamconfig import EMAIL
 
@@ -129,6 +130,14 @@ def _recorded(recorder: ActionsRecorder, action_type: str) -> list[dict]:
     return [a for a in recorder.actions if a["type"] == action_type]
 
 
+# How a run records its comment again, for the refusals that need it.
+RE_RECORD = (
+    f"Call `{LIST_ACTIONS_TOOL}` for the action IDs, remove the comment and every field "
+    f"change with `{REMOVE_ACTION_TOOL}`, then record the comment first and every field "
+    "change again"
+)
+
+
 # --- bugzilla.add_comment --------------------------------------------------- #
 
 
@@ -139,9 +148,11 @@ def add_comment_hook(recorder: ActionsRecorder, bug_id: int) -> ActionHook:
         params = action_params(action)
         if _recorded(recorder, "bugzilla.add_comment"):
             raise ToolError(
-                "you have already recorded a comment; record one per run. To fix "
-                f"it, call `{REMOVE_RECORDED_ACTIONS_TOOL}`, then record the comment "
-                "and every field change again"
+                f"you have already recorded a comment; record one per run. {RE_RECORD}"
+            )
+        if _recorded(recorder, "bugzilla.update_bug"):
+            raise ToolError(
+                f"remove every recorded field change before the comment. {RE_RECORD}"
             )
         _check_target_bug(params, bug_id)
         if params.get("is_private"):
@@ -806,10 +817,7 @@ def _check_reporter_ask(
         investigations, state.reporter, needinfo_requestees(changes)
     )
     if reason:
-        raise ToolError(
-            f"{reason}. To change the recorded comment first, call "
-            f"`{REMOVE_RECORDED_ACTIONS_TOOL}`"
-        )
+        raise ToolError(f"{reason}. {RE_RECORD}")
 
 
 def author_needinfos(
@@ -966,10 +974,9 @@ def _check_groups(changes: dict, state: TriageState) -> None:
     group = SECURITY_GROUPS.get(state.bug.get("product"))
     if group is None:
         raise ToolError(
-            "this product has no security group here, so the bug stays public. Remove "
-            "the recorded comment with remove_recorded_actions. Record a comment that "
-            "does not describe the vulnerability. Say in the final message that the "
-            "security team must look at the bug."
+            "this product has no security group here, so the bug stays public. "
+            f"{RE_RECORD}, with a comment that does not describe the vulnerability. "
+            "Say in the final message that the security team must look at the bug."
         )
     if changes["groups"] != {"add": [group]}:
         raise ToolError(

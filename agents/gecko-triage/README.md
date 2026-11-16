@@ -120,15 +120,16 @@ use a key that cannot read private bugs or private comments.
    each action as it is recorded; their docstring lists the limits. A refusal reaches
    the model as a tool error it can correct in the same run, and nothing lands in
    `summary.json`.
-   The main agent can fix an error in its recorded comment with
-   `remove_recorded_actions`, an in-process MCP server (`rerecord.py`) bound to the
-   recorder. It removes every recorded action, the `dupe_of` change too, and the agent
-   records them again. Every hook runs again. The close verdicts stay, so a verdict
-   after the first comment stays late. A run can use it 2 times. The `PreToolUse` hook
-   `removal_caller_guard` refuses it to every subagent. That hook is the barrier: the
-   CLI's built-in general-purpose agent has every tool, MCP tools too. A run that
-   removed its actions and ends with no comment fails, unless its decision is
-   `watching`, so BugBot runs it again.
+   The main agent can fix an error in its recorded comment with hackbot-runtime's
+   `list_actions` and `remove_action`. The agent removes the comment and every field
+   change one by one, the `dupe_of` change too, and records them again: the comment hook refuses a new
+   comment while a field change is still recorded, so every hook runs again in order.
+   The close verdicts stay, so a verdict after the first comment stays late.
+   `removals.py` holds the limits. A run can remove its comment 2 times. The
+   `PreToolUse` hook `removal_guard` refuses `remove_action` to every subagent. That
+   hook is the barrier: the CLI's built-in general-purpose agent has every tool, MCP
+   tools too. A run that removed its comment and ends with no comment fails, unless its
+   decision is `watching`, so BugBot runs it again.
 6. `may_apply_unattended` in `agent.py` sets `findings.auto_apply` when the run has a
    team, the run recorded a comment and the final message carries a decision. A dropped
    write, a security group, a `needinfo_warning` or a `restricted_warning` sets it to

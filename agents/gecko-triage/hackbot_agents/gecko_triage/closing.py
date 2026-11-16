@@ -455,7 +455,7 @@ def verifier_read_guard(store: CloseVerdicts):
 
     async def guard(input_data: dict, tool_use_id: str | None, context) -> dict:
         reason = verifier_read_refusal(store, input_data)
-        return {} if reason is None else _deny(reason)
+        return {} if reason is None else deny(reason)
 
     return guard
 
@@ -482,7 +482,7 @@ def comment_marker_hook(store: CloseVerdicts):
     return hook
 
 
-def _deny(reason: str) -> dict:
+def deny(reason: str) -> dict:
     return {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
@@ -526,7 +526,7 @@ def spawn_guard(store: CloseVerdicts):
 
     async def guard(input_data: dict, tool_use_id: str | None, context) -> dict:
         reason = spawn_refusal(store, input_data)
-        return {} if reason is None else _deny(reason)
+        return {} if reason is None else deny(reason)
 
     return guard
 
@@ -546,4 +546,4 @@ async def verdict_caller_guard(
     input_data: dict, tool_use_id: str | None, context
 ) -> dict:
     reason = verdict_caller_refusal(input_data)
-    return {} if reason is None else _deny(reason)
+    return {} if reason is None else deny(reason)

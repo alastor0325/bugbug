@@ -56,10 +56,18 @@ MOZILLA_VCS_TOOLS = [
 
 # Recordable action types. `update_bug` carries the fields in `ALLOWED_UPDATE_FIELDS`;
 # `hooks.py` checks each one and refuses every other field.
+# hackbot-runtime's tools that list and remove the run's own recorded actions;
+# `removals.py` holds the limits on them.
+LIST_ACTIONS_TYPE = "action_records.list_actions"
+REMOVE_ACTION_TYPE = "action_records.remove_action"
 ENABLED_ACTION_TYPES = [
     "bugzilla.add_comment",
     "bugzilla.update_bug",
+    LIST_ACTIONS_TYPE,
+    REMOVE_ACTION_TYPE,
 ]
+# The decisions that need no comment; `skipped` comes from the preflight.
+NO_COMMENT_DECISIONS = frozenset({"watching", "skipped"})
 
 
 # The team this run triages for: the optional `team` run input, which hackbot-api

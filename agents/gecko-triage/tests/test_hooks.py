@@ -25,7 +25,7 @@ from conftest import (
     _verdicts,
     with_needinfo,
 )
-from hackbot_agents.gecko_triage import hooks
+from hackbot_agents.gecko_triage import hooks, removals
 from hackbot_agents.gecko_triage import state as state_module
 from hackbot_agents.gecko_triage.citations import ReadComments, note_comments
 from hackbot_agents.gecko_triage.closing import CloseVerdict, CloseVerdicts
@@ -47,9 +47,17 @@ from hackbot_runtime.actions.claude_sdk import actions_to_tool_names
 from hackbot_runtime.searchfox import PLACEHOLDER as SEARCHFOX_PLACEHOLDER
 
 
-def test_the_agent_is_given_a_comment_and_a_field_change_and_nothing_else():
-    assert ENABLED_ACTION_TYPES == ["bugzilla.add_comment", "bugzilla.update_bug"]
+def test_the_agent_is_given_a_comment_a_field_change_and_the_removal_tools():
+    # The writes are a comment and a field change; the other two only read or remove
+    # the run's own recorded actions.
+    assert ENABLED_ACTION_TYPES == [
+        "bugzilla.add_comment",
+        "bugzilla.update_bug",
+        "action_records.list_actions",
+        "action_records.remove_action",
+    ]
     tools = actions_to_tool_names(ENABLED_ACTION_TYPES)
+    assert tools[2:] == [removals.LIST_ACTIONS_TOOL, removals.REMOVE_ACTION_TOOL]
     assert not [t for t in tools if "create_bug" in t or "attachment" in t], tools
 
 

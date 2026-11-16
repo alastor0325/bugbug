@@ -14,6 +14,7 @@ from conftest import (
     _record_verdict,
     _result,
     _run,
+    remove_as_the_agent,
 )
 from hackbot_agents.gecko_triage import (
     agent,
@@ -21,7 +22,7 @@ from hackbot_agents.gecko_triage import (
     ci_logs,
     closing,
     dupes,
-    rerecord,
+    removals,
 )
 from hackbot_agents.gecko_triage.authors import CommitFacts
 from hackbot_agents.gecko_triage.closing import CloseVerdicts
@@ -709,26 +710,33 @@ async def test_the_run_registers_the_close_verifier_and_binds_its_store(
         ), name
 
 
-async def test_the_run_offers_remove_recorded_actions_to_the_main_agent_only(
-    fake_client, tmp_path, new_state, monkeypatch
+async def test_the_run_offers_the_runtime_removal_tools_to_the_main_agent_only(
+    fake_client, tmp_path, new_state
 ):
-    bound = []
-    real = rerecord.removals_server
-    monkeypatch.setattr(
-        rerecord, "removals_server", lambda r: bound.append(r) or real(r)
-    )
-    recorder = ActionsRecorder()
-    await _run(tmp_path, new_state, recorder)
+    await _run(tmp_path, new_state, ActionsRecorder())
     options = fake_client.options
-    (removals,) = bound
-    assert removals.recorder is recorder and removals.used == 0
-    assert options.mcp_servers[rerecord.SERVER_NAME]["type"] == "sdk"
-    assert rerecord.REMOVE_RECORDED_ACTIONS_TOOL in options.allowed_tools
-    for name, sub in options.agents.items():
-        assert rerecord.REMOVE_RECORDED_ACTIONS_TOOL not in sub.tools, name
-    hooks = options.hooks["PreToolUse"]
-    (guard,) = [m for m in hooks if m.matcher == rerecord.REMOVE_RECORDED_ACTIONS_TOOL]
-    assert guard.hooks == [rerecord.removal_caller_guard]
+    for tool in (removals.LIST_ACTIONS_TOOL, removals.REMOVE_ACTION_TOOL):
+        assert tool in options.allowed_tools
+        for name, sub in options.agents.items():
+            assert tool not in sub.tools, name
+    (guard,) = [
+        m
+        for m in options.hooks["PreToolUse"]
+        if m.matcher == removals.REMOVE_ACTION_TOOL
+    ]
+    denied = await guard.hooks[0]({"agent_type": "investigator"}, None, None)
+    assert denied["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+async def _remove_as_the_agent(options, recorder):
+    """Remove every recorded action through the run's own `remove_action` guard."""
+    (match,) = [
+        m
+        for m in options.hooks["PreToolUse"]
+        if m.matcher == removals.REMOVE_ACTION_TOOL
+    ]
+    for action in recorder.list_actions():
+        await remove_as_the_agent(match.hooks[0], recorder, action["action_id"])
 
 
 def _close_script(recorder, stores, verdict):
@@ -784,11 +792,6 @@ async def test_a_run_that_records_its_close_again_keeps_the_confirm(
     fake_client, tmp_path, new_state, monkeypatch, verdict_stores
 ):
     _fake_fetch(monkeypatch, {})
-    bound = []
-    real = rerecord.removals_server
-    monkeypatch.setattr(
-        rerecord, "removals_server", lambda r: bound.append(r) or real(r)
-    )
     recorder = ActionsRecorder()
 
     def record_both(text):
@@ -806,7 +809,7 @@ async def test_a_run_that_records_its_close_again_keeps_the_confirm(
     async def script():
         _record_verdict(verdict_stores, "INVALID")
         record_both("The the note.")
-        await rerecord.remove_recorded_actions_tool(bound[-1])
+        await _remove_as_the_agent(fake_client.options, recorder)
         record_both("The note.")
 
     fake_client.script = script
@@ -827,11 +830,6 @@ async def test_a_run_that_removed_its_comment_and_did_not_record_it_again_fails(
     fake_client, tmp_path, new_state, monkeypatch, decision, fails
 ):
     _fake_fetch(monkeypatch, {})
-    bound = []
-    real = rerecord.removals_server
-    monkeypatch.setattr(
-        rerecord, "removals_server", lambda r: bound.append(r) or real(r)
-    )
     recorder = ActionsRecorder()
 
     async def script():
@@ -840,7 +838,7 @@ async def test_a_run_that_removed_its_comment_and_did_not_record_it_again_fails(
             {"bug_id": BUG, "text": "The the note.", "is_private": False},
             reasoning="r",
         )
-        await rerecord.remove_recorded_actions_tool(bound[-1])
+        await _remove_as_the_agent(fake_client.options, recorder)
 
     fake_client.script = script
     fake_client.result = _result(

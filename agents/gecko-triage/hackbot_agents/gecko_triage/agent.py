@@ -45,7 +45,7 @@ from hackbot_runtime.searchfox import (
 from pydantic import BaseModel, BeforeValidator, Field, model_validator
 from searchfox import AsyncSearchfoxClient
 
-from . import attachments, authors, bugzilla_prompt, ci_logs, closing, dupes, rerecord
+from . import attachments, authors, bugzilla_prompt, ci_logs, closing, dupes, removals
 from .actions_view import needinfo_requestees, updates
 from .citations import ReadComments, read_hook
 from .config import (
@@ -59,6 +59,7 @@ from .config import (
     MOZILLA_VCS_TOOLS,
     MOZREGRESSION_BLOCK,
     MOZREGRESSION_PLACEHOLDER,
+    NO_COMMENT_DECISIONS,
     SEARCHFOX_TOOLS,
     SECURITY_GROUPS,
     STALE_NEEDINFO_DAYS,
@@ -299,7 +300,7 @@ def relabeled_empty_run(
     """
     if (
         actions
-        or plan.decision in rerecord.NO_COMMENT_DECISIONS
+        or plan.decision in NO_COMMENT_DECISIONS
         or (
             plan.decision not in RELABELED_WHEN_EMPTY
             and not (refuted and plan.decision in CLOSING_DECISIONS)
@@ -322,7 +323,7 @@ def empty_run_refusal(
     if (
         actions
         or (refuted and plan.decision in CLOSING_DECISIONS)
-        or plan.decision in RELABELED_WHEN_EMPTY | rerecord.NO_COMMENT_DECISIONS
+        or plan.decision in RELABELED_WHEN_EMPTY | NO_COMMENT_DECISIONS
     ):
         return None
     return f"the decision is {plan.decision}, but the run recorded no action"
@@ -939,6 +940,7 @@ def session_options(
     withheld: WithheldBugs | None = None,
     steps: Steps | None = None,
     read_comments: ReadComments | None = None,
+    run_removals: removals.Removals | None = None,
 ) -> dict:
     """The tool set and environment every run's Claude Code session gets.
 
@@ -951,10 +953,15 @@ def session_options(
     bugs that a read withheld. ``steps`` counts the tool calls of each
     session and notes a subagent that stopped at its step limit. ``read_comments``
     collects the comments that a read returned, for the citation check.
+    ``run_removals`` counts the comment removals that the `remove_action` guard lets
+    through, on the run's recorder.
     """
     withheld = WithheldBugs() if withheld is None else withheld
     steps = Steps() if steps is None else steps
     read_comments = ReadComments() if read_comments is None else read_comments
+    run_removals = (
+        removals.Removals(ActionsRecorder()) if run_removals is None else run_removals
+    )
     on_any_tool = HookMatcher(matcher=None, hooks=[call_counter(steps)])
     on_broker = HookMatcher(
         matcher=BROKER_TOOLS_MATCHER,
@@ -988,8 +995,8 @@ def session_options(
                     matcher="Read", hooks=[closing.verifier_read_guard(close_verdicts)]
                 ),
                 HookMatcher(
-                    matcher=rerecord.REMOVE_RECORDED_ACTIONS_TOOL,
-                    hooks=[rerecord.removal_caller_guard],
+                    matcher=removals.REMOVE_ACTION_TOOL,
+                    hooks=[removals.removal_guard(run_removals)],
                 ),
                 # The server serves the whole session; only `log_analyst` fetches.
                 HookMatcher(
@@ -1035,11 +1042,18 @@ def combined_options(
     withheld: WithheldBugs | None = None,
     steps: Steps | None = None,
     read_comments: ReadComments | None = None,
+    run_removals: removals.Removals | None = None,
 ) -> dict:
     """The plugin options and the session options, with their environments merged."""
     toolkit = toolkit_options(toolkit_dir)
     session = session_options(
-        close_verdicts, commits, investigations, withheld, steps, read_comments
+        close_verdicts,
+        commits,
+        investigations,
+        withheld,
+        steps,
+        read_comments,
+        run_removals,
     )
     return {**toolkit, **session, "env": {**toolkit["env"], **session["env"]}}
 
@@ -1106,7 +1120,7 @@ async def run_gecko_triage(
     steps = Steps()
     # The read hook adds each comment a read returned; the citation check reads them.
     read_comments = ReadComments()
-    removals = rerecord.Removals(actions_recorder)
+    run_removals = removals.Removals(actions_recorder)
     install_hooks(
         actions_recorder,
         bug,
@@ -1132,7 +1146,6 @@ async def run_gecko_triage(
             ci_logs.SERVER_NAME: ci_logs.ci_logs_server(bug),
             dupes.SERVER_NAME: dupes.concepts_server(concepts),
             closing.SERVER_NAME: closing.verdicts_server(close_verdicts),
-            rerecord.SERVER_NAME: rerecord.removals_server(removals),
             ACTIONS_SERVER_NAME: actions_server,
         },
         agents={
@@ -1157,7 +1170,6 @@ async def run_gecko_triage(
             ci_logs.FETCH_CI_LOG_TOOL,
             dupes.SEARCH_CONCEPTS_TOOL,
             closing.RECORD_CLOSE_VERDICT_TOOL,
-            rerecord.REMOVE_RECORDED_ACTIONS_TOOL,
             *enabled_action_tools,
         ],
         model=model,
@@ -1173,6 +1185,7 @@ async def run_gecko_triage(
             withheld,
             steps,
             read_comments,
+            run_removals,
         ),
     )
 
@@ -1216,7 +1229,9 @@ async def run_gecko_triage(
             file=sys.stderr,
         )
     recorded = actions_recorder.list_actions()
-    if reason := rerecord.missing_comment_refusal(removals, recorded, plan.decision):
+    if reason := removals.missing_comment_refusal(
+        run_removals, recorded, plan.decision
+    ):
         # Failing gets the run retried; an ok run would end with no comment.
         raise AgentError(f"bug {bug}: {reason}")
     if reason := analyzed_refusal(plan, recorded, state):

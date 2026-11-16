@@ -1,4 +1,4 @@
-"""Tests for the tool that removes a run's recorded actions so it can record them again."""
+"""Tests for the limits on a run that removes its recorded actions to record them again."""
 
 import pytest
 from agent_tools.registry import ToolError
@@ -10,30 +10,38 @@ from conftest import (
     _recorder,
     _text,
     _update,
+    remove_as_the_agent,
 )
-from hackbot_agents.gecko_triage import closing, hooks, rerecord
+from hackbot_agents.gecko_triage import closing, hooks
 from hackbot_agents.gecko_triage.closing import (
     CloseVerdicts,
     record_close_verdict_tool,
     recorded_close,
     spawn_refusal,
 )
-from hackbot_agents.gecko_triage.rerecord import (
-    MAX_REMOVALS,
-    REMOVE_RECORDED_ACTIONS_TOOL,
+from hackbot_agents.gecko_triage.removals import (
+    LIST_ACTIONS_TOOL,
+    MAX_COMMENT_REMOVALS,
+    REMOVE_ACTION_TOOL,
     Removals,
     missing_comment_refusal,
-    removal_caller_guard,
-    removal_caller_refusal,
-    remove_recorded_actions_tool,
+    removal_guard,
 )
 
 INVALID = {"status": "RESOLVED", "resolution": "INVALID"}
 DUPLICATE = {"status": "RESOLVED", "resolution": "DUPLICATE", "dupe_of": DUPE_TARGET}
 
 
+async def _remove_one(rec, removals, action_id, **caller):
+    return await remove_as_the_agent(removal_guard(removals), rec, action_id, **caller)
+
+
 async def _remove(rec, removals=None):
-    return await remove_recorded_actions_tool(removals or Removals(rec))
+    """Remove every recorded action, the comment first, as the rules tell the agent."""
+    removals = removals or Removals(rec)
+    for action in rec.list_actions():
+        await _remove_one(rec, removals, action["action_id"])
+    return removals
 
 
 async def _verdict(store, resolution="INVALID", verdict="confirm", dupe_of=None):
@@ -42,21 +50,31 @@ async def _verdict(store, resolution="INVALID", verdict="confirm", dupe_of=None)
     )
 
 
-async def test_the_tool_removes_the_comment_and_every_field_change(new_state):
+async def test_the_runtime_tools_remove_the_comment_and_every_field_change(new_state):
     store = CloseVerdicts()
     rec = _recorder(new_state, close_verdicts=store)
     await _verdict(store, "DUPLICATE", dupe_of=DUPE_TARGET)
     _comment(rec)
     _update(rec, DUPLICATE)
     _update(rec, {"blocks": {"add": [KNOWN_META]}}, bug_id=DUPE_TARGET)
-    result = await _remove(rec)
+    removals = await _remove(rec)
     assert rec.actions == []
-    assert result["removed"] == [
-        "bugzilla.add_comment",
-        "bugzilla.update_bug",
-        "bugzilla.update_bug",
-    ]
-    assert result["removals_left"] == MAX_REMOVALS - 1
+    assert removals.comments == 1
+
+
+async def test_a_new_comment_waits_until_every_field_change_is_removed(new_state):
+    # The comment comes first again, so every field change is checked against it.
+    rec = _recorder(new_state)
+    removals = Removals(rec)
+    _comment(rec)
+    _update(rec, {"severity": "S3", "priority": "P3"})
+    comment, update = rec.list_actions()
+    await _remove_one(rec, removals, comment["action_id"])
+    with pytest.raises(ToolError, match="remove every recorded field change"):
+        _comment(rec)
+    await _remove_one(rec, removals, update["action_id"])
+    _comment(rec)
+    assert [a["type"] for a in rec.actions] == ["bugzilla.add_comment"]
 
 
 async def test_a_re_record_runs_every_comment_hook_again(new_state):
@@ -111,56 +129,60 @@ async def test_a_duplicate_target_change_needs_the_duplicate_again(new_state):
     assert len(rec.actions) == 3
 
 
-async def test_the_run_may_remove_its_actions_twice_and_no_more(new_state):
+async def test_the_run_may_remove_its_comment_twice_and_no_more(new_state):
     rec = _recorder(new_state)
     removals = Removals(rec)
-    for _ in range(MAX_REMOVALS):
+    for _ in range(MAX_COMMENT_REMOVALS):
         _comment(rec)
         await _remove(rec, removals)
     _comment(rec)
-    with pytest.raises(ToolError, match=f"{MAX_REMOVALS} times already"):
-        await _remove(rec, removals)
+    (comment,) = rec.list_actions()
+    with pytest.raises(ToolError, match=f"{MAX_COMMENT_REMOVALS} times already"):
+        await _remove_one(rec, removals, comment["action_id"])
     assert len(rec.actions) == 1
-    assert removals.used == MAX_REMOVALS
+    assert removals.comments == MAX_COMMENT_REMOVALS
 
 
-async def test_a_call_with_nothing_recorded_is_refused_and_not_counted(new_state):
+async def test_a_field_change_removal_is_not_counted(new_state):
     rec = _recorder(new_state)
     removals = Removals(rec)
-    with pytest.raises(ToolError, match="nothing is recorded"):
-        await _remove(rec, removals)
-    assert removals.used == 0
+    _comment(rec)
+    _update(rec, {"severity": "S3", "priority": "P3"})
+    (_, update) = rec.list_actions()
+    await _remove_one(rec, removals, update["action_id"])
+    assert removals.comments == 0
 
 
-def test_the_comment_refusal_names_the_tool():
+async def test_an_unknown_action_id_is_left_to_the_tool(new_state):
+    rec = _recorder(new_state)
+    removals = Removals(rec)
+    with pytest.raises(ToolError, match="No recorded action"):
+        await _remove_one(rec, removals, "nope")
+    assert removals.comments == 0
+
+
+def test_the_comment_refusal_names_the_tools():
     rec = _recorder()
     _comment(rec)
     with pytest.raises(ToolError) as e:
         _comment(rec)
-    assert REMOVE_RECORDED_ACTIONS_TOOL in str(e.value)
+    assert LIST_ACTIONS_TOOL in str(e.value) and REMOVE_ACTION_TOOL in str(e.value)
     assert "revising it" not in str(e.value)
 
 
-def test_only_the_main_agent_may_remove_the_actions():
-    assert removal_caller_refusal({"tool_name": REMOVE_RECORDED_ACTIONS_TOOL}) is None
-    for data in (
+async def test_only_the_main_agent_may_remove_the_actions(new_state):
+    rec = _recorder(new_state)
+    _comment(rec)
+    (comment,) = rec.list_actions()
+    removals = Removals(rec)
+    for caller in (
         {"agent_type": "bug_investigator", "agent_id": "a1"},
         {"agent_type": closing.VERIFIER},
         {"agent_id": "a2"},
     ):
-        assert removal_caller_refusal(data)
-
-
-async def test_the_caller_guard_denies_a_subagent():
-    denied = await removal_caller_guard({"agent_type": "investigator"}, None, None)
-    assert denied["hookSpecificOutput"]["permissionDecision"] == "deny"
-    assert await removal_caller_guard({}, None, None) == {}
-
-
-def test_the_tool_name_and_server():
-    assert REMOVE_RECORDED_ACTIONS_TOOL == "mcp__rerecord__remove_recorded_actions"
-    server = rerecord.removals_server(Removals(_recorder()))
-    assert server["type"] == "sdk"
+        with pytest.raises(ToolError, match="only the main agent"):
+            await _remove_one(rec, removals, comment["action_id"], **caller)
+    assert len(rec.actions) == 1 and removals.comments == 0
 
 
 # --- the close verdict state ------------------------------------------------- #
@@ -230,8 +252,8 @@ async def test_a_refused_close_still_warns_after_a_re_record_without_it(new_stat
     assert "refused 1 close(s)" in store.warning(recorded_close(rec.actions))
 
 
-def test_the_hooks_name_the_tool_in_their_docstring():
-    assert "rerecord.py" in hooks.__doc__
+def test_the_hooks_name_the_removals_in_their_docstring():
+    assert "removals.py" in hooks.__doc__
 
 
 @pytest.mark.parametrize("decision", ["needs_info", "analyzed", "invalid", None])
@@ -239,7 +261,7 @@ def test_a_removal_with_no_comment_again_fails_the_run(new_state, decision):
     rec = _recorder(new_state)
     _comment(rec)
     _update(rec, {"severity": "S3", "priority": "P3"})
-    removals = Removals(rec, used=1)
+    removals = Removals(rec, comments=1)
     for action in rec.list_actions():
         rec.remove_action(action["action_id"])
     reason = missing_comment_refusal(removals, rec.list_actions(), decision)
@@ -248,10 +270,12 @@ def test_a_removal_with_no_comment_again_fails_the_run(new_state, decision):
 
 def test_a_removal_with_a_comment_again_or_no_comment_needed_passes(new_state):
     rec = _recorder(new_state)
-    assert missing_comment_refusal(Removals(rec, used=1), [], "watching") is None
+    assert missing_comment_refusal(Removals(rec, comments=1), [], "watching") is None
     assert missing_comment_refusal(Removals(rec), [], "needs_info") is None
     _comment(rec)
     assert (
-        missing_comment_refusal(Removals(rec, used=1), rec.list_actions(), "analyzed")
+        missing_comment_refusal(
+            Removals(rec, comments=1), rec.list_actions(), "analyzed"
+        )
         is None
     )

@@ -472,7 +472,7 @@ KEY_PHRASES = (
     ("workflow.md", "do not ask again. Say that the bug waits for X."),
     # One comment.
     ("system.md", "**`bugzilla_add_comment`**, once."),
-    ("comment.md", "You can do this two times per run."),
+    ("comment.md", "You can remove the comment two times per run."),
     # Severity and priority.
     ("severity-priority.md", "comment, and only when the current value is `--`."),
     ("severity-priority.md", "The agent sets only P1, P2 or P3."),

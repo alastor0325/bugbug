@@ -166,7 +166,8 @@ developer.
 
 ## An error in a recorded comment
 
-Read the comment again after you record it. If you find an error, call
-`remove_recorded_actions`. It removes the comment and every recorded field change. Then
-record the corrected comment and every field change again, in the same order. Every check
-runs again. You can do this two times per run. Never leave an error that you know of.
+Read the comment again after you record it. If you find an error, call `list_actions` for
+the IDs of your recorded actions. Remove the comment and every recorded field change with
+`remove_action`, the change on the `dupe_of` bug too. Then record the corrected comment
+first, and every field change again, in the same order. Every check runs again. You can
+remove the comment two times per run. Never leave an error that you know of.

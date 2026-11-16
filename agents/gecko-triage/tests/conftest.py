@@ -16,6 +16,7 @@ import pytest
 # config is imported, which reads it.
 os.environ.setdefault("TEAM", "media")
 
+from agent_tools.registry import ToolError  # noqa: E402
 from claude_agent_sdk import ResultMessage  # noqa: E402
 from hackbot_agents.gecko_triage import (  # noqa: E402
     agent,
@@ -23,6 +24,7 @@ from hackbot_agents.gecko_triage import (  # noqa: E402
     closing,
     config,
     hooks,
+    removals,
 )
 from hackbot_agents.gecko_triage.closing import (  # noqa: E402
     CloseVerdict,
@@ -36,7 +38,7 @@ from hackbot_agents.gecko_triage.config import (  # noqa: E402
 from hackbot_agents.gecko_triage.hooks import install_hooks  # noqa: E402
 from hackbot_agents.gecko_triage.investigations import Investigations  # noqa: E402
 from hackbot_agents.gecko_triage.state import TriageState  # noqa: E402
-from hackbot_runtime.actions import ActionsRecorder  # noqa: E402
+from hackbot_runtime.actions import ActionsRecorder, action_records  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -507,3 +509,16 @@ def full_prompt(state, known_docs=(), duplicate_candidates=None) -> str:
             agent.render_user_prompt(BUG, "t", state, known_docs, duplicate_candidates),
         )
     )
+
+
+async def remove_as_the_agent(guard, recorder, action_id, **caller):
+    """Remove one recorded action as the agent does: the guard first, then the tool."""
+    data = {
+        "tool_name": removals.REMOVE_ACTION_TOOL,
+        "tool_input": {"action_id": action_id},
+        **caller,
+    }
+    denied = await guard(data, None, None)
+    if denied:
+        raise ToolError(denied["hookSpecificOutput"]["permissionDecisionReason"])
+    return await action_records.remove_action(recorder, action_id)
