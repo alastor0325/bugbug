@@ -18,7 +18,7 @@ from hackbot_agents.gecko_triage.closing import CloseVerdicts
 from hackbot_agents.gecko_triage.investigations import Investigations
 from hackbot_agents.gecko_triage.state import TriageState
 
-OWNER = "alwu@mozilla.com"
+OWNER = "owner@example.com"
 REFUSAL = (
     "Error: Profile load failed: This profile is version 78, but this profiler-cli "
     "only supports up to version 77 of the processed profile format.\n"
@@ -117,18 +117,18 @@ def test_an_owner_with_an_open_needinfo_is_not_asked_again(bug_new, comments_new
     assert [a["type"] for a in rec.actions] == ["bugzilla.add_comment"]
 
 
-def test_an_owner_the_run_already_asked_is_not_added_twice(commented):
-    state, rec = commented
+def test_an_owner_the_run_already_asked_is_not_added_twice(bug_new, comments_new):
+    bug = dict(bug_new, cc=[*bug_new.get("cc", ()), OWNER])
+    state = TriageState(bug=bug, comments=comments_new, now=NOW)
+    rec = _recorder(state)
+    _comment(rec)
     _update(rec, {"flags": [{"name": "needinfo", "status": "?", "requestee": OWNER}]})
     assert not tooling.ask_tooling_owner(rec, BUG, state, _gaps(), OWNER)
     assert rec.actions[-1]["params"]["changes"]["flags"] == [_owner_flag()]
 
 
 def test_every_session_collects_tooling_gaps_from_bash():
-    gaps = tooling.ToolingGaps()
-    options = session_options(
-        CloseVerdicts(), CommitFacts(), Investigations(), tooling_gaps=gaps
-    )
+    options = session_options(CloseVerdicts(), CommitFacts(), Investigations())
     for event in ("PostToolUse", "PostToolUseFailure"):
         bash = [m for m in options["hooks"][event] if m.matcher == tooling.BASH_TOOL]
         assert bash, event
@@ -140,35 +140,26 @@ def test_an_owner_the_needinfo_rules_refuse_is_skipped(commented):
     assert [a["type"] for a in rec.actions] == ["bugzilla.add_comment"]
 
 
-def test_a_run_with_no_team_lists_still_asks_the_owner(
-    bug_new, comments_new, monkeypatch
-):
-    from hackbot_agents.gecko_triage import state as state_module
-
-    monkeypatch.setattr(state_module, "NEEDINFO_EXPERTS", frozenset())
-    monkeypatch.setattr(state_module, "NEEDINFO_FALLBACK", frozenset())
-    state = TriageState(bug=bug_new, comments=comments_new, now=NOW)
-    assert OWNER not in state.people
-    rec = _recorder(state)
-    _comment(rec)
+def test_an_owner_off_the_bug_and_the_team_lists_is_asked(commented):
+    state, rec = commented
+    assert OWNER not in state.askable
     assert tooling.ask_tooling_owner(rec, BUG, state, _gaps(), OWNER)
     assert rec.actions[-1]["params"]["changes"] == {"flags": [_owner_flag()]}
 
 
-def test_the_model_may_not_ask_the_owner_before_the_run_ends(
-    bug_new, comments_new, monkeypatch
-):
-    from hackbot_agents.gecko_triage import state as state_module
-
-    monkeypatch.setattr(state_module, "NEEDINFO_EXPERTS", frozenset())
-    monkeypatch.setattr(state_module, "NEEDINFO_FALLBACK", frozenset())
-    state = TriageState(bug=bug_new, comments=comments_new, now=NOW)
-    rec = _recorder(state)
-    _comment(rec)
+def test_the_model_may_not_ask_the_owner_before_the_run_ends(commented):
+    _, rec = commented
     with pytest.raises(ToolError):
         _update(
             rec, {"flags": [{"name": "needinfo", "status": "?", "requestee": OWNER}]}
         )
+
+
+def test_the_bot_is_never_the_owner_also_with_an_update(commented):
+    state, rec = commented
+    _update(rec, {"priority": "P3"})
+    assert not tooling.ask_tooling_owner(rec, BUG, state, _gaps(), BOT_ACCOUNT)
+    assert "flags" not in rec.actions[-1]["params"]["changes"]
 
 
 def test_a_full_update_gets_no_owner(bug_new, comments_new):

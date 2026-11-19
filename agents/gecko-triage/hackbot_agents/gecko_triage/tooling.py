@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from agent_tools.registry import ToolError
 from hackbot_runtime.actions import ActionsRecorder
 
-from .actions_view import ADD_COMMENT, UPDATE_BUG, needinfo_requestees, updates
+from .actions_view import UPDATE_BUG, comment_texts, needinfo_requestees, updates
 from .config import MAX_NEEDINFOS
 from .state import TriageState
 
@@ -77,17 +77,14 @@ def ask_tooling_owner(
     """
     if not gaps.profile_formats or not owner:
         return False
-    if not any(a.get("type") == ADD_COMMENT for a in recorder.actions):
+    if not comment_texts(recorder.actions) or owner in state.bot_logins:
         return False
-    asked = {
-        r
-        for u in updates(recorder.actions, bug)
-        for r in needinfo_requestees(u.changes)
-    }
+    found = updates(recorder.actions, bug)
+    asked = {r for u in found for r in needinfo_requestees(u.changes)}
     if owner in asked or owner in {n.requestee for n in state.open_needinfos}:
         return False
     flag = {"name": "needinfo", "status": "?", "requestee": owner}
-    if found := updates(recorder.actions, bug):
+    if found:
         # Hackbot merges a bug's updates with later fields winning, so the request goes
         # in the run's first update. A change made here skips the record hook, which
         # adds `new` to each request.
