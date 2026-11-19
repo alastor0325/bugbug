@@ -1,8 +1,8 @@
 """Gaps in our own tools that a run meets, and the person asked to close them.
 
 `profiler-cli` refuses a profile whose format is newer than the version it knows. The run
-cannot read that profile until someone bumps the pinned version, so the team's
-`tooling_owner` gets a needinfo with the run's comment.
+cannot read that profile until someone bumps the pinned version, so the agent's
+`tooling_owner` (in `shared/people.toml`) gets a needinfo with the run's comment.
 """
 
 from __future__ import annotations
@@ -96,7 +96,7 @@ def ask_tooling_owner(
             bug,
             [flag],
             reasoning=f"profiler-cli cannot read profile format {versions}; asks the "
-            "team's tooling owner to bump it.",
+            "tooling owner to bump it.",
         )
     except ToolError:
         # The team's needinfo rules refuse the owner; the comment still names the gap.

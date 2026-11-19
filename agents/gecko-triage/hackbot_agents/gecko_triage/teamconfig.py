@@ -72,6 +72,9 @@ class People(_Strict):
     qa_name_markers: tuple[StrictStr, ...]
     # Lower-cased QA logins the name markers miss.
     qa_accounts: Logins = frozenset()
+    # The person to ask when our own tools cannot read an artifact, such as a profile
+    # in a format newer than the pinned `profiler-cli` knows. None asks nobody.
+    tooling_owner: Email | None = None
 
 
 class CommentBlocks(_Strict):
@@ -140,9 +143,6 @@ class Team(_Strict):
     # The developers to ask, one at most, when no expert's area matches and the code's
     # history names nobody.
     needinfo_fallback: tuple[Email, ...] = ()
-    # The person to ask when our own tools cannot read an artifact, such as a profile
-    # in a format newer than the pinned `profiler-cli` knows. None asks nobody.
-    tooling_owner: Email | None = None
     # The values the run's `issue_type` may take, besides `other`.
     issue_types: tuple[IssueType, ...] = ()
     # In-tree docs, relative to the Firefox checkout, that the system prompt carries

@@ -91,7 +91,7 @@ ask: asking someone to re-capture a good profile because our reader is stale was
 round trip. We cannot read a log that the reporter sent privately to the team. Put it in
 the `unread` list for that reason. "Unread attachments" in `diagnostics.md` says when an
 attachment is unread. When `profiler-cli` refuses a profile because its format is newer,
-the run itself adds a needinfo on the team's tooling owner to bump `profiler-cli`. Say in
+the run itself adds a needinfo on the agent's tooling owner to bump `profiler-cli`. Say in
 the comment that the profile reader will be updated, and do not set that needinfo
 yourself.
 

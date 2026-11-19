@@ -488,16 +488,24 @@ def test_every_description_reads_the_team_as_optional(path):
 
 
 def test_the_tooling_owner_parses_as_one_normalized_email():
-    assert Team.model_validate(team()).tooling_owner is None
-    parsed = Team.model_validate(team(tooling_owner=" Owner@Example.com"))
+    assert People.model_validate(PEOPLE_DATA).tooling_owner is None
+    parsed = People.model_validate(
+        {**PEOPLE_DATA, "tooling_owner": " Owner@Example.com"}
+    )
     assert parsed.tooling_owner == "owner@example.com"
 
 
 @pytest.mark.parametrize("owner", ["not-an-email", ["a@example.com"]])
 def test_a_bad_tooling_owner_is_refused(owner):
     with pytest.raises(ValidationError):
-        Team.model_validate(team(tooling_owner=owner))
+        People.model_validate({**PEOPLE_DATA, "tooling_owner": owner})
 
 
-def test_the_media_team_names_its_tooling_owner():
-    assert TEAM.tooling_owner == "alwu@mozilla.com"
+def test_the_shared_people_name_the_tooling_owner():
+    assert PEOPLE.tooling_owner == "alwu@mozilla.com"
+
+
+def test_a_team_names_no_tooling_owner():
+    # The tools are the agent's, the same for every team.
+    with pytest.raises(ValidationError):
+        Team.model_validate(team(tooling_owner="owner@example.com"))

@@ -68,6 +68,7 @@ from .config import (
     MOZILLA_VCS_TOOLS,
     MOZREGRESSION_BLOCK,
     MOZREGRESSION_PLACEHOLDER,
+    PEOPLE,
     SEARCHFOX_TOOLS,
     SECURITY_GROUPS,
     STALE_NEEDINFO_DAYS,
@@ -1255,7 +1256,7 @@ async def run_gecko_triage(
     if reason := answer_asks(actions_recorder, bug, state):
         # Failing gets the run retried; an ok run would leave the ask unanswered.
         raise AgentError(f"bug {bug}: {reason}")
-    owner = TEAM.tooling_owner if TEAM else None
+    owner = PEOPLE.tooling_owner
     if tooling.ask_tooling_owner(actions_recorder, bug, state, tooling_gaps, owner):
         print(
             f"[gecko_triage] bug {bug}: asked {owner} to bump profiler-cli",

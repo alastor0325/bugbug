@@ -6,3 +6,7 @@ employee_domain = "@mozilla.com"
 qa_name_markers = ["QA", "Quality", "Test Engineering", "Testing"]
 # QA accounts the name markers miss.
 qa_accounts = ["ctanase@mozilla.com"]
+
+# Asked to update our tools when a run cannot read an artifact because of them, for
+# example a profile format newer than the image's `profiler-cli`.
+tooling_owner = "alwu@mozilla.com"
