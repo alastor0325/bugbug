@@ -295,15 +295,17 @@ that need a local machine. The skills' wiki steps are switched off. The session 
 `FX_BUG_INVESTIGATION_DIR=/tmp/gecko-triage-investigations`. The `bug-start` skill must
 write its investigation file, and the write guard allows writes only under `/tmp`. A
 PreToolUse hook refuses Write and Edit on any other path. The job container discards the
-file. On the host, it stays in /tmp. The image also has Node 24,
-`@firefox-devtools/profiler-cli@0.13.0`, `webspec-index` 0.14.0, `socorro-cli` 0.6.0 and,
-on amd64, `treeherder-cli` 0.3.1, from their release builds (installed by
-`cargo-binstall`), and Debian's `ffmpeg`.
+file. On the host, it stays in /tmp. The image also has `webspec-index` 0.14.0,
+`socorro-cli` 0.6.0 and, on amd64, `treeherder-cli` 0.3.1, from their release builds
+(installed by `cargo-binstall`), and Debian's `ffmpeg`.
 
-`profiler-cli` refuses a profile in a newer processed format than it knows, and it has
-no option to read the parts that it knows. A new Firefox Profiler release can change the
-format. Then the agent cannot read new profiles until the pin above is updated. Check for
-a new `profiler-cli` release when the agent says that a profile format is not supported.
+`profiler-cli` refuses a profile in a newer processed format than it knows, and a new
+Firefox Profiler release can change the format. So the run installs the tree's
+`profiler-cli` after the checkout, with the npm tools step of `mach bootstrap`
+(`ensure_npm_tools`, which also brings the tree's Node), and puts it first on `PATH`.
+The tree updates that toolchain with the Firefox Profiler's deploys. A failed install
+does not fail the run: a `profiler-cli` already on `PATH` stays in use, and without one
+the agent reports the profiles as unread.
 
 `hackbot_agents/gecko_triage/shared/limits.toml` sets the step limit and the effort of the
 main agent and of each subagent, and the cost limit of a run. The sessions that analyze
@@ -356,9 +358,9 @@ The run writes `<ARTIFACTS_DIR>/<run_id>/summary.json` (`findings` and the recor
 `actions`) and `logs/agent.log`. Nothing posts: the apply step only runs in hackbot-api.
 
 The runtime's `prepare_repo` fetches and hard-resets whatever `SOURCE_REPO` points at.
-Point it at a spare clone, never at a working tree. `profiler-cli`, `webspec-index`,
-`socorro-cli` and `treeherder-cli` must be on `PATH` for profile, spec, crash and CI
-reading, at the image's versions:
+Point it at a spare clone, never at a working tree. The run installs the clone's
+`profiler-cli` as above. `webspec-index`, `socorro-cli` and `treeherder-cli` must be on
+`PATH` for spec, crash and CI reading, at the image's versions:
 `cargo binstall webspec-index@0.14.0 socorro-cli@0.6.0 treeherder-cli@0.3.1`.
 
 ## Inputs

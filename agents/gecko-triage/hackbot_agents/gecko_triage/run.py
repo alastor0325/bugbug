@@ -1,6 +1,7 @@
 """One gecko-triage run on one bug, after `__main__` picked the team."""
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -20,6 +21,8 @@ from .agent import (
 from .broker_client import mcp_url
 from .dupes import find_candidates
 from .preflight import require_state, skip_reason
+from .profiler_cli import install as install_profiler_cli
+from .profiler_cli import with_bin_on_path
 from .state import fetch_state
 from .toolkit import DEFAULT_TOOLKIT_DIR, require_toolkit
 
@@ -88,6 +91,9 @@ async def main(ctx: HackbotContext) -> GeckoTriageResult:
         print(
             "[gecko_triage] no searchfox revision; linking tip-of-tree", file=sys.stderr
         )
+    # The tree's profiler-cli reads the profile format of its own Firefox Profiler.
+    if bin_dir := await asyncio.to_thread(install_profiler_cli, Path(ctx.repo_path)):
+        os.environ["PATH"] = with_bin_on_path(os.environ.get("PATH", ""), bin_dir)
 
     return await run_gecko_triage(
         task=TRIAGE_TASK,

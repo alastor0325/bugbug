@@ -1,7 +1,9 @@
 """Tests for the run: a skipped bug costs neither a checkout nor a model turn."""
 
 import asyncio
+import os
 import threading
+from pathlib import Path
 
 import pytest
 from conftest import NOW
@@ -52,6 +54,7 @@ def wired(monkeypatch):
     monkeypatch.setattr(run, "resolve_index_revision", resolve_index_revision)
     monkeypatch.setattr(run, "find_candidates", find_candidates)
     monkeypatch.setattr(run, "run_gecko_triage", run_gecko_triage)
+    monkeypatch.setattr(run, "install_profiler_cli", lambda repo: None)
     return use_state, calls
 
 
@@ -143,3 +146,32 @@ async def test_the_checkout_runs_beside_the_duplicate_search(
     ctx = BlockingContext()
     assert await run.main(ctx) == "ran"
     assert calls["cloning_during_search"] and ctx.prepared
+
+
+async def test_the_trees_profiler_cli_goes_first_on_path_after_the_checkout(
+    wired, new_state, monkeypatch
+):
+    use_state, _ = wired
+    use_state(new_state)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    ctx = FakeContext()
+    installed = []
+
+    def install(repo):
+        installed.append((repo, ctx.prepared))
+        return Path("/state/bin")
+
+    monkeypatch.setattr(run, "install_profiler_cli", install)
+    assert await run.main(ctx) == "ran"
+    assert installed == [(Path("/repo"), True)]
+    assert os.environ["PATH"] == "/state/bin:/usr/bin"
+
+
+async def test_a_failed_profiler_cli_install_leaves_path_alone(
+    wired, new_state, monkeypatch
+):
+    use_state, _ = wired
+    use_state(new_state)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    assert await run.main(FakeContext()) == "ran"
+    assert os.environ["PATH"] == "/usr/bin"
