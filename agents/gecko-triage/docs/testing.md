@@ -6,7 +6,7 @@ Four levels, from the cheapest to the closest to production.
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
 | Unit tests      | The hooks, the preflight, the state, the team files, the plugin check, the duplicate search, the plan parsing, the /tmp write guard and the attachment reader                 | any machine, no network  |
 | Local dry run   | The model triages real bugs with the real tools and the plugin skills; nothing is posted                                                                                      | the host, with `uv`      |
-| Image check     | The Dockerfile builds; the plugin, `webspec-index`, `socorro-cli`, `treeherder-cli` and `ffmpeg` are in the image; `attachments.py` unpacks files in it | Docker, `linux/amd64`    |
+| Image check     | The Dockerfile builds; the plugin, `webspec-index`, `socorro-cli`, `treeherder-cli` and `ffmpeg` are in the image; `attachments.py` unpacks files in it                       | Docker, `linux/amd64`    |
 | Dev environment | Network access from Cloud Run, and Hackbot applying the actions                                                                                                               | Hackbot dev, after merge |
 
 ## Unit tests

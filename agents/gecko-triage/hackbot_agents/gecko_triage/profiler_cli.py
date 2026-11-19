@@ -8,7 +8,9 @@ directory of its own, so its launcher directory holds only the npm tools.
 
 from __future__ import annotations
 
+import atexit
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -47,24 +49,22 @@ def bin_dir(output: str) -> Path | None:
 
 def with_bin_on_path(path: str, bin_dir: Path) -> str:
     """``path`` with ``bin_dir`` first, so the tree's `profiler-cli` wins."""
-    rest = [p for p in path.split(os.pathsep) if p and p != str(bin_dir)]
-    return os.pathsep.join([str(bin_dir), *rest])
+    return os.pathsep.join([str(bin_dir), *filter(None, path.split(os.pathsep))])
 
 
-def install(
-    repo: Path, run: Callable = subprocess.run, state_dir: Path | None = None
-) -> Path | None:
+def install(repo: Path, run: Callable = subprocess.run) -> Path | None:
     """Install the tree's `profiler-cli` and return its launcher directory, or None.
 
     A failure does not fail the run: on a host, a `profiler-cli` already on PATH stays
     in use. The image has no other `profiler-cli`, so there the agent reports the
     profiles as unread. The install gets no secret of the agent's environment.
     """
-    state_dir = state_dir or Path(tempfile.mkdtemp(prefix="gecko-triage-mozbuild-"))
+    state_dir = tempfile.mkdtemp(prefix="gecko-triage-mozbuild-")
+    atexit.register(shutil.rmtree, state_dir, ignore_errors=True)
     env = {
         **os.environ,
         **hidden_env(os.environ),
-        "MOZBUILD_STATE_PATH": str(state_dir),
+        "MOZBUILD_STATE_PATH": state_dir,
     }
     try:
         done = run(

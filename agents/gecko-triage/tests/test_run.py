@@ -148,12 +148,23 @@ async def test_the_checkout_runs_beside_the_duplicate_search(
     assert calls["cloning_during_search"] and ctx.prepared
 
 
+@pytest.mark.parametrize(
+    "path, expected",
+    [
+        ("/usr/bin", "/state/bin:/usr/bin"),
+        (None, f"/state/bin{os.pathsep}{os.defpath}"),
+    ],
+    ids=["path set", "no path"],
+)
 async def test_the_trees_profiler_cli_goes_first_on_path_after_the_checkout(
-    wired, new_state, monkeypatch
+    wired, new_state, monkeypatch, path, expected
 ):
     use_state, _ = wired
     use_state(new_state)
-    monkeypatch.setenv("PATH", "/usr/bin")
+    if path is None:
+        monkeypatch.delenv("PATH", raising=False)
+    else:
+        monkeypatch.setenv("PATH", path)
     ctx = FakeContext()
     installed = []
 
@@ -164,7 +175,7 @@ async def test_the_trees_profiler_cli_goes_first_on_path_after_the_checkout(
     monkeypatch.setattr(run, "install_profiler_cli", install)
     assert await run.main(ctx) == "ran"
     assert installed == [(Path("/repo"), True)]
-    assert os.environ["PATH"] == "/state/bin:/usr/bin"
+    assert os.environ["PATH"] == expected
 
 
 async def test_a_failed_profiler_cli_install_leaves_path_alone(
@@ -175,14 +186,3 @@ async def test_a_failed_profiler_cli_install_leaves_path_alone(
     monkeypatch.setenv("PATH", "/usr/bin")
     assert await run.main(FakeContext()) == "ran"
     assert os.environ["PATH"] == "/usr/bin"
-
-
-async def test_with_no_path_the_trees_profiler_cli_goes_before_the_default_path(
-    wired, new_state, monkeypatch
-):
-    use_state, _ = wired
-    use_state(new_state)
-    monkeypatch.delenv("PATH", raising=False)
-    monkeypatch.setattr(run, "install_profiler_cli", lambda repo: Path("/state/bin"))
-    assert await run.main(FakeContext()) == "ran"
-    assert os.environ["PATH"] == f"/state/bin{os.pathsep}{os.defpath}"
