@@ -31,6 +31,7 @@ from .config import (
     BOT_ALIASES,
     NEEDINFO_EXPERTS,
     NEEDINFO_FALLBACK,
+    PEOPLE,
     STALE_NEEDINFO_DAYS,
     TERMS,
 )
@@ -123,8 +124,13 @@ class TriageState:
 
     @property
     def askable(self) -> frozenset[str]:
-        """Who a needinfo may go to without a move: `people`, the experts, the fallback."""
-        return self.people | NEEDINFO_EXPERTS | NEEDINFO_FALLBACK
+        """Who a needinfo may go to without a move.
+
+        That is `people`, the experts, the fallback, and the tooling owner, whom a run
+        asks to fix our tools in any team.
+        """
+        owner = {PEOPLE.tooling_owner} if PEOPLE.tooling_owner else set()
+        return self.people | NEEDINFO_EXPERTS | NEEDINFO_FALLBACK | owner
 
     @cached_property
     def open_needinfos(self) -> tuple[Needinfo, ...]:

@@ -130,3 +130,18 @@ def test_an_owner_the_needinfo_rules_refuse_is_skipped(commented):
     outsider = "outsider@example.com"
     assert not tooling.ask_tooling_owner(rec, BUG, state, _gaps(), outsider)
     assert [a["type"] for a in rec.actions] == ["bugzilla.add_comment"]
+
+
+def test_a_run_with_no_team_lists_still_asks_the_owner(
+    bug_new, comments_new, monkeypatch
+):
+    from hackbot_agents.gecko_triage import state as state_module
+
+    monkeypatch.setattr(state_module, "NEEDINFO_EXPERTS", frozenset())
+    monkeypatch.setattr(state_module, "NEEDINFO_FALLBACK", frozenset())
+    state = TriageState(bug=bug_new, comments=comments_new, now=NOW)
+    assert OWNER not in state.people
+    rec = _recorder(state)
+    _comment(rec)
+    assert tooling.ask_tooling_owner(rec, BUG, state, _gaps(), OWNER)
+    assert rec.actions[-1]["params"]["changes"] == {"flags": [_owner_flag()]}
