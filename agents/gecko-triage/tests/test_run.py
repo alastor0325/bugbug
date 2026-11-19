@@ -175,3 +175,14 @@ async def test_a_failed_profiler_cli_install_leaves_path_alone(
     monkeypatch.setenv("PATH", "/usr/bin")
     assert await run.main(FakeContext()) == "ran"
     assert os.environ["PATH"] == "/usr/bin"
+
+
+async def test_with_no_path_the_trees_profiler_cli_goes_before_the_default_path(
+    wired, new_state, monkeypatch
+):
+    use_state, _ = wired
+    use_state(new_state)
+    monkeypatch.delenv("PATH", raising=False)
+    monkeypatch.setattr(run, "install_profiler_cli", lambda repo: Path("/state/bin"))
+    assert await run.main(FakeContext()) == "ran"
+    assert os.environ["PATH"] == f"/state/bin{os.pathsep}{os.defpath}"

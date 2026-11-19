@@ -93,7 +93,9 @@ async def main(ctx: HackbotContext) -> GeckoTriageResult:
         )
     # The tree's profiler-cli reads the profile format of its own Firefox Profiler.
     if bin_dir := await asyncio.to_thread(install_profiler_cli, Path(ctx.repo_path)):
-        os.environ["PATH"] = with_bin_on_path(os.environ.get("PATH", ""), bin_dir)
+        os.environ["PATH"] = with_bin_on_path(
+            os.environ.get("PATH", os.defpath), bin_dir
+        )
 
     return await run_gecko_triage(
         task=TRIAGE_TASK,

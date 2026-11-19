@@ -303,9 +303,11 @@ file. On the host, it stays in /tmp. The image also has `webspec-index` 0.14.0,
 Firefox Profiler release can change the format. So the run installs the tree's
 `profiler-cli` after the checkout, with the npm tools step of `mach bootstrap`
 (`ensure_npm_tools`, which also brings the tree's Node), and puts it first on `PATH`.
-The tree updates that toolchain with the Firefox Profiler's deploys. A failed install
-does not fail the run: a `profiler-cli` already on `PATH` stays in use, and without one
-the agent reports the profiles as unread.
+The tree updates that toolchain with the Firefox Profiler's deploys. The install uses a
+state directory of its own, so it changes no `~/.mozbuild` and puts only `profiler-cli`
+and `pq` first on `PATH`. A failed install does not fail the run. On a host, a
+`profiler-cli` already on `PATH` stays in use; the image has no other one, so there the
+agent reports the profiles as unread.
 
 `hackbot_agents/gecko_triage/shared/limits.toml` sets the step limit and the effort of the
 main agent and of each subagent, and the cost limit of a run. The sessions that analyze
