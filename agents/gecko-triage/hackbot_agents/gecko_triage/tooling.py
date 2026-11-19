@@ -14,8 +14,7 @@ from dataclasses import dataclass, field
 from agent_tools.registry import ToolError
 from hackbot_runtime.actions import ActionsRecorder
 
-from .actions_view import ADD_COMMENT, needinfo_requestees, updates
-from .hooks import add_flags
+from .actions_view import ADD_COMMENT, UPDATE_BUG, needinfo_requestees, updates
 from .state import TriageState
 
 BASH_TOOL = "Bash"
@@ -86,19 +85,25 @@ def ask_tooling_owner(
     }
     if owner in asked or owner in {n.requestee for n in state.open_needinfos}:
         return False
+    flag = {"name": "needinfo", "status": "?", "requestee": owner}
+    if found := updates(recorder.actions, bug):
+        # Hackbot merges a bug's updates with later fields winning, so the request goes
+        # in the run's first update. A change made here skips the record hook, which
+        # adds `new` to each request.
+        changes = found[0].changes
+        changes["flags"] = [*(changes.get("flags") or ()), {**flag, "new": True}]
+        return True
     versions = ", ".join(
         f"{a} (reads up to {b})" for a, b in sorted(gaps.profile_formats)
     )
-    flag = {"name": "needinfo", "status": "?", "requestee": owner}
     try:
-        add_flags(
-            recorder,
-            bug,
-            [flag],
+        recorder.record(
+            UPDATE_BUG,
+            {"bug_id": bug, "changes": {"flags": [flag]}},
             reasoning=f"profiler-cli cannot read profile format {versions}; asks the "
             "tooling owner to bump it.",
         )
     except ToolError:
-        # The team's needinfo rules refuse the owner; the comment still names the gap.
+        # The needinfo rules refuse the owner; the comment still names the gap.
         return False
     return True

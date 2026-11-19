@@ -45,16 +45,7 @@ from hackbot_runtime.searchfox import (
 from pydantic import BaseModel, BeforeValidator, Field, model_validator
 from searchfox import AsyncSearchfoxClient
 
-from . import (
-    attachments,
-    authors,
-    bugzilla_prompt,
-    ci_logs,
-    closing,
-    dupes,
-    rerecord,
-    tooling,
-)
+from . import attachments, authors, bugzilla_prompt, ci_logs, closing, dupes, rerecord
 from .actions_view import needinfo_requestees, updates
 from .citations import ReadComments, read_hook
 from .config import (
@@ -100,6 +91,7 @@ from .targets import (
     screen_writes,
 )
 from .teamconfig import EMAIL, OTHER_ISSUE_TYPE, Component, scope_for
+from .tooling import BASH_TOOL, ToolingGaps, ask_tooling_owner, gap_hook
 from .toolkit import qualified, toolkit_options
 from .version import current_agent_version
 from .withheld import BROKER_TOOLS_MATCHER, WithheldBugs, withheld_hook
@@ -949,7 +941,7 @@ def session_options(
     withheld: WithheldBugs | None = None,
     steps: Steps | None = None,
     read_comments: ReadComments | None = None,
-    tooling_gaps: tooling.ToolingGaps | None = None,
+    tooling_gaps: ToolingGaps | None = None,
 ) -> dict:
     """The tool set and environment every run's Claude Code session gets.
 
@@ -965,10 +957,8 @@ def session_options(
     ``tooling_gaps`` collects the profiles that `profiler-cli` refused for their format.
     """
     withheld = WithheldBugs() if withheld is None else withheld
-    tooling_gaps = tooling.ToolingGaps() if tooling_gaps is None else tooling_gaps
-    on_bash = HookMatcher(
-        matcher=tooling.BASH_TOOL, hooks=[tooling.gap_hook(tooling_gaps)]
-    )
+    tooling_gaps = ToolingGaps() if tooling_gaps is None else tooling_gaps
+    on_bash = HookMatcher(matcher=BASH_TOOL, hooks=[gap_hook(tooling_gaps)])
     steps = Steps() if steps is None else steps
     read_comments = ReadComments() if read_comments is None else read_comments
     on_any_tool = HookMatcher(matcher=None, hooks=[call_counter(steps)])
@@ -1044,13 +1034,27 @@ def session_options(
     }
 
 
-def combined_options(toolkit_dir: Path, *args, **kwargs) -> dict:
-    """The plugin options and the session options, with their environments merged.
-
-    ``args`` and ``kwargs`` are the arguments of `session_options`.
-    """
+def combined_options(
+    toolkit_dir: Path,
+    close_verdicts: closing.CloseVerdicts,
+    commits: authors.CommitFacts,
+    investigations: Investigations,
+    withheld: WithheldBugs | None = None,
+    steps: Steps | None = None,
+    read_comments: ReadComments | None = None,
+    tooling_gaps: ToolingGaps | None = None,
+) -> dict:
+    """The plugin options and the session options, with their environments merged."""
     toolkit = toolkit_options(toolkit_dir)
-    session = session_options(*args, **kwargs)
+    session = session_options(
+        close_verdicts,
+        commits,
+        investigations,
+        withheld,
+        steps,
+        read_comments,
+        tooling_gaps,
+    )
     return {**toolkit, **session, "env": {**toolkit["env"], **session["env"]}}
 
 
@@ -1117,8 +1121,8 @@ async def run_gecko_triage(
     # The read hook adds each comment a read returned; the citation check reads them.
     read_comments = ReadComments()
     # The Bash hook adds each profile format profiler-cli refused; the end of the run
-    # asks the team's tooling owner to bump it.
-    tooling_gaps = tooling.ToolingGaps()
+    # asks the tooling owner to bump it.
+    tooling_gaps = ToolingGaps()
     removals = rerecord.Removals(actions_recorder)
     install_hooks(
         actions_recorder,
@@ -1257,7 +1261,7 @@ async def run_gecko_triage(
         # Failing gets the run retried; an ok run would leave the ask unanswered.
         raise AgentError(f"bug {bug}: {reason}")
     owner = PEOPLE.tooling_owner
-    if tooling.ask_tooling_owner(actions_recorder, bug, state, tooling_gaps, owner):
+    if ask_tooling_owner(actions_recorder, bug, state, tooling_gaps, owner):
         print(
             f"[gecko_triage] bug {bug}: asked {owner} to bump profiler-cli",
             file=sys.stderr,
