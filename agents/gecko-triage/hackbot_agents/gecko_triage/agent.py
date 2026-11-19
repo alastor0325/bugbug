@@ -1266,6 +1266,12 @@ async def run_gecko_triage(
             f"[gecko_triage] bug {bug}: asked {owner} to bump profiler-cli",
             file=sys.stderr,
         )
+    elif tooling_gaps.profile_formats:
+        print(
+            f"[gecko_triage] bug {bug}: profiler-cli refused profile format "
+            f"{sorted(tooling_gaps.profile_formats)}; nobody was asked",
+            file=sys.stderr,
+        )
     actions = actions_recorder.actions
     refuted = close_verdicts.refuted()
     if reason := empty_run_refusal(plan, actions, refuted):

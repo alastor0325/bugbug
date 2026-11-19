@@ -31,7 +31,6 @@ from .config import (
     BOT_ALIASES,
     NEEDINFO_EXPERTS,
     NEEDINFO_FALLBACK,
-    PEOPLE,
     STALE_NEEDINFO_DAYS,
     TERMS,
 )
@@ -101,6 +100,8 @@ class TriageState:
     # Bugzilla's history of changes after the agent's newest comment, when the bug
     # changed after it: `when`, `who` and `changes`. None when not read.
     history: tuple[dict, ...] | None = None
+    # The tooling owner, askable only once the run's own end asks for a tooling fix.
+    tooling_owner: str | None = None
 
     @property
     def whiteboard(self) -> str:
@@ -124,12 +125,8 @@ class TriageState:
 
     @property
     def askable(self) -> frozenset[str]:
-        """Who a needinfo may go to without a move.
-
-        That is `people`, the experts, the fallback, and the tooling owner, whom a run
-        asks to fix our tools in any team.
-        """
-        owner = {PEOPLE.tooling_owner} if PEOPLE.tooling_owner else set()
+        """Who a needinfo may go to without a move: `people`, the experts, the fallback."""
+        owner = {self.tooling_owner} if self.tooling_owner else set()
         return self.people | NEEDINFO_EXPERTS | NEEDINFO_FALLBACK | owner
 
     @cached_property

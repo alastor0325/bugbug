@@ -15,6 +15,7 @@ from agent_tools.registry import ToolError
 from hackbot_runtime.actions import ActionsRecorder
 
 from .actions_view import ADD_COMMENT, UPDATE_BUG, needinfo_requestees, updates
+from .config import MAX_NEEDINFOS
 from .state import TriageState
 
 BASH_TOOL = "Bash"
@@ -91,11 +92,15 @@ def ask_tooling_owner(
         # in the run's first update. A change made here skips the record hook, which
         # adds `new` to each request.
         changes = found[0].changes
+        if len(needinfo_requestees(changes)) >= MAX_NEEDINFOS:
+            return False
         changes["flags"] = [*(changes.get("flags") or ()), {**flag, "new": True}]
         return True
     versions = ", ".join(
         f"{a} (reads up to {b})" for a, b in sorted(gaps.profile_formats)
     )
+    # The record hook accepts the owner only from here, not from the model's turn.
+    state.tooling_owner = owner
     try:
         recorder.record(
             UPDATE_BUG,

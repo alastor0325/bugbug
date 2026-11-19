@@ -1,7 +1,16 @@
 import asyncio
 
 import pytest
-from conftest import BUG, NOW, _comment, _recorder, _update, with_needinfo
+from agent_tools.registry import ToolError
+from conftest import (
+    BOT_ACCOUNT,
+    BUG,
+    NOW,
+    _comment,
+    _recorder,
+    _update,
+    with_needinfo,
+)
 from hackbot_agents.gecko_triage import tooling
 from hackbot_agents.gecko_triage.agent import session_options
 from hackbot_agents.gecko_triage.authors import CommitFacts
@@ -127,8 +136,7 @@ def test_every_session_collects_tooling_gaps_from_bash():
 
 def test_an_owner_the_needinfo_rules_refuse_is_skipped(commented):
     state, rec = commented
-    outsider = "outsider@example.com"
-    assert not tooling.ask_tooling_owner(rec, BUG, state, _gaps(), outsider)
+    assert not tooling.ask_tooling_owner(rec, BUG, state, _gaps(), BOT_ACCOUNT)
     assert [a["type"] for a in rec.actions] == ["bugzilla.add_comment"]
 
 
@@ -145,3 +153,34 @@ def test_a_run_with_no_team_lists_still_asks_the_owner(
     _comment(rec)
     assert tooling.ask_tooling_owner(rec, BUG, state, _gaps(), OWNER)
     assert rec.actions[-1]["params"]["changes"] == {"flags": [_owner_flag()]}
+
+
+def test_the_model_may_not_ask_the_owner_before_the_run_ends(
+    bug_new, comments_new, monkeypatch
+):
+    from hackbot_agents.gecko_triage import state as state_module
+
+    monkeypatch.setattr(state_module, "NEEDINFO_EXPERTS", frozenset())
+    monkeypatch.setattr(state_module, "NEEDINFO_FALLBACK", frozenset())
+    state = TriageState(bug=bug_new, comments=comments_new, now=NOW)
+    rec = _recorder(state)
+    _comment(rec)
+    with pytest.raises(ToolError):
+        _update(
+            rec, {"flags": [{"name": "needinfo", "status": "?", "requestee": OWNER}]}
+        )
+
+
+def test_a_full_update_gets_no_owner(bug_new, comments_new):
+    asks = [f"p{i}@example.com" for i in range(3)]
+    bug = dict(bug_new, cc=[*bug_new.get("cc", ()), *asks])
+    state = TriageState(bug=bug, comments=comments_new, now=NOW)
+    rec = _recorder(state)
+    _comment(rec)
+    _update(
+        rec,
+        {"flags": [{"name": "needinfo", "status": "?", "requestee": a} for a in asks]},
+    )
+    assert not tooling.ask_tooling_owner(rec, BUG, state, _gaps(), OWNER)
+    flags = rec.actions[-1]["params"]["changes"]["flags"]
+    assert [f["requestee"] for f in flags] == asks

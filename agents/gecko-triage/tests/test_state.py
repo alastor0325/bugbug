@@ -63,19 +63,12 @@ def test_people_are_the_reporter_the_cc_list_and_the_commenters(new_state):
     }
 
 
-def test_askable_is_the_people_the_experts_the_fallback_and_the_tooling_owner(
-    new_state, monkeypatch
-):
+def test_askable_is_the_people_the_experts_and_the_fallback(new_state, monkeypatch):
     monkeypatch.setattr(state_module, "NEEDINFO_EXPERTS", frozenset({"e@example.org"}))
     monkeypatch.setattr(state_module, "NEEDINFO_FALLBACK", frozenset({"f@example.org"}))
-    people = state_module.PEOPLE.model_copy(update={"tooling_owner": "t@example.org"})
-    monkeypatch.setattr(state_module, "PEOPLE", people)
-    expected = {"e@example.org", "f@example.org", "t@example.org"}
-    assert new_state.askable == new_state.people | expected
-    monkeypatch.setattr(
-        state_module, "PEOPLE", people.model_copy(update={"tooling_owner": None})
-    )
     assert new_state.askable == new_state.people | {"e@example.org", "f@example.org"}
+    new_state.tooling_owner = "t@example.org"
+    assert "t@example.org" in new_state.askable
 
 
 def test_open_needinfos_include_ones_set_by_others(new_state):
