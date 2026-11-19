@@ -1250,15 +1250,34 @@ def answer_asks(recorder: ActionsRecorder, bug: int, state: TriageState) -> str 
             f"{who} asked for this run with a needinfo, but the run recorded no comment"
         )
     clears = [{"id": i, "status": "X"} for i in sorted(state.ask_flag_ids)]
+    add_flags(
+        recorder,
+        bug,
+        clears,
+        reasoning="Clears the needinfo that asked the agent; the comment answers it.",
+    )
+    return None
+
+
+def add_flags(
+    recorder: ActionsRecorder, bug: int, flags: list[dict], *, reasoning: str
+) -> None:
+    """Add ``flags`` to the run's first update of ``bug``, or record a new update.
+
+    Hackbot merges the updates of a bug with later fields winning, so a second `flags`
+    list would replace the run's needinfo requests. A flag merged into an update skips
+    the record hook, so a request gets `new` here, as the hook gives it.
+    """
     if found := updates(recorder.actions, bug):
         changes = found[0].changes
-        flags = list(changes.get("flags") or ())
-        flags += [c for c in clears if c not in flags]
-        changes["flags"] = flags
-    elif clears:
+        current = list(changes.get("flags") or ())
+        current += [
+            f if is_clear(f) else {**f, "new": True} for f in flags if f not in current
+        ]
+        changes["flags"] = current
+    elif flags:
         recorder.record(
             "bugzilla.update_bug",
-            {"bug_id": bug, "changes": {"flags": clears}},
-            reasoning="Clears the needinfo that asked the agent; the comment answers it.",
+            {"bug_id": bug, "changes": {"flags": flags}},
+            reasoning=reasoning,
         )
-    return None

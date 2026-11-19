@@ -45,7 +45,16 @@ from hackbot_runtime.searchfox import (
 from pydantic import BaseModel, BeforeValidator, Field, model_validator
 from searchfox import AsyncSearchfoxClient
 
-from . import attachments, authors, bugzilla_prompt, ci_logs, closing, dupes, rerecord
+from . import (
+    attachments,
+    authors,
+    bugzilla_prompt,
+    ci_logs,
+    closing,
+    dupes,
+    rerecord,
+    tooling,
+)
 from .actions_view import needinfo_requestees, updates
 from .citations import ReadComments, read_hook
 from .config import (
@@ -939,6 +948,7 @@ def session_options(
     withheld: WithheldBugs | None = None,
     steps: Steps | None = None,
     read_comments: ReadComments | None = None,
+    tooling_gaps: tooling.ToolingGaps | None = None,
 ) -> dict:
     """The tool set and environment every run's Claude Code session gets.
 
@@ -951,8 +961,13 @@ def session_options(
     bugs that a read withheld. ``steps`` counts the tool calls of each
     session and notes a subagent that stopped at its step limit. ``read_comments``
     collects the comments that a read returned, for the citation check.
+    ``tooling_gaps`` collects the profiles that `profiler-cli` refused for their format.
     """
     withheld = WithheldBugs() if withheld is None else withheld
+    tooling_gaps = tooling.ToolingGaps() if tooling_gaps is None else tooling_gaps
+    on_bash = HookMatcher(
+        matcher=tooling.BASH_TOOL, hooks=[tooling.gap_hook(tooling_gaps)]
+    )
     steps = Steps() if steps is None else steps
     read_comments = ReadComments() if read_comments is None else read_comments
     on_any_tool = HookMatcher(matcher=None, hooks=[call_counter(steps)])
@@ -1017,30 +1032,24 @@ def session_options(
                     matcher=closing.SPAWN_TOOLS,
                     hooks=[spawn_counter(investigations), limit_hit_hook(steps)],
                 ),
+                on_bash,
                 on_any_tool,
             ],
             # A refused read can come as a failed call.
-            "PostToolUseFailure": [on_broker, on_any_tool],
+            "PostToolUseFailure": [on_broker, on_bash, on_any_tool],
         },
         # A large attachment or file read can exceed the SDK's 1 MiB default.
         "max_buffer_size": 32 * 1024 * 1024,
     }
 
 
-def combined_options(
-    toolkit_dir: Path,
-    close_verdicts: closing.CloseVerdicts,
-    commits: authors.CommitFacts,
-    investigations: Investigations,
-    withheld: WithheldBugs | None = None,
-    steps: Steps | None = None,
-    read_comments: ReadComments | None = None,
-) -> dict:
-    """The plugin options and the session options, with their environments merged."""
+def combined_options(toolkit_dir: Path, *args, **kwargs) -> dict:
+    """The plugin options and the session options, with their environments merged.
+
+    ``args`` and ``kwargs`` are the arguments of `session_options`.
+    """
     toolkit = toolkit_options(toolkit_dir)
-    session = session_options(
-        close_verdicts, commits, investigations, withheld, steps, read_comments
-    )
+    session = session_options(*args, **kwargs)
     return {**toolkit, **session, "env": {**toolkit["env"], **session["env"]}}
 
 
@@ -1106,6 +1115,9 @@ async def run_gecko_triage(
     steps = Steps()
     # The read hook adds each comment a read returned; the citation check reads them.
     read_comments = ReadComments()
+    # The Bash hook adds each profile format profiler-cli refused; the end of the run
+    # asks the team's tooling owner to bump it.
+    tooling_gaps = tooling.ToolingGaps()
     removals = rerecord.Removals(actions_recorder)
     install_hooks(
         actions_recorder,
@@ -1173,6 +1185,7 @@ async def run_gecko_triage(
             withheld,
             steps,
             read_comments,
+            tooling_gaps,
         ),
     )
 
@@ -1242,6 +1255,12 @@ async def run_gecko_triage(
     if reason := answer_asks(actions_recorder, bug, state):
         # Failing gets the run retried; an ok run would leave the ask unanswered.
         raise AgentError(f"bug {bug}: {reason}")
+    owner = TEAM.tooling_owner if TEAM else None
+    if tooling.ask_tooling_owner(actions_recorder, bug, state, tooling_gaps, owner):
+        print(
+            f"[gecko_triage] bug {bug}: asked {owner} to bump profiler-cli",
+            file=sys.stderr,
+        )
     actions = actions_recorder.actions
     refuted = close_verdicts.refuted()
     if reason := empty_run_refusal(plan, actions, refuted):

@@ -33,7 +33,7 @@ vouches for unattended apply, so a person always applies its actions.
 | -------------------------------------- | ----------------------------------------------------------------- |
 | `hackbot_agents/gecko_triage/rules/`   | The general rules every team follows                              |
 | `hackbot_agents/gecko_triage/prompts/` | The prompts, as Jinja templates that `prompting.py` renders       |
-| `teams/<team>/team.toml`               | The team's components, capture steps and needinfo experts         |
+| `teams/<team>/team.toml`               | The team's components, capture steps, needinfo experts and tooling owner |
 | `teams/<team>/rules/`                  | The team's rules: bug types, diagnostics, comment, S/P, meta bugs |
 | `shared/bugzilla.toml`                 | Bugzilla keywords and fields, and the agent's whiteboard tags     |
 | `shared/people.toml`                   | How to tell Mozilla staff and QA apart                            |
@@ -302,8 +302,10 @@ on amd64, `treeherder-cli` 0.3.1, from their release builds (installed by
 
 `profiler-cli` refuses a profile in a newer processed format than it knows, and it has
 no option to read the parts that it knows. A new Firefox Profiler release can change the
-format. Then the agent cannot read new profiles until the pin above is updated. Check for
-a new `profiler-cli` release when the agent says that a profile format is not supported.
+format. Then the agent cannot read new profiles until the pin above is updated. When a run
+meets such a refusal, it adds a needinfo on the team's `tooling_owner` (in `team.toml`) to
+the update that goes with its comment, so a person bumps the pin. A team with no
+`tooling_owner` asks nobody.
 
 `hackbot_agents/gecko_triage/shared/limits.toml` sets the step limit and the effort of the
 main agent and of each subagent, and the cost limit of a run. The sessions that analyze

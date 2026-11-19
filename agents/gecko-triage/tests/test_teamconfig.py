@@ -485,3 +485,19 @@ def test_every_description_reads_the_team_as_optional(path):
     for phrase in ("for one team", "one team per run", "Audio/Video first"):
         assert phrase not in flat, phrase
     assert "Each team can add its own rules." in flat
+
+
+def test_the_tooling_owner_parses_as_one_normalized_email():
+    assert Team.model_validate(team()).tooling_owner is None
+    parsed = Team.model_validate(team(tooling_owner=" Owner@Example.com"))
+    assert parsed.tooling_owner == "owner@example.com"
+
+
+@pytest.mark.parametrize("owner", ["not-an-email", ["a@example.com"]])
+def test_a_bad_tooling_owner_is_refused(owner):
+    with pytest.raises(ValidationError):
+        Team.model_validate(team(tooling_owner=owner))
+
+
+def test_the_media_team_names_its_tooling_owner():
+    assert TEAM.tooling_owner == "alwu@mozilla.com"

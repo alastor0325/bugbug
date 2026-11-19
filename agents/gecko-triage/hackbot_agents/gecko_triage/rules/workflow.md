@@ -90,7 +90,10 @@ and do not present the analysis as complete. Never turn our tooling gap into a r
 ask: asking someone to re-capture a good profile because our reader is stale wastes a
 round trip. We cannot read a log that the reporter sent privately to the team. Put it in
 the `unread` list for that reason. "Unread attachments" in `diagnostics.md` says when an
-attachment is unread.
+attachment is unread. When `profiler-cli` refuses a profile because its format is newer,
+the run itself adds a needinfo on the team's tooling owner to bump `profiler-cli`. Say in
+the comment that the profile reader will be updated, and do not set that needinfo
+yourself.
 
 **Triage scope limit.** Do not read source files, trace call stacks or reason about fix
 approaches yourself; `bug_investigator` does that, before "Analyzed" and before an ask.
